@@ -1,0 +1,30 @@
+{
+  "name": "lumadock-assistant-electron",
+  "version": "1.2.0-beta.2",
+  "description": "LumaDock: Dynamic Island for Windows with native AI monitor.",
+  "main": "main.js",
+  "scripts": {
+    "test": "node --test tests/monitor.test.cjs tests/windows-check.test.cjs tests/claude-code-hooks.test.cjs tests/extras.test.cjs",
+    "start": "electron .",
+    "check:windows": "node check-windows.cjs"
+  },
+  "keywords": [
+    "dynamic-island",
+    "windows",
+    "ai-assistant",
+    "chatgpt",
+    "claude",
+    "claude-code",
+    "codex",
+    "productivity"
+  ],
+  "author": "SentryCoderDev",
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^44.5.1"
+  },
+  "dependencies": {
+    "@openai/codex": "^0.160.0"
+  }
+}
