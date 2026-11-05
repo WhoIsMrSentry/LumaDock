@@ -1,0 +1,22 @@
+{
+  "name": "project-editor",
+  "publisher": "lumadock",
+  "displayName": "LumaDock Project Editor",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "activationEvents": [
+    "onUri"
+  ],
+  "main": "./extension.js",
+  "description": "Local project workspace bridge for LumaDock Assistant.",
+  "extensionKind": [
+    "ui"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  }
+}
