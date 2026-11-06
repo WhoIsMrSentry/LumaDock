@@ -2456,7 +2456,12 @@ let latestWindowsMedia = null;
 let mediaWatchChild = null;
 const artworkCache = new Map();
 
+const mediaCmdFile = path.join(os.tmpdir(), 'lumadock-media-cmd.txt');
+
 function sendMediaCommand(cmd) {
+  try {
+    fs.writeFileSync(mediaCmdFile, String(cmd).trim(), 'utf8');
+  } catch {}
   if (mediaWatchChild && mediaWatchChild.stdin && !mediaWatchChild.stdin.destroyed) {
     try {
       mediaWatchChild.stdin.write(cmd + '\n');
@@ -4011,20 +4016,15 @@ async function spotifyControl(action) {
     return { ok: true };
   }
 
-  // 1. Instant local Windows session control (0ms latency!)
-  sendMediaCommand(action);
-
-  // 2. Immediate Windows media key simulation
-  if (process.platform === 'win32') {
-    const vkMap = { play: 179, pause: 179, next: 176, previous: 177 };
-    if (vkMap[action]) {
-      try {
-        exec(`powershell -NoProfile -NonInteractive -Command "(New-Object -ComObject WScript.Shell).SendKeys([char]${vkMap[action]})"`);
-      } catch {}
-    }
+  if (latestWindowsMedia) {
+    if (action === 'play') latestWindowsMedia.is_playing = true;
+    else if (action === 'pause') latestWindowsMedia.is_playing = false;
   }
 
-  // 3. Background sync to Spotify Web API
+  // 1. Instant local Windows session control via command file
+  sendMediaCommand(action);
+
+  // 2. Background sync to Spotify Web API
   const commands = {
     play: ['/v1/me/player/play', 'PUT'],
     pause: ['/v1/me/player/pause', 'PUT'],
@@ -4042,6 +4042,9 @@ async function spotifyControl(action) {
 
 async function spotifySeek(positionMs) {
   const safePosition = Math.max(0, Math.round(Number(positionMs) || 0));
+  if (latestWindowsMedia) {
+    latestWindowsMedia.position = safePosition;
+  }
   // 1. Instant local Windows session seek
   sendMediaCommand('seek ' + safePosition);
   // 2. Background sync to Spotify Web API

@@ -1,6 +1,6 @@
 # Media session watcher for LumaDock
 # Monitors Windows GlobalSystemMediaTransportControls (Spotify, browsers, media players)
-# Accepts stdin commands: play, pause, toggle, next, previous, seek <ms>
+# Communicates with LumaDock via stdout (JSON) and %TEMP%\lumadock-media-cmd.txt
 param([int]$Parent = 0)
 
 $ErrorActionPreference = 'SilentlyContinue'
@@ -15,7 +15,7 @@ function AwaitOp($winRtOp, $resultType) {
     try {
         $asTask = $asTaskGeneric.MakeGenericMethod($resultType)
         $netTask = $asTask.Invoke($null, @($winRtOp))
-        if ($netTask.Wait(1000)) {
+        if ($netTask.Wait(800)) {
             return $netTask.Result
         }
     } catch {}
@@ -32,6 +32,7 @@ if (-not $mgr) {
 
 $lastJson = ''
 $tick = 0
+$cmdFile = "$env:TEMP\lumadock-media-cmd.txt"
 
 function GetActiveSession() {
     $current = $mgr.GetCurrentSession()
@@ -47,7 +48,6 @@ function GetActiveSession() {
         return $current
     }
 
-    # Find playing session
     foreach ($s in $sessions) {
         $info = $s.GetPlaybackInfo()
         if ($info -and $info.PlaybackStatus -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing) {
@@ -117,20 +117,22 @@ function HandleControlCommand([string]$cmd) {
     } catch {}
 }
 
-# Run loop
-$stdin = [System.Console]::In
+# Run loop - non-blocking, fast polling
 while ($true) {
-    if ($Parent -and (++$tick % 15 -eq 0) -and -not (Get-Process -Id $Parent -ErrorAction SilentlyContinue)) {
+    if ($Parent -and (++$tick % 25 -eq 0) -and -not (Get-Process -Id $Parent -ErrorAction SilentlyContinue)) {
         exit 0
     }
 
-    # Process pending stdin commands if any
-    try {
-        while ($stdin.Peek() -ne -1) {
-            $line = $stdin.ReadLine()
-            if ($line) { HandleControlCommand $line }
-        }
-    } catch {}
+    # Check for incoming commands from LumaDock
+    if (Test-Path $cmdFile) {
+        try {
+            $cmd = Get-Content $cmdFile -Raw
+            Remove-Item $cmdFile -Force -ErrorAction SilentlyContinue
+            if ($cmd) {
+                HandleControlCommand $cmd
+            }
+        } catch {}
+    }
 
     try {
         $now = ReadSessionInfo
@@ -142,5 +144,5 @@ while ($true) {
         [Console]::Out.Flush()
         $lastJson = $now
     }
-    Start-Sleep -Milliseconds 300
+    Start-Sleep -Milliseconds 250
 }

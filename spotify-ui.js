@@ -12,10 +12,14 @@
   const L = (en, tr) => (isTr() ? tr : en);
 
   // Colour of the album cover (extras-ui.js), Spotify green as fallback.
+  let seeking = false, seekPreviewMs = 0;
   const accent = () => window.__lumadockAlbumColour || '#1ed760';
   const time = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
-  const position = () => Math.min(spotifyState.duration_ms || 0,
-    (spotifyState.progress_ms || 0) + (spotifyState.is_playing ? performance.now() - spotifySyncAt : 0));
+  const position = () => {
+    if (seeking) return seekPreviewMs;
+    return Math.min(spotifyState.duration_ms || 0,
+      (spotifyState.progress_ms || 0) + (spotifyState.is_playing ? performance.now() - spotifySyncAt : 0));
+  };
 
   // Vector media icons (crisper than text glyphs).
   function mediaIcon(kind, x, y, s, colour) {
@@ -184,8 +188,33 @@
     window.__lumadockKick?.(dir > 0 ? -0.05 : 0.05);
     control(dir > 0 ? 'next' : 'previous');
   }
-  canvas.addEventListener('pointerdown', e => { drag = canSwipe(e.clientX, e.clientY) ? { x: e.clientX, y: e.clientY } : null; });
-  canvas.addEventListener('pointerup', e => {
+  canvas.addEventListener('pointerdown', e => {
+    if (currentView === 'spotify' && mode === 'expanded' && hit.spSeek && inside(e.clientX, e.clientY, hit.spSeek)) {
+      seeking = true;
+      const frac = Math.max(0, Math.min(1, (e.clientX - hit.spSeek.x) / hit.spSeek.width));
+      seekPreviewMs = Math.round(frac * (spotifyState.duration_ms || 0));
+      spotifyState.progress_ms = seekPreviewMs;
+      spotifySyncAt = performance.now();
+      return;
+    }
+    drag = canSwipe(e.clientX, e.clientY) ? { x: e.clientX, y: e.clientY } : null;
+  });
+  window.addEventListener('pointermove', e => {
+    if (seeking && hit.spSeek) {
+      const frac = Math.max(0, Math.min(1, (e.clientX - hit.spSeek.x) / hit.spSeek.width));
+      seekPreviewMs = Math.round(frac * (spotifyState.duration_ms || 0));
+      spotifyState.progress_ms = seekPreviewMs;
+      spotifySyncAt = performance.now();
+    }
+  });
+  window.addEventListener('pointerup', e => {
+    if (seeking) {
+      seeking = false;
+      const finalMs = seekPreviewMs;
+      api.spotifySeek(finalMs).catch(() => {});
+      setTimeout(() => refreshSpotify(), 100);
+      return;
+    }
     if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag = null;
     if (Math.abs(dx) > 48 && Math.abs(dy) < 36) { swallowClick = true; swipe(dx < 0 ? 1 : -1); }
   });
@@ -206,12 +235,14 @@
       spPlay: () => control(spotifyState.is_playing ? 'pause' : 'play'), spOpen: () => control('open'), spTitle: () => control('open'),
       spConnect: async () => { try { await api.spotifyConnect(); } catch {} refreshSpotify(); },
       spSeek: () => {
-        const bar = hit.spSeek, ms = Math.round(((x - bar.x) / bar.width) * (spotifyState.duration_ms || 0));
+        if (!hit.spSeek) return;
+        const bar = hit.spSeek, frac = Math.max(0, Math.min(1, (x - bar.x) / bar.width));
+        const ms = Math.round(frac * (spotifyState.duration_ms || 0));
         spotifyState.progress_ms = ms;
         spotifySyncAt = performance.now();
         api.spotifySeek(ms).catch(() => {});
         setTimeout(() => refreshSpotify(), 80);
-        setTimeout(() => refreshSpotify(), 350);
+        setTimeout(() => refreshSpotify(), 300);
       }
     };
     if (devicesOpen && !['spDevices', 'spDevClose', 'spDev0', 'spDev1', 'spDev2', 'spDev3'].some(k => inside(x, y, hit[k]))) { devicesOpen = false; event.preventDefault(); event.stopImmediatePropagation(); return; } // a click elsewhere closes the list
