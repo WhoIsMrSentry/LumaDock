@@ -106,7 +106,17 @@ function ReadSessionInfo() {
     $album = if ($props -and $props.AlbumTitle) { $props.AlbumTitle } else { '' }
     $status = if ($info) { $info.PlaybackStatus.ToString() } else { 'Closed' }
     $isPlaying = ($status -eq 'Playing')
-    $pos = if ($tl -and $tl.Position) { [long]$tl.Position.TotalMilliseconds } else { 0 }
+    $pos = 0
+    if ($tl -and $tl.Position) {
+        $rawPos = [long]$tl.Position.TotalMilliseconds
+        if ($isPlaying -and $tl.LastUpdatedTime) {
+            $elapsedMs = ([DateTimeOffset]::UtcNow - $tl.LastUpdatedTime).TotalMilliseconds
+            if ($elapsedMs -gt 0 -and $elapsedMs -lt 600000) {
+                $rawPos = [long]($rawPos + $elapsedMs)
+            }
+        }
+        $pos = $rawPos
+    }
     $dur = if ($tl -and $tl.EndTime) { [long]$tl.EndTime.TotalMilliseconds } else { 0 }
     $source = if ($session.SourceAppId) { $session.SourceAppId } else { 'Spotify' }
 

@@ -4098,6 +4098,17 @@ async function refreshSpotify() {
     if (
       result.connected
     ) {
+      const incomingPos = Number(result.progress_ms || 0);
+      const sameTrack = Boolean(spotifyState?.track?.name && result.track?.name && spotifyState.track.name === result.track.name);
+      let finalPos = incomingPos;
+      if (sameTrack && spotifyState?.is_playing && result.is_playing) {
+        const curPos = (spotifyState.progress_ms || 0) + (performance.now() - spotifySyncAt);
+        // Prevent backward jitter/rewind that causes lyrics to jump back to earlier lines
+        if (incomingPos < curPos && (curPos - incomingPos) < 3500) {
+          finalPos = curPos;
+        }
+      }
+
       spotifyState = {
         active:
           Boolean(
@@ -4110,10 +4121,7 @@ async function refreshSpotify() {
           ),
 
         progress_ms:
-          Number(
-            result.progress_ms ||
-            0
-          ),
+          finalPos,
 
         duration_ms:
           Number(
@@ -4150,10 +4158,21 @@ window.lumadock?.onMediaStateChanged?.(data => {
   if (!data) return;
   if (data.active && data.title) {
     spotifyConnected = true;
+    const incomingPos = Number(data.position || 0);
+    const sameTrack = Boolean(spotifyState?.track?.name && data.title && spotifyState.track.name === data.title);
+    let finalPos = incomingPos;
+    if (sameTrack && spotifyState?.is_playing && data.is_playing) {
+      const curPos = (spotifyState.progress_ms || 0) + (performance.now() - spotifySyncAt);
+      // Prevent backward jitter/rewind so lyrics never hop back to previous lines
+      if (incomingPos < curPos && (curPos - incomingPos) < 3500) {
+        finalPos = curPos;
+      }
+    }
+
     spotifyState = {
       active: true,
       is_playing: Boolean(data.is_playing),
-      progress_ms: Number(data.position || 0),
+      progress_ms: finalPos,
       duration_ms: Number(data.duration || 0),
       track: {
         id: 'local-' + String(data.title).slice(0, 12),

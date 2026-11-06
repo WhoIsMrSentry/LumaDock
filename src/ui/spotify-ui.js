@@ -64,11 +64,11 @@
   window.__lumadockGetActiveLyric = () => {
     if (!spotifyState.is_playing || !lyrics?.lines?.length) return null;
     const curPos = position();
-    if (typeof lyrics.lines.findLast === 'function') {
-      return lyrics.lines.findLast(l => l.timeMs <= curPos) || null;
-    }
     for (let i = lyrics.lines.length - 1; i >= 0; i--) {
-      if (lyrics.lines[i].timeMs <= curPos) return lyrics.lines[i];
+      const line = lyrics.lines[i];
+      if (line.timeMs <= curPos && line.text && line.text.trim()) {
+        return line;
+      }
     }
     return null;
   };
