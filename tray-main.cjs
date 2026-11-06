@@ -62,6 +62,13 @@ if (!app.requestSingleInstanceLock()) {
           const info = require('node:fs').existsSync(old) && shell.readShortcutLink(old);
           if (info && info.appUserModelId === 'com.lumadock.assistant' && path.resolve(info.target) === path.resolve(process.execPath)) require('node:fs').unlinkSync(old);
         } catch {}
+        // Clean legacy shortcuts and registry keys
+        try {
+          ['TwoCode.lnk', 'TwoCode Instellingen.lnk'].forEach(f => {
+            const legacy = path.join(programs, f);
+            if (require('node:fs').existsSync(legacy)) require('node:fs').unlinkSync(legacy);
+          });
+        } catch {}
         shell.writeShortcutLink(link, require('node:fs').existsSync(link) ? 'replace' : 'create', {
           target: process.execPath,
           args: app.isPackaged ? '' : `"${app.getAppPath()}"`,
