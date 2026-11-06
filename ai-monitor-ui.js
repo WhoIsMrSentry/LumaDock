@@ -716,12 +716,12 @@
     else if (!medium() && mode === 'compact') oldSetMode('rest', false);
   }
   window.__lumadockSettleSize = settleSize;
-  async function pollSpotify() {
-    try { await refreshSpotify(); settleSize(); } catch {}
-    const delay = (spotifyState?.is_playing || currentView === 'spotify') ? 700 : 1800;
-    setTimeout(pollSpotify, delay);
-  }
-  pollSpotify();
+  setInterval(async () => {
+    try {
+      if (typeof refreshSpotify === 'function') await refreshSpotify();
+      settleSize();
+    } catch {}
+  }, 1000);
   drawExpanded = function (alpha) {
     if (currentView === 'shortcuts') { drawHeader(alpha); drawShortcuts(contentRect()); return; }
     if (!['monitor', 'assistant'].includes(currentView)) return oldDrawExpanded(alpha);

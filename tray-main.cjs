@@ -42,7 +42,6 @@ function buildMenu() {
 }
 
 if (!app.requestSingleInstanceLock()) {
-  // LumaDock already runs: that one opens its island, this one stops right away.
   app.exit(0);
 } else {
   // "LumaDock Instellingen" in the Start menu starts LumaDock with --settings: then only that app opens.
