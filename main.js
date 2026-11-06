@@ -2511,6 +2511,18 @@ async function fetchTrackArtwork(title, artist) {
   return '';
 }
 
+function getArtworkOrFetchBackground(title, artist) {
+  if (!title) return '';
+  const cacheKey = `${title}:::${artist || ''}`.toLowerCase();
+  if (artworkCache.has(cacheKey)) {
+    return artworkCache.get(cacheKey) || '';
+  }
+  // Reserve cache slot with empty string to prevent duplicate fetches in 1s ticks
+  artworkCache.set(cacheKey, '');
+  fetchTrackArtwork(title, artist).catch(() => {});
+  return '';
+}
+
 function startWindowsMediaWatcher() {
   if (process.platform !== 'win32' || mediaWatchChild) return;
   const scriptPath = path.join(__dirname, 'media-watch.ps1');
@@ -3716,6 +3728,8 @@ async function spotifyApi(
       {
         ...options,
 
+        signal: options.signal || AbortSignal.timeout(1800),
+
         headers: {
           Authorization:
             `Bearer ${token}`,
@@ -3810,7 +3824,7 @@ async function getSpotifyState() {
 
   if (!hasTokens) {
     if (localMedia) {
-      const cover = await fetchTrackArtwork(localMedia.title, localMedia.artist);
+      const cover = getArtworkOrFetchBackground(localMedia.title, localMedia.artist);
       return {
         ok: true,
         connected: true,
@@ -3860,7 +3874,7 @@ async function getSpotifyState() {
 
     // Fallback to local Windows media session if Spotify Web API has no track
     if ((!data || !data.item) && localMedia) {
-      const cover = await fetchTrackArtwork(localMedia.title, localMedia.artist);
+      const cover = getArtworkOrFetchBackground(localMedia.title, localMedia.artist);
       return {
         ok: true,
         connected: true,
@@ -3919,7 +3933,7 @@ async function getSpotifyState() {
     };
   } catch (error) {
     if (localMedia) {
-      const cover = await fetchTrackArtwork(localMedia.title, localMedia.artist);
+      const cover = getArtworkOrFetchBackground(localMedia.title, localMedia.artist);
       return {
         ok: true,
         connected: true,

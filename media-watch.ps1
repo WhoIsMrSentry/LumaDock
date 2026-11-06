@@ -33,6 +33,13 @@ if (-not $mgr) {
 $lastJson = ''
 $tick = 0
 $cmdFile = "$env:TEMP\lumadock-media-cmd.txt"
+$cachedProps = $null
+$cachedPropsTime = 0
+$lastSessionSource = ''
+
+function InvalidatePropsCache() {
+    $script:cachedPropsTime = 0
+}
 
 function GetActiveSession() {
     $current = $mgr.GetCurrentSession()
@@ -65,7 +72,17 @@ function ReadSessionInfo() {
         return '{"active":false}'
     }
 
-    $props = AwaitOp ($session.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+    $nowMs = [System.Environment]::TickCount
+    if (-not $script:cachedProps -or ($nowMs - $script:cachedPropsTime) -gt 1500 -or $session.SourceAppId -ne $script:lastSessionSource) {
+        $newProps = AwaitOp ($session.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+        if ($newProps -and ($newProps.Title -or $newProps.Artist)) {
+            $script:cachedProps = $newProps
+            $script:cachedPropsTime = $nowMs
+            $script:lastSessionSource = $session.SourceAppId
+        }
+    }
+    $props = $script:cachedProps
+
     $info = $session.GetPlaybackInfo()
     $tl = $session.GetTimelineProperties()
 
@@ -103,14 +120,14 @@ function HandleControlCommand([string]$cmd) {
     try {
         if ($cmd -eq 'play') { [void]$session.TryPlayAsync() }
         elseif ($cmd -eq 'pause') { [void]$session.TryPauseAsync() }
-        elseif ($cmd -eq 'toggle') { [void]$session.TryTogglePlayPauseAsync() }
-        elseif ($cmd -eq 'next') { [void]$session.TrySkipNextAsync() }
-        elseif ($cmd -eq 'previous') { [void]$session.TrySkipPreviousAsync() }
+        elseif ($cmd -eq 'toggle') { [void]$session.TryTogglePlayPauseAsync(); InvalidatePropsCache }
+        elseif ($cmd -eq 'next') { [void]$session.TrySkipNextAsync(); InvalidatePropsCache }
+        elseif ($cmd -eq 'previous') { [void]$session.TrySkipPreviousAsync(); InvalidatePropsCache }
         elseif ($cmd.StartsWith('seek ')) {
             $msStr = $cmd.Substring(5).Trim()
             $ms = 0
             if ([long]::TryParse($msStr, [ref]$ms)) {
-                $ticks = $ms * 10000
+                $ticks = [long]($ms * 10000)
                 [void]$session.TryChangePlaybackPositionAsync($ticks)
             }
         }
@@ -126,10 +143,12 @@ while ($true) {
     # Check for incoming commands from LumaDock
     if (Test-Path $cmdFile) {
         try {
-            $cmd = Get-Content $cmdFile -Raw
+            $raw = Get-Content $cmdFile -Raw
             Remove-Item $cmdFile -Force -ErrorAction SilentlyContinue
-            if ($cmd) {
-                HandleControlCommand $cmd
+            if ($raw) {
+                foreach ($cmd in ($raw -split "[\r\n]+")) {
+                    if ($cmd.Trim()) { HandleControlCommand $cmd.Trim() }
+                }
             }
         } catch {}
     }

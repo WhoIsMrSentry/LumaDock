@@ -135,11 +135,11 @@
 
     // long progress bar with times
     const barY = top + 76, part = spotifyState.duration_ms ? position() / spotifyState.duration_ms : 0;
-    const overBar = inside(pointer.x, pointer.y, { x, y: barY - 8, width: w, height: 18 }), bh = overBar ? 6 : 4;
+    const overBar = inside(pointer.x, pointer.y, { x, y: barY - 14, width: w, height: 28 }), bh = (overBar || seeking) ? 6 : 4;
     box(x, barY - bh / 2, w, bh, 3, 'rgba(255,255,255,.14)');
-    box(x, barY - bh / 2, Math.max(bh, w * part), bh, 3, overBar ? colour : '#f4f7f0');
-    if (overBar) { ctx.save(); ctx.beginPath(); ctx.arc(x + w * part, barY, 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.restore(); }
-    hit.spSeek = { x, y: barY - 8, width: w, height: 18 };
+    box(x, barY - bh / 2, Math.max(bh, w * part), bh, 3, (overBar || seeking) ? colour : '#f4f7f0');
+    if (overBar || seeking) { ctx.save(); ctx.beginPath(); ctx.arc(x + w * part, barY, 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.restore(); }
+    hit.spSeek = { x, y: barY - 14, width: w, height: 28 };
     text(time(position()), x, barY + 17, 10, 'rgba(235,240,230,.5)', 600);
     text(spotifyState.duration_ms ? '-' + time(spotifyState.duration_ms - position()) : '0:00', right, barY + 17, 10, 'rgba(235,240,230,.5)', 600, 'right');
 
@@ -210,9 +210,10 @@
   window.addEventListener('pointerup', e => {
     if (seeking) {
       seeking = false;
+      swallowClick = true;
       const finalMs = seekPreviewMs;
       api.spotifySeek(finalMs).catch(() => {});
-      setTimeout(() => refreshSpotify(), 100);
+      setTimeout(() => refreshSpotify(), 80);
       return;
     }
     if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag = null;

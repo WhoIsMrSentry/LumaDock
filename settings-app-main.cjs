@@ -138,23 +138,29 @@ const GITHUB_REPO = 'WhoIsMrSentry/LumaDock';
 const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}`;
 let news = null, newsAt = 0;
 
+const { exec } = require('node:child_process');
+
+let cachedCurrentHash = '';
 function currentGitHash() {
+  if (cachedCurrentHash) return cachedCurrentHash;
   try {
     const { execSync } = require('node:child_process');
-    return execSync('git rev-parse --short HEAD', { cwd: __dirname, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    cachedCurrentHash = execSync('git rev-parse --short HEAD', { cwd: __dirname, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return cachedCurrentHash;
   } catch {
-    return '542f653';
+    cachedCurrentHash = '6d90b97';
+    return cachedCurrentHash;
   }
 }
 
-function remoteGitHash() {
-  try {
-    const { execSync } = require('node:child_process');
-    const out = execSync(`git ls-remote https://github.com/${GITHUB_REPO}.git HEAD`, { cwd: __dirname, encoding: 'utf8', timeout: 6000, stdio: ['ignore', 'pipe', 'ignore'] });
-    const match = out.match(/^([0-9a-f]{7,40})/i);
-    if (match) return match[1].slice(0, 7);
-  } catch {}
-  return null;
+function remoteGitHashAsync() {
+  return new Promise(resolve => {
+    exec(`git ls-remote https://github.com/${GITHUB_REPO}.git HEAD`, { cwd: __dirname, timeout: 4000, encoding: 'utf8' }, (err, stdout) => {
+      if (err || !stdout) return resolve(null);
+      const match = stdout.match(/^([0-9a-f]{7,40})/i);
+      resolve(match ? match[1].slice(0, 7) : null);
+    });
+  });
 }
 
 async function getNews() {
@@ -163,11 +169,12 @@ async function getNews() {
   const currentVersion = app.getVersion();
 
   try {
-    // 1. Fetch releases, commits and tags simultaneously
-    const [relRes, comRes, tagRes] = await Promise.all([
+    // 1. Fetch releases, commits, tags and remote git hash simultaneously (non-blocking)
+    const [relRes, comRes, tagRes, rHash] = await Promise.all([
       net.fetch(`${GITHUB_API}/releases?per_page=5`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'LumaDock' } }).catch(() => null),
       net.fetch(`${GITHUB_API}/commits?per_page=8`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'LumaDock' } }).catch(() => null),
-      net.fetch(`${GITHUB_API}/tags?per_page=5`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'LumaDock' } }).catch(() => null)
+      net.fetch(`${GITHUB_API}/tags?per_page=5`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'LumaDock' } }).catch(() => null),
+      remoteGitHashAsync().catch(() => null)
     ]);
 
     let list = [];
@@ -186,12 +193,12 @@ async function getNews() {
     }
 
     let remoteCommit = null;
-    let remoteHash = remoteGitHash() || currentHash;
+    let remoteHash = rHash || currentHash;
     if (comRes?.ok) {
       const commits = await comRes.json();
       if (Array.isArray(commits) && commits.length) {
         remoteCommit = commits[0];
-        remoteHash = String(remoteCommit.sha || '').slice(0, 7) || currentHash;
+        remoteHash = String(remoteCommit.sha || '').slice(0, 7) || rHash || currentHash;
 
         // If no formal GitHub releases created yet, turn latest commit changelog into the news entries
         if (!list.length) {
@@ -207,6 +214,27 @@ async function getNews() {
           }));
         }
       }
+    }
+
+    // Fallback: If GitHub API had no items (offline/rate-limited), read latest commits from local git history
+    if (!list.length) {
+      try {
+        const { execSync } = require('node:child_process');
+        const raw = execSync('git log -n 6 --format="%h%x09%s%x09%an%x09%aI"', { cwd: __dirname, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+        list = raw.trim().split('\n').filter(Boolean).map(line => {
+          const [h, msg, author, d] = line.split('\t');
+          return {
+            tag: 'v' + currentVersion,
+            name: msg || h,
+            body: msg || '',
+            date: d || new Date().toISOString(),
+            url: `https://github.com/${GITHUB_REPO}/commit/${h}`,
+            beta: true,
+            hash: h || currentHash,
+            assets: []
+          };
+        });
+      } catch {}
     }
 
     let latestTag = 'v' + currentVersion;
