@@ -698,11 +698,23 @@
   let holdClosed = false;
   window.__lumadockHoldClosed = () => { holdClosed = true; };
   // While Claude waits for an answer the small island pops open and gets wider (room for the buttons).
-  let wideFor = false;
+  let wideFor = '', lastRenderedLyric = '', lyricStartedAt = 0;
   function askSize() {
     const want = needsAnswer();
-    if (want === wideFor) return; wideFor = want;
-    UI.COMPACT_W = want ? 440 : 300;
+    const hasMusic = music() && !musicTucked;
+    const lrc = window.__lumadockGetActiveLyric?.();
+    let targetW = 300;
+    if (want) {
+      targetW = 440;
+    } else if (hasMusic) {
+      // Widen horizontally so song & lyrics fit comfortably without looking like a dönerci sign
+      targetW = (lrc && lrc.text) ? 560 : 500;
+    }
+
+    const key = `${want}:${hasMusic}:${Boolean(lrc?.text)}:${targetW}`;
+    if (key === wideFor && UI.COMPACT_W === targetW) return;
+    wideFor = key;
+    UI.COMPACT_W = targetW;
     if (want && mode !== 'expanded') oldSetMode('compact', false);
     else if (!want && mode === 'compact') { oldSetMode('compact', false); settleSize(); }
   }
@@ -712,6 +724,7 @@
   setMode = function (next, playSound = true) { return oldSetMode(next === 'rest' && medium() ? 'compact' : next, playSound); };
   function settleSize() {
     if (!introFinished || pointer.known && inside(pointer.x, pointer.y, islandBounds)) return;
+    askSize();
     if (medium() && mode === 'rest') setMode('compact', false);
     else if (!medium() && mode === 'compact') oldSetMode('rest', false);
   }
@@ -809,6 +822,7 @@
     text(`${level}%`, right - 4, cy + 4, 11.5, '#f2f5ed', 700, 'right');
   }
   drawSmall = function () {
+    askSize();
     hit.musicTuck = null; if (mode !== 'compact') tuckBox = null;
     if (mode !== 'compact') { oldDrawSmall(); songLine(); return; }
     songLine();
@@ -873,18 +887,38 @@
         const tw = ctx.measureText ? ctx.measureText(lrcText).width : 100;
         let ox = 0;
         if (tw > availW) {
-          const shift = Math.floor((performance.now() / 28) % (tw + 48));
-          ox = -shift;
+          if (activeLyric.text !== lastRenderedLyric) {
+            lastRenderedLyric = activeLyric.text;
+            lyricStartedAt = now;
+          }
+          const elapsed = (now - lyricStartedAt) / 1000;
+          const maxShift = tw - availW;
+          if (elapsed < 2.2) {
+            ox = 0;
+          } else {
+            const cycle = (elapsed - 2.2) % 9.0;
+            if (cycle < 4.0) {
+              const p = 0.5 - 0.5 * Math.cos((cycle / 4.0) * Math.PI);
+              ox = -p * maxShift;
+            } else if (cycle < 6.0) {
+              ox = -maxShift;
+            } else {
+              const p = 0.5 + 0.5 * Math.cos(((cycle - 6.0) / 3.0) * Math.PI);
+              ox = -p * maxShift;
+            }
+          }
+        } else {
+          lastRenderedLyric = activeLyric.text;
+          lyricStartedAt = now;
+          ox = 0;
         }
         text(lrcText, mid0 + ox, cy + 4, 11.5, window.__lumadockAlbumColour || '#1ed760', 600, 'left');
-        if (tw > availW && ox < 0) {
-          text(lrcText, mid0 + ox + tw + 48, cy + 4, 11.5, window.__lumadockAlbumColour || '#1ed760', 600, 'left');
-        }
         ctx.restore();
       } else {
-        text(tr.name || 'Spotify', mid0, cy + 4, 11.5, '#f2f5ed', 700, 'left', Math.max(40, (mid1 - mid0 - timer) * 0.62));
-        const nameW = Math.min((mid1 - mid0 - timer) * 0.62, (ctx.measureText ? (ctx.font = '700 11.5px "Segoe UI"', ctx.measureText(tr.name || 'Spotify').width) : 80));
-        if (tr.artist) text(tr.artist, mid0 + nameW + 8, cy + 4, 11, 'rgba(235,240,230,.5)', 600, 'left', Math.max(0, mid1 - timer - mid0 - nameW - 8));
+        lastRenderedLyric = '';
+        text(tr.name || 'Spotify', mid0, cy + 4, 11.5, '#f2f5ed', 700, 'left', Math.max(40, (mid1 - mid0 - timer) * 0.55));
+        const nameW = Math.min((mid1 - mid0 - timer) * 0.55, (ctx.measureText ? (ctx.font = '700 11.5px "Segoe UI"', ctx.measureText(tr.name || 'Spotify').width) : 80));
+        if (tr.artist) text(tr.artist, mid0 + nameW + 10, cy + 4, 11, 'rgba(235,240,230,.55)', 600, 'left', Math.max(0, mid1 - timer - mid0 - nameW - 10));
       }
       if (focus?.active()) text(focus.label(), mid1 - 26, cy + 4, 11.5, '#ffd28a', 700, 'right');
       if (p) drawLamp(p, right - 20, cy);
