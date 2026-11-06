@@ -738,13 +738,18 @@ async function loadNews() {
 }
 function drawNews() {
   if (tab !== 'news' || !news) return;
-  const latest = news.releases?.[0], hasUpdate = latest && newer(latest.tag, news.version);
-  const head = `<div class="card version"><span class="tile" style="--c:${hasUpdate ? '#ffb35c' : '#c6e994'}">${icon(hasUpdate ? 'download' : 'check')}</span><div><b>${esc(hasUpdate ? t().update(latest.tag) : t().yours(news.version))}</b><small>${esc(hasUpdate ? (t().yours(news.version) + ' · ' + (lang === 'tr' ? 'Otomatik güncelleniyor' : 'Auto updating')) : latest ? t().upToDate + ' · ' + t().latest(latest.tag) : '')}</small></div>
-    <div style="display:flex;gap:6px"><button class="btn ${hasUpdate ? 'main' : 'ghost'}" data-update="auto">${icon('download')}${hasUpdate ? (lang === 'tr' ? 'Şimdi Güncelle' : 'Update Now') : (lang === 'tr' ? 'Güncelleme Kontrol' : 'Check Updates')}</button><button class="btn ghost" data-url="https://github.com/lumadock/lumadock/releases/latest">${icon('external')}</button></div></div>`;
+  const latest = news.releases?.[0];
+  const hashLabel = news.hash ? ` · git:${news.hash}` : '';
+  const remoteHashLabel = news.remoteHash && news.remoteHash !== news.hash ? ` (uzak: ${news.remoteHash})` : '';
+  const hasUpdate = (latest && newer(latest.tag, news.version)) || (news.remoteHash && news.hash && news.remoteHash !== news.hash);
+  const head = `<div class="card version"><span class="tile" style="--c:${hasUpdate ? '#ffb35c' : '#c6e994'}">${icon(hasUpdate ? 'download' : 'check')}</span>
+    <div><b>${esc(hasUpdate ? (lang === 'tr' ? `Yeni sürüm / commit mevcut: ${latest?.tag || news.remoteHash}` : `Update available: ${latest?.tag || news.remoteHash}`) : (lang === 'tr' ? `Güncelsiniz: v${news.version}${hashLabel}` : `You are up to date: v${news.version}${hashLabel}`))}</b>
+    <small>${esc(hasUpdate ? (lang === 'tr' ? `Mevcut: v${news.version}${hashLabel} · Otomatik güncelleniyor` : `Current: v${news.version}${hashLabel} · Auto updating`) : (lang === 'tr' ? `GitHub WhoIsMrSentry/LumaDock ile senkronize${remoteHashLabel}` : `Synchronized with GitHub WhoIsMrSentry/LumaDock`))}</small></div>
+    <div style="display:flex;gap:6px"><button class="btn ${hasUpdate ? 'main' : 'ghost'}" data-update="auto">${icon(hasUpdate ? 'download' : 'check')}${hasUpdate ? (lang === 'tr' ? 'Şimdi Güncelle' : 'Update Now') : (lang === 'tr' ? 'Güncelleme Kontrol' : 'Check Updates')}</button><button class="btn ghost" data-url="https://github.com/WhoIsMrSentry/LumaDock/releases/latest" title="GitHub">${icon('external')}</button></div></div>`;
   if (!news.ok) { paint(head + `<div class="card"><p class="muted" style="margin:0 0 12px">${t().newsError}</p><button class="btn" data-news="retry">${t().retry}</button></div>`, false); return; }
   const date = d => d ? new Date(d).toLocaleDateString(lang === 'tr' ? 'tr-TR' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
-  const items = news.releases.map((r, i) => `<div class="release ${i === 0 ? 'latest' : ''}"><div class="rhead"><b>${esc(r.name || r.tag)}</b>${i === 0 ? `<span class="pill new">${t().newest}</span>` : ''}${r.beta ? `<span class="pill">${t().beta}</span>` : ''}<span>${esc(date(r.date))}</span></div>
-    <div class="card"><div class="notes">${notes(r.body) || '<span class="muted">—</span>'}</div><div class="more"><button class="btn ghost" data-url="${esc(r.url)}">${t().onGithub}${icon('external')}</button></div></div></div>`).join('');
+  const items = news.releases.map((r, i) => `<div class="release ${i === 0 ? 'latest' : ''}"><div class="rhead"><b>${esc(r.name || r.tag)}</b>${i === 0 ? `<span class="pill new">${t().newest}</span>` : ''}${r.beta ? `<span class="pill">${t().beta}</span>` : ''}${r.hash ? `<span class="pill" style="font-family:monospace">${esc(r.hash)}</span>` : ''}<span>${esc(date(r.date))}</span></div>
+    <div class="card"><div class="notes">${notes(r.body) || '<span class="muted">—</span>'}</div><div class="more"><button class="btn ghost" data-url="${esc(r.url || 'https://github.com/WhoIsMrSentry/LumaDock')}">${t().onGithub}${icon('external')}</button></div></div></div>`).join('');
   paint(head + items, false);
 }
 
@@ -871,14 +876,17 @@ list.addEventListener('click', e => {
   if (b.dataset.news === 'retry') loadNews();
   if (b.dataset.update === 'auto') {
     b.disabled = true;
-    toast(lang === 'tr' ? 'Güncellemeler denetleniyor…' : 'Checking for updates…');
+    toast(lang === 'tr' ? 'GitHub kontrol ediliyor (sürüm & commit hash)…' : 'Checking GitHub (version & commit hash)…');
     S.updateCheck(false).then(res => {
-      if (res?.status === 'up_to_date') toast(lang === 'tr' ? 'Zaten en son sürümü kullanıyorsunuz.' : 'You are on the latest version.');
+      if (res?.status === 'up_to_date') {
+        const hashStr = res.hash ? ` (git: ${res.hash})` : '';
+        toast(lang === 'tr' ? `Güncelsiniz: v${news?.version || '1.2.0-beta.2'}${hashStr} doğrulandı.` : `You are up to date: v${news?.version || '1.2.0-beta.2'}${hashStr} verified.`);
+      }
       else if (res?.status === 'downloading') toast(lang === 'tr' ? 'Güncelleme indiriliyor…' : 'Downloading update…');
       else if (res?.status === 'ready') toast(lang === 'tr' ? 'Güncelleme hazır, yükleniyor…' : 'Update ready, installing…');
       else if (res?.status === 'available_web') { toast(lang === 'tr' ? 'İndirme sayfası açılıyor…' : 'Opening download page…'); S.openUrl(res.url); }
       else if (res?.error) toast(res.error, true);
-    }).catch(err => toast(String(err?.message || err), true)).finally(() => { b.disabled = false; });
+    }).catch(err => toast(String(err?.message || err), true)).finally(() => { b.disabled = false; loadNews(); });
   }
 });
 // the island counts the buttons of its own list (the hero on Robo's page is ours, so it is left out)

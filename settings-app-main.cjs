@@ -133,57 +133,139 @@ ipcMain.handle('settings-app:connect', async (e, req) => {
   try { return await connect(req.id, req.on === true); } catch (error) { const msg = error instanceof Error ? error.message : String(error); return { ok: false, error: msg }; }
 });
 
-// News: our updates, straight from the releases on GitHub (the same place you download LumaDock).
-const RELEASES = 'https://api.github.com/repos/lumadock/lumadock/releases?per_page=12';
+// News & Updates: live GitHub commits, releases and tags from WhoIsMrSentry/LumaDock
+const GITHUB_REPO = 'WhoIsMrSentry/LumaDock';
+const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}`;
 let news = null, newsAt = 0;
-async function getNews() {
-  if (news && Date.now() - newsAt < 10 * 60 * 1000) return news;
+
+function currentGitHash() {
   try {
-    const res = await net.fetch(RELEASES, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'LumaDock' } });
-    if (!res.ok) throw new Error('GitHub ' + res.status);
-    const list = (await res.json()).filter(r => !r.draft).map(r => ({
-      tag: String(r.tag_name || ''), name: String(r.name || r.tag_name || ''), body: String(r.body || '').slice(0, 8000),
-      date: r.published_at || r.created_at || '', url: String(r.html_url || ''), beta: !!r.prerelease,
-      assets: (r.assets || []).map(a => ({ name: a.name, url: a.browser_download_url, size: a.size }))
-    }));
-    news = { ok: true, version: app.getVersion(), releases: list }; newsAt = Date.now();
+    const { execSync } = require('node:child_process');
+    return execSync('git rev-parse --short HEAD', { cwd: __dirname, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch {
+    return '66375c2';
+  }
+}
+
+async function getNews() {
+  if (news && Date.now() - newsAt < 2 * 60 * 1000) return news;
+  const currentHash = currentGitHash();
+  const currentVersion = app.getVersion();
+
+  try {
+    // 1. Fetch releases, commits and tags simultaneously
+    const [relRes, comRes, tagRes] = await Promise.all([
+      net.fetch(`${GITHUB_API}/releases?per_page=5`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'LumaDock' } }).catch(() => null),
+      net.fetch(`${GITHUB_API}/commits?per_page=8`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'LumaDock' } }).catch(() => null),
+      net.fetch(`${GITHUB_API}/tags?per_page=5`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'LumaDock' } }).catch(() => null)
+    ]);
+
+    let list = [];
+    if (relRes?.ok) {
+      const rels = (await relRes.json()).filter(r => !r.draft);
+      list = rels.map(r => ({
+        tag: String(r.tag_name || ''),
+        name: String(r.name || r.tag_name || ''),
+        body: String(r.body || '').slice(0, 8000),
+        date: r.published_at || r.created_at || '',
+        url: String(r.html_url || ''),
+        beta: !!r.prerelease,
+        hash: '',
+        assets: (r.assets || []).map(a => ({ name: a.name, url: a.browser_download_url, size: a.size }))
+      }));
+    }
+
+    let remoteCommit = null;
+    let remoteHash = currentHash;
+    if (comRes?.ok) {
+      const commits = await comRes.json();
+      if (Array.isArray(commits) && commits.length) {
+        remoteCommit = commits[0];
+        remoteHash = String(remoteCommit.sha || '').slice(0, 7) || currentHash;
+
+        // If no formal GitHub releases created yet, turn latest commit changelog into the news entries
+        if (!list.length) {
+          list = commits.slice(0, 6).map(c => ({
+            tag: 'v' + currentVersion,
+            name: String(c.commit?.message || '').split('\n')[0].slice(0, 100),
+            body: String(c.commit?.message || ''),
+            date: c.commit?.author?.date || c.commit?.committer?.date || '',
+            url: c.html_url || `https://github.com/${GITHUB_REPO}`,
+            beta: true,
+            hash: String(c.sha || '').slice(0, 7),
+            assets: []
+          }));
+        }
+      }
+    }
+
+    let latestTag = 'v' + currentVersion;
+    if (tagRes?.ok) {
+      const tags = await tagRes.json();
+      if (Array.isArray(tags) && tags.length && tags[0].name) latestTag = tags[0].name;
+    }
+
+    news = {
+      ok: true,
+      repo: GITHUB_REPO,
+      version: currentVersion,
+      hash: currentHash,
+      remoteHash,
+      latestTag,
+      releases: list
+    };
+    newsAt = Date.now();
     return news;
-  } catch (error) { const msg = error instanceof Error ? error.message : String(error); return { ok: false, version: app.getVersion(), error: msg }; }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return { ok: false, version: currentVersion, hash: currentHash, error: msg };
+  }
 }
 ipcMain.handle('settings-app:news', e => fromApp(e) ? getNews() : null);
 
-// Auto-Updater: checks latest GitHub release, downloads installer and applies automatically
-let updateState = { status: 'idle', tag: '', progress: 0, error: '' };
+// Auto-Updater: checks latest GitHub release/commit, downloads installer or verifies hash
+let updateState = { status: 'idle', tag: '', hash: '', progress: 0, error: '' };
 async function checkAndApplyUpdate(silent = false) {
   try {
     const data = await getNews();
-    if (!data?.ok || !data.releases?.length) return { ok: false, status: 'no_release' };
-    const latest = data.releases[0];
-    const current = app.getVersion();
+    if (!data?.ok) return { ok: false, error: data?.error || 'Failed to check GitHub' };
+
+    const currentHash = data.hash || currentGitHash();
+    const remoteHash = data.remoteHash || currentHash;
+    const currentVersion = data.version;
+    const latest = data.releases?.[0];
+    const latestTag = data.latestTag || latest?.tag || ('v' + currentVersion);
+
     const parts = v => String(v || '').replace(/^v/i, '').split('-')[0].split('.').map(n => parseInt(n, 10) || 0);
     const newer = (a, b) => { const x = parts(a), y = parts(b); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
-    if (!newer(latest.tag, current)) {
-      updateState = { status: 'up_to_date', tag: latest.tag, progress: 100, error: '' };
-      return { ok: true, status: 'up_to_date', tag: latest.tag };
+
+    const hasNewerVersion = newer(latestTag, currentVersion);
+    const hasDifferentHash = remoteHash && currentHash && remoteHash !== currentHash;
+
+    if (!hasNewerVersion && !hasDifferentHash) {
+      updateState = { status: 'up_to_date', tag: latestTag, hash: currentHash, remoteHash, progress: 100, error: '' };
+      return { ok: true, status: 'up_to_date', tag: latestTag, hash: currentHash, remoteHash };
     }
-    const exeAsset = (latest.assets || []).find(a => /\.exe$/i.test(a.name));
+
+    const exeAsset = (latest?.assets || []).find(a => /\.exe$/i.test(a.name));
     if (!exeAsset?.url) {
-      updateState = { status: 'available_web', tag: latest.tag, progress: 0, url: latest.url };
-      return { ok: true, status: 'available_web', tag: latest.tag, url: latest.url };
+      updateState = { status: 'available_web', tag: latestTag, hash: remoteHash, progress: 0, url: latest?.url || `https://github.com/${GITHUB_REPO}/releases` };
+      return { ok: true, status: 'available_web', tag: latestTag, hash: remoteHash, url: updateState.url };
     }
-    updateState = { status: 'downloading', tag: latest.tag, progress: 10, error: '' };
-    const targetFile = path.join(os.tmpdir(), `LumaDock-Setup-${latest.tag}.exe`);
+
+    updateState = { status: 'downloading', tag: latestTag, hash: remoteHash, progress: 10, error: '' };
+    const targetFile = path.join(os.tmpdir(), `LumaDock-Setup-${latestTag}.exe`);
     const resp = await net.fetch(exeAsset.url, { headers: { 'User-Agent': 'LumaDock' } });
     if (!resp.ok) throw new Error('Download failed: ' + resp.status);
     const arrayBuffer = await resp.arrayBuffer();
     fs.writeFileSync(targetFile, Buffer.from(arrayBuffer));
-    updateState = { status: 'ready', tag: latest.tag, progress: 100, targetFile };
+    updateState = { status: 'ready', tag: latestTag, hash: remoteHash, progress: 100, targetFile };
     if (!silent) {
       const { spawn } = require('node:child_process');
       spawn(targetFile, ['/SILENT'], { detached: true, stdio: 'ignore' }).unref();
       setTimeout(() => app.quit(), 1500);
     }
-    return { ok: true, status: 'ready', tag: latest.tag, targetFile };
+    return { ok: true, status: 'ready', tag: latestTag, hash: remoteHash, targetFile };
   } catch (err) {
     updateState = { status: 'error', error: err?.message || String(err) };
     return { ok: false, error: updateState.error };
