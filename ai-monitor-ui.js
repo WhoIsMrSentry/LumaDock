@@ -716,7 +716,7 @@
     else if (!medium() && mode === 'compact') oldSetMode('rest', false);
   }
   window.__lumadockSettleSize = settleSize;
-  setInterval(async () => { await refreshSpotify(); settleSize(); }, 4000);
+  setInterval(async () => { await refreshSpotify(); settleSize(); }, 2000);
   drawExpanded = function (alpha) {
     if (currentView === 'shortcuts') { drawHeader(alpha); drawShortcuts(contentRect()); return; }
     if (!['monitor', 'assistant'].includes(currentView)) return oldDrawExpanded(alpha);

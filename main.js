@@ -3701,10 +3701,20 @@ async function getSpotifyState() {
 
 
   try {
-    const data =
+    let data =
       await spotifyApi(
         '/v1/me/player?additional_types=track,episode'
       );
+
+    // Fallback: if /v1/me/player returns 204 or no item, try /v1/me/player/currently-playing
+    if (!data || !data.item) {
+      try {
+        const cp = await spotifyApi('/v1/me/player/currently-playing?additional_types=track,episode');
+        if (cp && cp.item) {
+          data = cp;
+        }
+      } catch {}
+    }
 
 
     if (
