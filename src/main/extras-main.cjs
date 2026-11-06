@@ -15,7 +15,7 @@ function setup(electron) {
   const readJson = (name, fallback) => { try { return JSON.parse(fs.readFileSync(file(name), 'utf8')); } catch { return fallback; } };
   const writeJson = (name, value) => { try { fs.writeFileSync(file(name), JSON.stringify(value)); } catch {} };
   const trusted = event => {
-    try { return path.resolve(fileURLToPath(event.sender.getURL())).toLowerCase() === path.join(__dirname, 'mascot.html').toLowerCase(); }
+    try { return path.resolve(fileURLToPath(event.sender.getURL())).toLowerCase() === path.join(__dirname, '..', '..', 'mascot.html').toLowerCase(); }
     catch { return false; }
   };
   const handle = (channel, fn) => ipcMain.handle(channel, async (event, payload) => {
@@ -97,7 +97,7 @@ function setup(electron) {
   let volumeChild = null;
   function startVolume() {
     if (process.platform !== 'win32' || volumeChild) return;
-    volumeChild = spawn(POWERSHELL, ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, 'volume-watch.ps1'), '-Parent', String(process.pid)],
+    volumeChild = spawn(POWERSHELL, ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, '..', 'native', 'volume-watch.ps1'), '-Parent', String(process.pid)],
       { windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'ignore'] });
     let buffer = '';
     volumeChild.stdout.on('data', chunk => {

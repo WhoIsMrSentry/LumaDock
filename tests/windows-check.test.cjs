@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { check } = require('../check-windows.cjs');
+const { check } = require('../src/main/check-windows.cjs');
 test('Windows check skips unrelated windows and never prints conversation content', async () => {
   const logs = [], actions = [];
   const worker = { request: async (method, args) => {

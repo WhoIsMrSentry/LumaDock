@@ -73,7 +73,7 @@ if (!app.requestSingleInstanceLock()) {
           target: process.execPath,
           args: app.isPackaged ? '' : `"${app.getAppPath()}"`,
           cwd: app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(),
-          icon: path.join(__dirname, 'assets', 'icon.ico'), iconIndex: 0,
+          icon: path.join(path.resolve(__dirname, '..', '..'), 'assets', 'icon.ico'), iconIndex: 0,
           appUserModelId: 'com.lumadock.assistant',
           description: 'LumaDock: Dynamic Island for Windows'
         });
@@ -83,7 +83,7 @@ if (!app.requestSingleInstanceLock()) {
           target: process.execPath,
           args: (app.isPackaged ? '' : `"${app.getAppPath()}" `) + '--settings',
           cwd: app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(),
-          icon: path.join(__dirname, 'assets', 'settings-icon.ico'), iconIndex: 0,
+          icon: path.join(path.resolve(__dirname, '..', '..'), 'assets', 'settings-icon.ico'), iconIndex: 0,
           appUserModelId: 'com.lumadock.settings',
           description: 'LumaDock Settings: connections, Robo, wardrobe and more'
         });
@@ -91,17 +91,18 @@ if (!app.requestSingleInstanceLock()) {
       // The shortcut alone was not enough: Windows also reads the name and icon of notifications from
       // HKCU\Software\Classes\AppUserModelId\<app id>. Only LumaDock's own key, in the user's own registry part.
       try {
+        const ROOT = path.resolve(__dirname, '..', '..');
         const { execFile } = require('node:child_process');
         const key = 'HKCU\\Software\\Classes\\AppUserModelId\\com.lumadock.assistant';
         const set = (name, value) => execFile('reg.exe', ['add', key, '/v', name, '/t', 'REG_SZ', '/d', value, '/f'], { windowsHide: true }, () => {});
         set('DisplayName', 'LumaDock');
-        set('IconUri', path.join(__dirname, 'assets', 'icon-256.png'));
+        set('IconUri', path.join(ROOT, 'assets', 'icon-256.png'));
         const key2 = 'HKCU\\Software\\Classes\\AppUserModelId\\com.lumadock.settings';
         execFile('reg.exe', ['add', key2, '/v', 'DisplayName', '/t', 'REG_SZ', '/d', 'LumaDock Settings', '/f'], { windowsHide: true }, () => {});
-        execFile('reg.exe', ['add', key2, '/v', 'IconUri', '/t', 'REG_SZ', '/d', path.join(__dirname, 'assets', 'settings-icon.png'), '/f'], { windowsHide: true }, () => {});
+        execFile('reg.exe', ['add', key2, '/v', 'IconUri', '/t', 'REG_SZ', '/d', path.join(ROOT, 'assets', 'settings-icon.png'), '/f'], { windowsHide: true }, () => {});
       } catch {}
     }
-    const image = nativeImage.createFromPath(path.join(__dirname, 'assets', 'tray.png'));
+    const image = nativeImage.createFromPath(path.join(path.resolve(__dirname, '..', '..'), 'assets', 'tray.png'));
     tray = new Tray(image);
     tray.setToolTip('LumaDock');
     tray.on('click', openIsland);

@@ -6,7 +6,7 @@
   "scripts": {
     "test": "node --test tests/monitor.test.cjs tests/windows-check.test.cjs tests/claude-code-hooks.test.cjs tests/extras.test.cjs",
     "start": "electron .",
-    "check:windows": "node check-windows.cjs"
+    "check:windows": "node src/main/check-windows.cjs"
   },
   "keywords": [
     "dynamic-island",

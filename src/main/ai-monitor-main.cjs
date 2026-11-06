@@ -18,7 +18,7 @@ class NativeWorker {
     if (this.child) return;
     if (this.platform !== 'win32') throw new Error('Deze koppeling gebruikt Windows.');
     const executable = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-    const child = this.spawn(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Mta', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, 'windows-ai-access.ps1')],
+    const child = this.spawn(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Mta', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, '..', 'native', 'windows-ai-access.ps1')],
       { windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
     this.child = child; this.decoder = new StringDecoder('utf8'); this.buffer = ''; this.stderr = '';
     child.stdout.on('data', data => {
@@ -133,7 +133,7 @@ function setup(electron, options = {}) {
   const settingsPath = () => path.join(app.getPath('userData'), 'ai-monitor-windows.json');
   const trusted = event => {
     try {
-      const actual = path.resolve(fileURLToPath(event.sender.getURL())), expected = path.join(__dirname, 'mascot.html');
+      const actual = path.resolve(fileURLToPath(event.sender.getURL())), expected = path.join(__dirname, '..', '..', 'mascot.html');
       return process.platform === 'win32' ? actual.toLowerCase() === expected.toLowerCase() : actual === expected;
     } catch { return false; }
   };

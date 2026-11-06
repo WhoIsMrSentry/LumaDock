@@ -52,7 +52,7 @@ function debugShot(data) {
 
 function ps(args, timeout = 30000) {
   return new Promise((resolve, reject) => {
-    execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, 'buddy-look.ps1'), ...args.map(String)],
+    execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, '..', 'native', 'buddy-look.ps1'), ...args.map(String)],
       { windowsHide: true, timeout, maxBuffer: 32 * 1024 * 1024 }, (error, stdout) => {
         const out = String(stdout || '').trim();
         try { const json = JSON.parse(out.slice(out.indexOf('{'))); if (json.error) throw new Error(json.error); resolve(json); }
@@ -68,7 +68,7 @@ let eyes = null, eyesBuf = '', eyesId = 0;
 const waiting = new Map();
 function startEyes() {
   if (eyes) return;
-  eyes = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, 'buddy-helper.ps1'), '-Skip', String(process.pid)], { windowsHide: true });
+  eyes = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, '..', 'native', 'buddy-helper.ps1'), '-Skip', String(process.pid)], { windowsHide: true });
   eyes.stdout.setEncoding('utf8');
   eyes.stdout.on('data', chunk => {
     eyesBuf += chunk;
@@ -109,15 +109,16 @@ async function windowAt(point) {
 // ---------- the layer ----------
 function create() {
   if (layer && !layer.isDestroyed()) return;
+  const ROOT = path.resolve(__dirname, '..', '..');
   layer = new BrowserWindow({
     frame: false, transparent: true, backgroundColor: '#00000000', resizable: false, movable: false, minimizable: false, maximizable: false,
     fullscreenable: false, skipTaskbar: true, alwaysOnTop: true, hasShadow: false, show: false, focusable: true, enableLargerThanScreen: true,
-    icon: path.join(__dirname, 'assets', 'icon.ico'),
-    webPreferences: { preload: path.join(__dirname, 'buddy-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false }
+    icon: path.join(ROOT, 'assets', 'icon.ico'),
+    webPreferences: { preload: path.join(ROOT, 'buddy-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false }
   });
   layer.setAlwaysOnTop(true, 'screen-saver');
   layer.setIgnoreMouseEvents(true, { forward: true });
-  layer.loadFile(path.join(__dirname, 'buddy.html'), { query: process.env.BUDDY_DEBUG ? { test: '1' } : {} }); // tests: a fake mouse cannot hold the button
+  layer.loadFile(path.join(ROOT, 'buddy.html'), { query: process.env.BUDDY_DEBUG ? { test: '1' } : {} }); // tests: a fake mouse cannot hold the button
   startEyes(); // ready before the first drag (it takes a second to start)
   layer.on('closed', () => { layer = null; layerDisplay = null; stopFollow(); if (state !== 'home') { state = 'home'; toIsland('buddy:home'); } });
 }

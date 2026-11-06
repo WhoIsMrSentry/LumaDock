@@ -1,4 +1,4 @@
 @echo off
 cd /d "%~dp0"
-node .\check-windows.cjs
+node .\src\main\check-windows.cjs
 pause

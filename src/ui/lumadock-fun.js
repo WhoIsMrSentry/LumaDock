@@ -488,16 +488,8 @@
       if (move === 3) { tilt = Math.sin(t / 120) * 0.08; dy -= Math.abs(Math.sin(t / 240)) * 2; }
     }
     if (!mood && hungry() && prefs.faces) mood = 'sad';
-    if (mood === 'sad') { dy += 2.2 + Math.sin(t / 320) * 0.8; tilt -= 0.05; }
-    else if (mood === 'happy') { dy -= Math.abs(Math.sin(t / 160)) * 2.6; tilt += Math.sin(t / 320) * 0.06; }
-    else if (mood === 'curious') { tilt += 0.12 + Math.sin(t / 280) * 0.05; }
-    else if (mood === 'angry') { tilt += Math.sin(t / 35) * 0.045; dy += 1; }
-    else if (mood === 'cool') { dy += Math.sin(t / 220) * 1.4; tilt += Math.sin(t / 440) * 0.04; }
-    else if (mood === 'dizzy') { tilt += Math.sin(t / 150) * 0.14; dy += Math.cos(t / 150) * 1.6; }
-    else if (mood === 'heart') { scale *= 1 + 0.04 * Math.pow(Math.sin(t / 155), 4); tilt += Math.sin(t / 310) * 0.05; }
-    else if (mood === 'wink') { tilt += 0.08; }
+    if (mood === 'sad') dy += 2;
     if (!mood && asleep()) { mood = 'sleep'; dy += Math.sin(t / 900) * 1.5; }
-    else if (mood === 'sleep') { dy += Math.sin(t / 650) * 1.6; }
     mood = idleLife(t, mood);
     const pop = (t - popAt) / 420;
     if (pop >= 0 && pop < 1) scale *= 1 + 2.70158 * Math.pow(pop - 1, 3) + 1.70158 * Math.pow(pop - 1, 2);
@@ -660,18 +652,10 @@
       c.beginPath(); c.moveTo(-16, -27); c.lineTo(16, -27); c.lineTo(10, -54); c.lineTo(20, -66); c.lineTo(2, -56); c.closePath(); c.fill();
       c.fillStyle = '#ff9a1f'; c.fillRect(-15, -33, 30, 5);
     }
-    const curMood = fx().mood;
-    if (curMood === 'sleep') {
+    if (fx().mood === 'sleep') {
       c.fillStyle = '#00e5ff'; c.font = '700 16px Arial';
       const t = now() / 1000;
       ['z', 'Z', 'Z'].forEach((letter, i) => { const k = (t * 0.5 + i / 3) % 1; c.globalAlpha = 1 - k; c.fillText(letter, 30 + k * 18, -20 - k * 34); });
-    } else if (curMood === 'heart') {
-      const t = now() / 1000;
-      for (let i = 0; i < 2; i++) {
-        const k = (t * 0.65 + i * 0.5) % 1;
-        c.save(); c.globalAlpha = 1 - k; c.translate((i === 0 ? 32 : -32) + Math.sin(k * 5 + i) * 4, -18 - k * 28); c.scale(0.65 + k * 0.35, 0.65 + k * 0.35);
-        c.fillStyle = '#ff4d88'; c.beginPath(); c.moveTo(0, 4); c.bezierCurveTo(-8, -2, -5, -10, 0, -5); c.bezierCurveTo(5, -10, 8, -2, 0, 4); c.fill(); c.restore();
-      }
     }
     if (focus.active() && mode !== 'expanded' && !previewing) {
       const part = 1 - focus.left() / focusLength;
@@ -817,13 +801,8 @@
     `<div class="tc-group" data-icon="🌍" style="--g:#7fb2ff">${L('Language', 'Dil')}</div>`,
     row(L('Language · Dil', 'Dil · Language'), L('Interface language for the island and settings', 'Ada ve ayarlar penceresinin arayüz dili'), chips('lang', [['en', 'English'], ['tr', 'Türkçe']])),
     `<div class="tc-group" data-icon="🧪" style="--g:#b98cff">${L('Testing', 'Test Modu')}</div>`,
-    row(L('Test Mode', 'Test Modu'), L('Try all MCP Robot visor expressions and island states live', 'Tüm MCP Robot yüz ifadelerini ve ada durumlarını canlı test edin'), toggle('testMode')),
-    prefs.testMode ? [
-      `<div class="tc-group" data-icon="🤖" style="--g:#00e5ff">${L('MCP Robot Visor Expressions · Live Test', 'MCP Robot Yüz İfadeleri · Canlı Test')}</div>`,
-      `<div class="tc-tests">${MOOD_DEMO().map(([m, label]) => `<button type="button" class="tc-chip${m === 'all' ? ' on' : ''}" data-mood="${m}">${label}</button>`).join('')}</div>`,
-      `<div class="tc-group" data-icon="⚡" style="--g:#c6e994">${L('Island States · Live Test', 'Ada Durumları · Canlı Test')}</div>`,
-      `<div class="tc-tests">${TESTS().map(([k, label]) => `<button type="button" class="tc-chip" data-test="${k}">${label}</button>`).join('')}</div>`
-    ].join('') : '',
+    row(L('Test Mode', 'Test Modu'), L('Try all island states and animations without an active AI session', 'Aktif yapay zeka veya müzik olmadan tüm durumları deneyin'), toggle('testMode')),
+    prefs.testMode ? `<div class="tc-tests">${TESTS().map(([k, label]) => `<button type="button" class="tc-chip" data-test="${k}">${label}</button>`).join('')}</div>` : '',
     `<div class="tc-group" data-icon="✨" style="--g:#ffb35c">${L('Animations', 'Animasyonlar')}</div>`,
     row(L('Speed', 'Hız'), L('How fast the island expands, collapses and reacts', 'Adanın açılma, kapanma ve tepki verme hızı'), chips('speed', [['snel', L('Fast', 'Hızlı')], ['normaal', L('Normal', 'Normal')]])),
     row(L('App Transitions', 'Uygulama Geçişleri'), L('Smooth blur and bounce transitions when switching views', 'Ekranlar arasında yumuşak geçiş animasyonları'), toggle('appAnim')),
@@ -852,7 +831,7 @@
   let moodTimers = [];
   function playAllMoods() {
     moodTimers.forEach(clearTimeout);
-    moodTimers = ALL_MOODS.map((m, i) => later(i * 1600, () => { feel(m, 1550); jump(); chime('pop'); }));
+    moodTimers = ALL_MOODS.map((m, i) => later(i * 950, () => { feel(m, 900); jump(); chime('pop'); }));
   }
   const DEMOS = {
     look: () => { jump(); feel('happy', 900); chime('pop'); },
@@ -888,7 +867,7 @@
     spotifyState = { is_playing: false, track: null }; albumImage = null; window.__lumadockAlbumColour = null; refreshSpotify(); window.__lumadockSettleSize?.();
   }
   function runTest(kind) {
-    const claude = k => window.lumadock?.aiMonitorHooksTest?.(k, isTr() ? 'tr' : 'en').then(() => window.__lumadockMonitor?.refresh()).catch(() => {});
+    const claude = k => window.lumadock?.aiMonitorHooksTest?.(k).then(() => window.__lumadockMonitor?.refresh()).catch(() => {});
     if (kind === 'hello') startHello();
     else if (kind === 'bye') { window.__lumadockBye(); setTimeout(() => { byeAt = null; jump(); feel('happy', 900); }, BYE.end + 500); }
     else if (kind === 'music') fakeMusic();
@@ -911,7 +890,7 @@
     if (target.dataset.mood) {
       moodTimers.forEach(clearTimeout); moodTimers = [];
       if (target.dataset.mood === 'all') { playAllMoods(); return true; }
-      feel(target.dataset.mood, 4500); jump(); chime('pop'); return true;
+      feel(target.dataset.mood, 2800); jump(); chime('pop'); return true;
     }
     if (target.dataset.test) { runTest(target.dataset.test); return true; }
     if (target.dataset.setname) {

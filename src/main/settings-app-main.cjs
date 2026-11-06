@@ -5,9 +5,10 @@
 const { app, BrowserWindow, ipcMain, net, shell, dialog } = require('electron');
 const path = require('node:path');
 
+const ROOT = path.resolve(__dirname, '..', '..');
 let win = null, dirty = false, closing = false;
 // Its own app for Windows: own name, own icon, own taskbar button (tray-main.cjs makes the Start menu shortcut).
-const APP_ID = 'com.lumadock.settings', APP_NAME = 'LumaDock Settings', ICON = path.join(__dirname, 'assets', 'settings-icon.ico');
+const APP_ID = 'com.lumadock.settings', APP_NAME = 'LumaDock Settings', ICON = path.join(ROOT, 'assets', 'settings-icon.ico');
 // light or dark, chosen in the app (the window's own buttons top right follow it)
 const THEMES = { dark: { bg: '#0e0f11', symbol: '#e6e6ea' }, light: { bg: '#f6f6f8', symbol: '#1a1b1e' } };
 const island = () => BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && /mascot\.html/.test(w.webContents.getURL()));
@@ -30,7 +31,7 @@ function open(tab) {
     width: 1120, height: 760, minWidth: 820, minHeight: 560, show: false, title: APP_NAME,
     backgroundColor: THEMES[theme].bg, icon: ICON,
     titleBarStyle: 'hidden', titleBarOverlay: { color: THEMES[theme].bg, symbolColor: THEMES[theme].symbol, height: 44 },
-    webPreferences: { preload: path.join(__dirname, 'settings-app-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
+    webPreferences: { preload: path.join(ROOT, 'settings-app-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
   win.setMenuBarVisibility(false);
   if (process.platform === 'win32') {
@@ -39,7 +40,7 @@ function open(tab) {
         relaunchCommand: `"${process.execPath}" ` + (app.isPackaged ? '' : `"${app.getAppPath()}" `) + '--settings' });
     } catch {}
   }
-  win.loadFile(path.join(__dirname, 'settings-app.html'), tab ? { query: { tab } } : {});
+  win.loadFile(path.join(ROOT, 'settings-app.html'), tab ? { query: { tab } } : {});
   win.once('ready-to-show', () => { win.show(); win.focus(); });
   win.on('show', () => faceWanted(true));
   win.on('hide', () => faceWanted(false));
@@ -145,7 +146,7 @@ function currentGitHash() {
   if (cachedCurrentHash) return cachedCurrentHash;
   try {
     const { execSync } = require('node:child_process');
-    cachedCurrentHash = execSync('git rev-parse --short HEAD', { cwd: __dirname, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    cachedCurrentHash = execSync('git rev-parse --short HEAD', { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     return cachedCurrentHash;
   } catch {
     cachedCurrentHash = '6d90b97';
@@ -155,7 +156,7 @@ function currentGitHash() {
 
 function remoteGitHashAsync() {
   return new Promise(resolve => {
-    exec(`git ls-remote https://github.com/${GITHUB_REPO}.git HEAD`, { cwd: __dirname, timeout: 4000, encoding: 'utf8' }, (err, stdout) => {
+    exec(`git ls-remote https://github.com/${GITHUB_REPO}.git HEAD`, { cwd: ROOT, timeout: 4000, encoding: 'utf8' }, (err, stdout) => {
       if (err || !stdout) return resolve(null);
       const match = stdout.match(/^([0-9a-f]{7,40})/i);
       resolve(match ? match[1].slice(0, 7) : null);
@@ -220,7 +221,7 @@ async function getNews() {
     if (!list.length) {
       try {
         const { execSync } = require('node:child_process');
-        const raw = execSync('git log -n 6 --format="%h%x09%s%x09%an%x09%aI"', { cwd: __dirname, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+        const raw = execSync('git log -n 6 --format="%h%x09%s%x09%an%x09%aI"', { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
         list = raw.trim().split('\n').filter(Boolean).map(line => {
           const [h, msg, author, d] = line.split('\t');
           return {

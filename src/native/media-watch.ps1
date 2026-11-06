@@ -141,16 +141,21 @@ while ($true) {
     }
 
     # Check for incoming commands from LumaDock
+    $hadCmd = $false
     if (Test-Path $cmdFile) {
         try {
             $raw = Get-Content $cmdFile -Raw
             Remove-Item $cmdFile -Force -ErrorAction SilentlyContinue
             if ($raw) {
                 foreach ($cmd in ($raw -split "[\r\n]+")) {
-                    if ($cmd.Trim()) { HandleControlCommand $cmd.Trim() }
+                    if ($cmd.Trim()) { HandleControlCommand $cmd.Trim(); $hadCmd = $true }
                 }
             }
         } catch {}
+    }
+
+    if ($hadCmd) {
+        Start-Sleep -Milliseconds 40
     }
 
     try {
@@ -163,5 +168,7 @@ while ($true) {
         [Console]::Out.Flush()
         $lastJson = $now
     }
-    Start-Sleep -Milliseconds 250
+    if (-not $hadCmd) {
+        Start-Sleep -Milliseconds 200
+    }
 }

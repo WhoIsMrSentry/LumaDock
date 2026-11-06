@@ -30,6 +30,8 @@
       ipcRenderer.invoke('spotify:seek', positionMs),
     spotifyDisconnect: () =>
       ipcRenderer.invoke('spotify:disconnect'),
+    onMediaStateChanged: callback => subscribe('media:state-changed', callback),
+    onMediaArtworkLoaded: callback => subscribe('media:artwork-loaded', callback),
 
     projectGet: () => ipcRenderer.invoke('project:get'),
     projectChoose: () => ipcRenderer.invoke('project:choose'),

@@ -4146,6 +4146,35 @@ async function refreshSpotify() {
   } catch {}
 }
 
+window.lumadock?.onMediaStateChanged?.(data => {
+  if (!data) return;
+  if (data.active && data.title) {
+    spotifyConnected = true;
+    spotifyState = {
+      active: true,
+      is_playing: Boolean(data.is_playing),
+      progress_ms: Number(data.position || 0),
+      duration_ms: Number(data.duration || 0),
+      track: {
+        id: 'local-' + String(data.title).slice(0, 12),
+        name: data.title,
+        artist: data.artist || 'Müzik',
+        image_url: data.image_url || albumUrl || ''
+      },
+      device: { id: 'local', name: 'Bu Bilgisayar', type: 'Computer', active: true, here: true }
+    };
+    spotifySyncAt = performance.now();
+    if (data.image_url) setAlbum(data.image_url);
+  } else if (!data.active && spotifyState) {
+    spotifyState.active = false;
+    spotifyState.is_playing = false;
+  }
+});
+
+window.lumadock?.onMediaArtworkLoaded?.(data => {
+  if (data?.cover) setAlbum(data.cover);
+});
+
 
 function drawSpotify(
   content
@@ -5427,28 +5456,11 @@ canvas.addEventListener(
       )
     ) {
       try {
-        const state =
-          await window.lumadock
-            .spotifyGetState();
-
-
-        if (
-          !state?.connected
-        ) {
-          await window.lumadock
-            .spotifyConnect();
-        }
-
-
-        await refreshSpotify();
-
-
         setView(
           'spotify'
         );
-
+        refreshSpotify();
       } catch {}
-
 
       return;
     }
@@ -5567,22 +5579,22 @@ setInterval(
 );
 
 </script>
-<script src="./i18n-ui.js"></script>
-<script src="./project-mode-ui.js"></script>
-<script src="./pages-ui.js"></script>
-<script src="./icons-ui.js"></script>
-<script src="./ai-settings-ui.js"></script>
-<script src="./ai-monitor-ui.js"></script>
-<script src="./spotify-ui.js"></script>
-<script src="./lumadock-fun.js"></script>
-<script src="./buddy-ui.js"></script>
-<script src="./settings-bridge-ui.js"></script>
-<script src="./chat-ui.js"></script>
-<script src="./extras-ui.js"></script>
-<script src="./focus-ui.js"></script>
-<script src="./blob-ui.js"></script>
-<script src="./tools-ui.js"></script>
-<script src="./island-window-ui.js"></script>
+<script src="./src/ui/i18n-ui.js"></script>
+<script src="./src/ui/project-mode-ui.js"></script>
+<script src="./src/ui/pages-ui.js"></script>
+<script src="./src/ui/icons-ui.js"></script>
+<script src="./src/ui/ai-settings-ui.js"></script>
+<script src="./src/ui/ai-monitor-ui.js"></script>
+<script src="./src/ui/spotify-ui.js"></script>
+<script src="./src/ui/lumadock-fun.js"></script>
+<script src="./src/ui/buddy-ui.js"></script>
+<script src="./src/ui/settings-bridge-ui.js"></script>
+<script src="./src/ui/chat-ui.js"></script>
+<script src="./src/ui/extras-ui.js"></script>
+<script src="./src/ui/focus-ui.js"></script>
+<script src="./src/ui/blob-ui.js"></script>
+<script src="./src/ui/tools-ui.js"></script>
+<script src="./src/ui/island-window-ui.js"></script>
 
 </body>
 

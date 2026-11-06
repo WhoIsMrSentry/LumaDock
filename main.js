@@ -1,6 +1,6 @@
 delete process.env.ELECTRON_RUN_AS_NODE;
-require('./tray-main.cjs'); // first: tray icon + only one LumaDock at a time
-require('./island-window-main');
+require('./src/main/tray-main.cjs'); // first: tray icon + only one LumaDock at a time
+require('./src/main/island-window-main');
 const {
   app,
   BrowserWindow,
@@ -18,11 +18,11 @@ const crypto = require('crypto');
 const os = require('os');
 const { spawn, exec } = require('child_process');
 
-require('./project-mode-main');
-require('./ai-monitor-main.cjs');
-require('./extras-main.cjs');
-require('./settings-app-main.cjs'); // LumaDock Settings: settings as their own app
-require('./license-main.cjs'); // packs bought on lumadock.app: which extra apps are open
+require('./src/main/project-mode-main');
+require('./src/main/ai-monitor-main.cjs');
+require('./src/main/extras-main.cjs');
+require('./src/main/settings-app-main.cjs'); // LumaDock Settings: settings as their own app
+require('./src/main/license-main.cjs'); // packs bought on lumadock.app: which extra apps are open
 
 app.setAppUserModelId(
   'com.lumadock.assistant'
@@ -2455,6 +2455,7 @@ let spotifyRateLimitedUntil = 0;
 let latestWindowsMedia = null;
 let mediaWatchChild = null;
 const artworkCache = new Map();
+const artworkInFlight = new Set();
 
 const mediaCmdFile = path.join(os.tmpdir(), 'lumadock-media-cmd.txt');
 
@@ -2472,43 +2473,49 @@ function sendMediaCommand(cmd) {
 async function fetchTrackArtwork(title, artist) {
   if (!title) return '';
   const cacheKey = `${title}:::${artist || ''}`.toLowerCase();
-  if (artworkCache.has(cacheKey)) {
+  if (artworkCache.has(cacheKey) && artworkCache.get(cacheKey)) {
     return artworkCache.get(cacheKey);
   }
+  if (artworkInFlight.has(cacheKey)) return '';
+  artworkInFlight.add(cacheKey);
 
+  let cover = '';
   // 1. iTunes Search API (fast, 600x600 HD artwork, no auth required)
   try {
-    const term = encodeURIComponent(`${title} ${artist || ''}`.trim());
+    const cleanTitle = title.replace(/\s*[\(\[\-].*$/, '').trim() || title;
+    const term = encodeURIComponent(`${cleanTitle} ${artist || ''}`.trim());
     const res = await fetch(`https://itunes.apple.com/search?term=${term}&entity=song&limit=1`, {
-      signal: AbortSignal.timeout(3500)
+      signal: AbortSignal.timeout(3000)
     });
     if (res.ok) {
       const data = await res.json();
       const song = data.results?.[0];
       if (song && song.artworkUrl100) {
-        const cover = song.artworkUrl100.replace('100x100bb', '600x600bb');
-        artworkCache.set(cacheKey, cover);
-        return cover;
+        cover = song.artworkUrl100.replace('100x100bb', '600x600bb');
       }
     }
   } catch {}
 
-  // 2. Spotify Search API if tokens exist
-  try {
-    if (loadSpotifyTokens()) {
-      const q = encodeURIComponent(`track:${title} artist:${artist || ''}`);
-      const data = await spotifyApi(`/v1/search?type=track&q=${q}&limit=1`);
-      const track = data?.tracks?.items?.[0];
-      const img = track?.album?.images?.[0]?.url;
-      if (img) {
-        artworkCache.set(cacheKey, img);
-        return img;
+  // 2. Spotify Search API if tokens exist and iTunes had no result
+  if (!cover) {
+    try {
+      if (loadSpotifyTokens()) {
+        const q = encodeURIComponent(`track:${title} artist:${artist || ''}`);
+        const data = await spotifyApi(`/v1/search?type=track&q=${q}&limit=1`);
+        const track = data?.tracks?.items?.[0];
+        cover = track?.album?.images?.[0]?.url || '';
       }
-    }
-  } catch {}
+    } catch {}
+  }
 
-  artworkCache.set(cacheKey, '');
-  return '';
+  artworkInFlight.delete(cacheKey);
+  if (cover) {
+    artworkCache.set(cacheKey, cover);
+    if (mascotWindow && !mascotWindow.isDestroyed()) {
+      mascotWindow.webContents.send('media:artwork-loaded', { title, artist, cover });
+    }
+  }
+  return cover;
 }
 
 function getArtworkOrFetchBackground(title, artist) {
@@ -2517,15 +2524,15 @@ function getArtworkOrFetchBackground(title, artist) {
   if (artworkCache.has(cacheKey)) {
     return artworkCache.get(cacheKey) || '';
   }
-  // Reserve cache slot with empty string to prevent duplicate fetches in 1s ticks
-  artworkCache.set(cacheKey, '');
-  fetchTrackArtwork(title, artist).catch(() => {});
+  if (!artworkInFlight.has(cacheKey)) {
+    fetchTrackArtwork(title, artist).catch(() => {});
+  }
   return '';
 }
 
 function startWindowsMediaWatcher() {
   if (process.platform !== 'win32' || mediaWatchChild) return;
-  const scriptPath = path.join(__dirname, 'media-watch.ps1');
+  const scriptPath = path.join(__dirname, 'src', 'native', 'media-watch.ps1');
   if (!fs.existsSync(scriptPath)) return;
 
   try {
@@ -2555,6 +2562,13 @@ function startWindowsMediaWatcher() {
         if (line && line.startsWith('{')) {
           try {
             latestWindowsMedia = JSON.parse(line);
+            if (latestWindowsMedia.title) {
+              const cover = getArtworkOrFetchBackground(latestWindowsMedia.title, latestWindowsMedia.artist);
+              latestWindowsMedia.image_url = cover || '';
+            }
+            if (mascotWindow && !mascotWindow.isDestroyed()) {
+              mascotWindow.webContents.send('media:state-changed', latestWindowsMedia);
+            }
           } catch {}
         }
       }

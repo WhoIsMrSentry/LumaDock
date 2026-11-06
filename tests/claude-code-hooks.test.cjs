@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createHub, EVENTS, PORT } = require('../claude-code-hooks.cjs');
+const { createHub, EVENTS, PORT } = require('../src/main/claude-code-hooks.cjs');
 
 function temp() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumadock-hooks-'));
@@ -139,7 +139,7 @@ test('status line prints usage and forwards it to the ring; your own status line
     const input = JSON.stringify({ session_id: 's', context_window: { used_percentage: 8.4 },
       rate_limits: { five_hour: { used_percentage: 23.5, resets_at: Math.floor(Date.now() / 1000) + 3600 }, seven_day: { used_percentage: 41.2 } } });
     const { execFileSync } = require('node:child_process');
-    const out = execFileSync(process.execPath, [path.join(__dirname, '..', 'lumadock-statusline.cjs'), token], { input, encoding: 'utf8' });
+    const out = execFileSync(process.execPath, [path.join(__dirname, '..', 'src', 'main', 'lumadock-statusline.cjs'), token], { input, encoding: 'utf8' });
     assert.equal(out.trim(), 'LumaDock · 5 uur: 24% · week: 41% · gesprek: 8% vol');
     await new Promise(resolve => setTimeout(resolve, 150));
     const usage = hub.view().usage;
@@ -157,7 +157,7 @@ test('answer typed in the island wakes Claude (exit 2); typing in the terminal c
   const hub = createHub({ userData: t.dir, settingsFile: t.settingsFile });
   const { spawn } = require('node:child_process');
   const run = (token, sessionId) => {
-    const child = spawn(process.execPath, [path.join(__dirname, '..', 'lumadock-reply.cjs'), token]);
+    const child = spawn(process.execPath, [path.join(__dirname, '..', 'src', 'main', 'lumadock-reply.cjs'), token]);
     let stderr = ''; child.stderr.on('data', d => { stderr += d; });
     child.stdin.end(JSON.stringify({ session_id: sessionId, hook_event_name: 'Stop' }));
     return new Promise(resolve => child.on('exit', code => resolve({ code, stderr })));
