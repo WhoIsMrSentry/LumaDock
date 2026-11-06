@@ -1,5 +1,6 @@
 # Media session watcher for LumaDock
 # Monitors Windows GlobalSystemMediaTransportControls (Spotify, browsers, media players)
+# Accepts stdin commands: play, pause, toggle, next, previous, seek <ms>
 param([int]$Parent = 0)
 
 $ErrorActionPreference = 'SilentlyContinue'
@@ -14,7 +15,7 @@ function AwaitOp($winRtOp, $resultType) {
     try {
         $asTask = $asTaskGeneric.MakeGenericMethod($resultType)
         $netTask = $asTask.Invoke($null, @($winRtOp))
-        if ($netTask.Wait(1200)) {
+        if ($netTask.Wait(1000)) {
             return $netTask.Result
         }
     } catch {}
@@ -94,11 +95,42 @@ function ReadSessionInfo() {
     return ($obj | ConvertTo-Json -Compress)
 }
 
+function HandleControlCommand([string]$cmd) {
+    if (-not $cmd) { return }
+    $session = GetActiveSession
+    if (-not $session) { return }
+    $cmd = $cmd.Trim().ToLower()
+    try {
+        if ($cmd -eq 'play') { [void]$session.TryPlayAsync() }
+        elseif ($cmd -eq 'pause') { [void]$session.TryPauseAsync() }
+        elseif ($cmd -eq 'toggle') { [void]$session.TryTogglePlayPauseAsync() }
+        elseif ($cmd -eq 'next') { [void]$session.TrySkipNextAsync() }
+        elseif ($cmd -eq 'previous') { [void]$session.TrySkipPreviousAsync() }
+        elseif ($cmd.StartsWith('seek ')) {
+            $msStr = $cmd.Substring(5).Trim()
+            $ms = 0
+            if ([long]::TryParse($msStr, [ref]$ms)) {
+                $ticks = $ms * 10000
+                [void]$session.TryChangePlaybackPositionAsync($ticks)
+            }
+        }
+    } catch {}
+}
+
 # Run loop
+$stdin = [System.Console]::In
 while ($true) {
     if ($Parent -and (++$tick % 15 -eq 0) -and -not (Get-Process -Id $Parent -ErrorAction SilentlyContinue)) {
         exit 0
     }
+
+    # Process pending stdin commands if any
+    try {
+        while ($stdin.Peek() -ne -1) {
+            $line = $stdin.ReadLine()
+            if ($line) { HandleControlCommand $line }
+        }
+    } catch {}
 
     try {
         $now = ReadSessionInfo
@@ -110,5 +142,5 @@ while ($true) {
         [Console]::Out.Flush()
         $lastJson = $now
     }
-    Start-Sleep -Milliseconds 450
+    Start-Sleep -Milliseconds 300
 }

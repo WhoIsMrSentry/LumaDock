@@ -143,8 +143,18 @@ function currentGitHash() {
     const { execSync } = require('node:child_process');
     return execSync('git rev-parse --short HEAD', { cwd: __dirname, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   } catch {
-    return '66375c2';
+    return '542f653';
   }
+}
+
+function remoteGitHash() {
+  try {
+    const { execSync } = require('node:child_process');
+    const out = execSync(`git ls-remote https://github.com/${GITHUB_REPO}.git HEAD`, { cwd: __dirname, encoding: 'utf8', timeout: 6000, stdio: ['ignore', 'pipe', 'ignore'] });
+    const match = out.match(/^([0-9a-f]{7,40})/i);
+    if (match) return match[1].slice(0, 7);
+  } catch {}
+  return null;
 }
 
 async function getNews() {
@@ -176,7 +186,7 @@ async function getNews() {
     }
 
     let remoteCommit = null;
-    let remoteHash = currentHash;
+    let remoteHash = remoteGitHash() || currentHash;
     if (comRes?.ok) {
       const commits = await comRes.json();
       if (Array.isArray(commits) && commits.length) {
@@ -227,6 +237,7 @@ ipcMain.handle('settings-app:news', e => fromApp(e) ? getNews() : null);
 let updateState = { status: 'idle', tag: '', hash: '', progress: 0, error: '' };
 async function checkAndApplyUpdate(silent = false) {
   try {
+    news = null; // force live check from GitHub
     const data = await getNews();
     if (!data?.ok) return { ok: false, error: data?.error || 'Failed to check GitHub' };
 

@@ -43,16 +43,39 @@
     try {
       const r = await api.spotifyDevices?.();
       devices = r?.devices || [];
-      devicesNote = r?.ok ? (devices.length ? '' : L('Open Spotify on another device to see it here.', 'Başka bir cihazda Spotify açarsanız burada görünür.')) : (r?.error || L('Could not retrieve devices.', 'Cihazlar alınamadı.'));
+      if (!r?.ok && r?.error) {
+        if (/403|premium/i.test(r.error)) {
+          devicesNote = L('Device switching requires Spotify Premium.', 'Cihaz aktarımı için Spotify Premium gereklidir.');
+        } else {
+          devicesNote = r.error;
+        }
+      } else {
+        devicesNote = devices.length ? '' : L('Open Spotify on another device to see it here.', 'Başka bir cihazda Spotify açarsanız burada görünür.');
+      }
     } catch {
       devicesNote = L('Could not retrieve devices.', 'Cihazlar alınamadı.');
     }
   }
   async function moveTo(device) {
+    if (device.id === 'local' || device.here) {
+      devicesOpen = false;
+      return;
+    }
     devicesNote = L('Switching to ' + device.name + '…', device.name + ' cihazına geçiliyor…');
     const r = await api.spotifyTransfer?.(device.id).catch(e => ({ ok: false, error: e.message }));
-    if (r?.ok) { devicesOpen = false; devicesNote = ''; window.__lumadockFlash?.('🔊  ' + device.name, 1200); window.__lumadockChime?.('pop'); setTimeout(() => refreshSpotify(), 700); }
-    else devicesNote = r?.error || L('Action failed.', 'İşlem başarısız oldu.');
+    if (r?.ok) {
+      devicesOpen = false;
+      devicesNote = '';
+      window.__lumadockFlash?.('🔊  ' + device.name, 1200);
+      window.__lumadockChime?.('pop');
+      setTimeout(() => refreshSpotify(), 250);
+    } else {
+      if (/403|premium/i.test(r?.error)) {
+        devicesNote = L('Spotify Premium required to transfer playback.', 'Cihaz değiştirmek için Spotify Premium gereklidir.');
+      } else {
+        devicesNote = r?.error || L('Action failed.', 'İşlem başarısız oldu.');
+      }
+    }
   }
   function control3(x, y, r, kind, key, primary) {
     const bounds = { x: x - r, y: y - r, width: r * 2, height: r * 2 }, over = inside(pointer.x, pointer.y, bounds);
@@ -147,8 +170,9 @@
   async function control(action) {
     window.dispatchEvent(new CustomEvent('lumadock:badge', { detail: 'dj' }));
     if (action === 'play' || action === 'pause') { spotifyState.is_playing = action === 'play'; spotifySyncAt = performance.now(); }
-    try { const result = await api.spotifyControl(action); if (!result?.ok && result?.error) console.warn('[LumaDock spotify]', result.error); } catch {}
-    setTimeout(() => refreshSpotify(), 350);
+    api.spotifyControl(action).catch(() => {});
+    setTimeout(() => refreshSpotify(), 50);
+    setTimeout(() => refreshSpotify(), 300);
   }
   // ---- swipe for music: drag left/right over the island (or swipe with two fingers on the touchpad) ----
   // left = next song, right = previous song. Works on the small island and on the Spotify page.
@@ -183,7 +207,11 @@
       spConnect: async () => { try { await api.spotifyConnect(); } catch {} refreshSpotify(); },
       spSeek: () => {
         const bar = hit.spSeek, ms = Math.round(((x - bar.x) / bar.width) * (spotifyState.duration_ms || 0));
-        spotifyState.progress_ms = ms; spotifySyncAt = performance.now(); api.spotifySeek(ms).catch(() => {});
+        spotifyState.progress_ms = ms;
+        spotifySyncAt = performance.now();
+        api.spotifySeek(ms).catch(() => {});
+        setTimeout(() => refreshSpotify(), 80);
+        setTimeout(() => refreshSpotify(), 350);
       }
     };
     if (devicesOpen && !['spDevices', 'spDevClose', 'spDev0', 'spDev1', 'spDev2', 'spDev3'].some(k => inside(x, y, hit[k]))) { devicesOpen = false; event.preventDefault(); event.stopImmediatePropagation(); return; } // a click elsewhere closes the list

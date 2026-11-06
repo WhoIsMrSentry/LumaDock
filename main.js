@@ -2453,6 +2453,57 @@ let spotifyRateLimitedUntil = 0;
 // Windows GlobalSystemMediaTransportControls (Spotify desktop & browser media)
 let latestWindowsMedia = null;
 let mediaWatchChild = null;
+const artworkCache = new Map();
+
+function sendMediaCommand(cmd) {
+  if (mediaWatchChild && mediaWatchChild.stdin && !mediaWatchChild.stdin.destroyed) {
+    try {
+      mediaWatchChild.stdin.write(cmd + '\n');
+    } catch {}
+  }
+}
+
+async function fetchTrackArtwork(title, artist) {
+  if (!title) return '';
+  const cacheKey = `${title}:::${artist || ''}`.toLowerCase();
+  if (artworkCache.has(cacheKey)) {
+    return artworkCache.get(cacheKey);
+  }
+
+  // 1. iTunes Search API (fast, 600x600 HD artwork, no auth required)
+  try {
+    const term = encodeURIComponent(`${title} ${artist || ''}`.trim());
+    const res = await fetch(`https://itunes.apple.com/search?term=${term}&entity=song&limit=1`, {
+      signal: AbortSignal.timeout(3500)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const song = data.results?.[0];
+      if (song && song.artworkUrl100) {
+        const cover = song.artworkUrl100.replace('100x100bb', '600x600bb');
+        artworkCache.set(cacheKey, cover);
+        return cover;
+      }
+    }
+  } catch {}
+
+  // 2. Spotify Search API if tokens exist
+  try {
+    if (loadSpotifyTokens()) {
+      const q = encodeURIComponent(`track:${title} artist:${artist || ''}`);
+      const data = await spotifyApi(`/v1/search?type=track&q=${q}&limit=1`);
+      const track = data?.tracks?.items?.[0];
+      const img = track?.album?.images?.[0]?.url;
+      if (img) {
+        artworkCache.set(cacheKey, img);
+        return img;
+      }
+    }
+  } catch {}
+
+  artworkCache.set(cacheKey, '');
+  return '';
+}
 
 function startWindowsMediaWatcher() {
   if (process.platform !== 'win32' || mediaWatchChild) return;
@@ -2473,7 +2524,7 @@ function startWindowsMediaWatcher() {
         '-Parent',
         String(process.pid)
       ],
-      { windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'ignore'] }
+      { windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'ignore'] }
     );
 
     let buffer = '';
@@ -3753,6 +3804,7 @@ async function getSpotifyState() {
 
   if (!hasTokens) {
     if (localMedia) {
+      const cover = await fetchTrackArtwork(localMedia.title, localMedia.artist);
       return {
         ok: true,
         connected: true,
@@ -3765,7 +3817,7 @@ async function getSpotifyState() {
           uri: '',
           name: localMedia.title,
           artist: localMedia.artist || 'Müzik',
-          image_url: ''
+          image_url: cover || ''
         },
         device: {
           id: 'local',
@@ -3802,6 +3854,7 @@ async function getSpotifyState() {
 
     // Fallback to local Windows media session if Spotify Web API has no track
     if ((!data || !data.item) && localMedia) {
+      const cover = await fetchTrackArtwork(localMedia.title, localMedia.artist);
       return {
         ok: true,
         connected: true,
@@ -3814,7 +3867,7 @@ async function getSpotifyState() {
           uri: '',
           name: localMedia.title,
           artist: localMedia.artist || 'Spotify',
-          image_url: ''
+          image_url: cover || ''
         },
         device: {
           id: 'local',
@@ -3860,6 +3913,7 @@ async function getSpotifyState() {
     };
   } catch (error) {
     if (localMedia) {
+      const cover = await fetchTrackArtwork(localMedia.title, localMedia.artist);
       return {
         ok: true,
         connected: true,
@@ -3872,7 +3926,7 @@ async function getSpotifyState() {
           uri: '',
           name: localMedia.title,
           artist: localMedia.artist || 'Spotify',
-          image_url: ''
+          image_url: cover || ''
         },
         device: {
           id: 'local',
@@ -3903,20 +3957,41 @@ function spotifyDevice(device) {
 
 // Spotify Connect: your devices, and moving the music to another one (like the speaker button in Spotify).
 async function spotifyDevices() {
+  const localDev = {
+    id: 'local',
+    name: os.hostname(),
+    type: 'Computer',
+    active: true,
+    volume: 100,
+    here: true
+  };
   try {
     const data = await spotifyApi('/v1/me/player/devices');
-    return { ok: true, devices: (data?.devices || []).filter(d => d.id && !d.is_restricted).map(spotifyDevice) };
+    const devs = (data?.devices || []).filter(d => d.id && !d.is_restricted).map(spotifyDevice);
+    if (!devs.some(d => d.here)) {
+      devs.unshift(localDev);
+    }
+    return { ok: true, devices: devs };
   } catch (error) {
-    return { ok: false, devices: [], error: error.message };
+    return {
+      ok: true,
+      devices: [localDev],
+      error: /403|premium/i.test(error.message)
+        ? 'Cihazlar arası aktarım için Spotify Premium gereklidir.'
+        : error.message
+    };
   }
 }
+
 async function spotifyTransfer(id) {
-  if (typeof id !== 'string' || !/^[\w-]{6,80}$/.test(id)) return { ok: false, error: 'Onbekend apparaat.' };
+  if (id === 'local') return { ok: true };
+  if (typeof id !== 'string' || !/^[\w-]{6,80}$/.test(id)) return { ok: false, error: 'Bilinmeyen cihaz.' };
   try {
     await spotifyApi('/v1/me/player', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ device_ids: [id], play: true }) });
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: /premium/i.test(error.message) ? 'Wisselen van apparaat kan alleen met Spotify Premium.' : error.message };
+    const isPremium = /premium|403/i.test(error.message);
+    return { ok: false, error: isPremium ? 'Cihaz aktarımı için Spotify Premium gereklidir.' : error.message };
   }
 }
 
@@ -3925,151 +4000,52 @@ async function spotifyTransfer(id) {
 // SPOTIFY CONTROL
 // ============================================================
 
-async function spotifyControl(
-  action
-) {
-  if (
-    action ===
-    'open'
-  ) {
+async function spotifyControl(action) {
+  if (action === 'open') {
     try {
-      await shell.openExternal(
-        'spotify:'
-      );
-
+      await shell.openExternal('spotify:');
     } catch {
-      await shell.openExternal(
-        'https://open.spotify.com/'
-      );
+      await shell.openExternal('https://open.spotify.com/');
     }
-
-
-    return {
-      ok: true
-    };
+    return { ok: true };
   }
 
+  // 1. Instant local Windows session control (0ms latency!)
+  sendMediaCommand(action);
 
+  // 2. Immediate Windows media key simulation
+  if (process.platform === 'win32') {
+    const vkMap = { play: 179, pause: 179, next: 176, previous: 177 };
+    if (vkMap[action]) {
+      try {
+        exec(`powershell -NoProfile -NonInteractive -Command "(New-Object -ComObject WScript.Shell).SendKeys([char]${vkMap[action]})"`);
+      } catch {}
+    }
+  }
+
+  // 3. Background sync to Spotify Web API
   const commands = {
-    play: [
-      '/v1/me/player/play',
-      'PUT'
-    ],
-
-    pause: [
-      '/v1/me/player/pause',
-      'PUT'
-    ],
-
-    next: [
-      '/v1/me/player/next',
-      'POST'
-    ],
-
-    previous: [
-      '/v1/me/player/previous',
-      'POST'
-    ]
+    play: ['/v1/me/player/play', 'PUT'],
+    pause: ['/v1/me/player/pause', 'PUT'],
+    next: ['/v1/me/player/next', 'POST'],
+    previous: ['/v1/me/player/previous', 'POST']
   };
 
-
-  const command =
-    commands[
-      action
-    ];
-
-
-  if (!command) {
-    return {
-      ok: false,
-
-      error:
-        'Bilinmeyen Spotify eylemi.'
-    };
+  const command = commands[action];
+  if (command) {
+    spotifyApi(command[0], { method: command[1] }).catch(() => {});
   }
 
-
-  try {
-    await spotifyApi(
-      command[0],
-      {
-        method:
-          command[1]
-      }
-    );
-
-
-    return {
-      ok: true
-    };
-
-  } catch (error) {
-    if (process.platform === 'win32') {
-      const vkMap = { play: 179, pause: 179, next: 176, previous: 177 };
-      if (vkMap[action]) {
-        try {
-          exec(`powershell -NoProfile -NonInteractive -Command "(New-Object -ComObject WScript.Shell).SendKeys([char]${vkMap[action]})"`);
-          return { ok: true };
-        } catch {}
-      }
-    }
-    return {
-      ok: false,
-      error: error.message
-    };
-  }
+  return { ok: true };
 }
 
-
-// ============================================================
-// SPOTIFY SEEK
-// ============================================================
-
-async function spotifySeek(
-  positionMs
-) {
-  const safePosition =
-    Math.max(
-      0,
-
-      Math.round(
-        Number(
-          positionMs
-        ) ||
-        0
-      )
-    );
-
-
-  try {
-    await spotifyApi(
-      `/v1/me/player/seek?position_ms=${safePosition}`,
-      {
-        method:
-          'PUT'
-      }
-    );
-
-
-    return {
-      ok: true
-    };
-
-  } catch (error) {
-    if (process.platform === 'win32') {
-      const vkMap = { play: 179, pause: 179, next: 176, previous: 177 };
-      if (vkMap[action]) {
-        try {
-          exec(`powershell -NoProfile -NonInteractive -Command "(New-Object -ComObject WScript.Shell).SendKeys([char]${vkMap[action]})"`);
-          return { ok: true };
-        } catch {}
-      }
-    }
-    return {
-      ok: false,
-      error: error.message
-    };
-  }
+async function spotifySeek(positionMs) {
+  const safePosition = Math.max(0, Math.round(Number(positionMs) || 0));
+  // 1. Instant local Windows session seek
+  sendMediaCommand('seek ' + safePosition);
+  // 2. Background sync to Spotify Web API
+  spotifyApi(`/v1/me/player/seek?position_ms=${safePosition}`, { method: 'PUT' }).catch(() => {});
+  return { ok: true };
 }
 
 
