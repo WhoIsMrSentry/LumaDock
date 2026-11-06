@@ -432,7 +432,9 @@ function createHub(options = {}) {
     });
     server.on('error', error => {
       listening = false; server = null;
-      serverError = error.code === 'EADDRINUSE' ? 'LumaDock draait al ergens anders (poort ' + PORT + ' is bezet). Sluit de andere LumaDock.' : error.message;
+      serverError = error.code === 'EADDRINUSE'
+        ? 'LumaDock başka bir yerde zaten çalışıyor (port ' + PORT + ' kullanımda). Lütfen diğer LumaDock uygulamasını kapatın.'
+        : error.message;
       onChange();
     });
     server.listen(PORT, '127.0.0.1', () => { listening = true; serverError = ''; onChange(); });
@@ -450,10 +452,10 @@ function createHub(options = {}) {
     const base = { provider: who.id, name: who.name, agent, kind: 'hooks', hooksInstalled: hooks, available: agent === 'codex' ? codexAvailable() : true,
       model: agent === 'codex' ? '' : getModel(), modelNow: top?.modelName || '', canReply: false, questionId: '', error: serverError,
       usage: { fiveHour: live(usage.fiveHour, now), sevenDay: live(usage.sevenDay, now), context: top?.context ?? null } };
-    if (!hooks || !listening) return { ...base, connected: false, state: 'disconnected', detail: hooks ? 'Niet actief' : 'Niet gekoppeld', question: '', elapsed: 0, list: [] };
+    if (!hooks || !listening) return { ...base, connected: false, state: 'disconnected', detail: hooks ? 'Etkin değil' : 'Bağlı değil', question: '', elapsed: 0, list: [] };
     const item = s => ({ id: s.id, project: s.project || who.name, state: s.state, detail: s.detail,
       elapsed: s.startedAt ? Math.floor(((s.endedAt || now) - s.startedAt) / 1000) : 0 });
-    if (!top) return { ...base, connected: true, state: 'ready', detail: 'Wacht op ' + who.name, question: '', elapsed: 0, list: [] };
+    if (!top) return { ...base, connected: true, state: 'ready', detail: who.name + ' bekleniyor', question: '', elapsed: 0, list: [] };
     return { ...base, connected: true, state: top.state, detail: top.detail, question: top.question, elapsed: item(top).elapsed,
       sessionId: top.id, lastMessage: top.lastMessage || '', ask: waiting.has(top.id) ? top.ask || null : null,
       plan: waiting.has(top.id) ? top.plan || null : null, stats: top.stats || {}, steps: (top.steps || []).slice(-8), prompt: top.prompt || '', files: (top.files || []).slice(-8), commands: (top.commands || []).slice(-3), code: top.code || null, run: top.run || null, canJump: Boolean(top.pid), canReply: replies.has(top.id) && !waiting.has(top.id), permission: top.permission && waiting.has(top.id) ? top.permission : null,

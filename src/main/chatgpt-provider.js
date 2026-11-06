@@ -45,7 +45,7 @@ function nativeRuntime() {
 
   if (!target) {
     throw new Error(
-      `Codex ondersteunt dit systeem niet: ${platform}.`
+      `Codex bu sistemi desteklemiyor: ${platform}.`
     );
   }
 
@@ -61,7 +61,7 @@ function nativeRuntime() {
     );
   } catch {
     throw new Error(
-      'Installeer Codex: npm.cmd install @openai/codex --save --include=optional'
+      'Codex\'i yükleyin: npm.cmd install @openai/codex --save --include=optional'
     );
   }
 
@@ -312,7 +312,7 @@ function waitFor(method, predicate, timeout) {
 
       reject(
         new Error(
-          'De ChatGPT-verbinding duurde te lang. Probeer opnieuw.'
+          'ChatGPT bağlantısı zaman aşımına uğradı. Lütfen tekrar deneyin.'
         )
       );
     }, timeout);
@@ -332,7 +332,7 @@ function waitFor(method, predicate, timeout) {
 
 async function start(retry = false) {
   if (quitting) {
-    throw new Error('LumaDock wordt afgesloten.');
+    throw new Error('LumaDock kapatılıyor.');
   }
 
   if (starting) return starting;
@@ -441,7 +441,7 @@ async function start(retry = false) {
       if (child === running) {
         stop(
           new Error(
-            `Codex kon niet starten: ${safeMessage(error.message)}`
+            `Codex başlatılamadı: ${safeMessage(error.message)}`
           )
         );
       }
@@ -452,11 +452,11 @@ async function start(retry = false) {
 
       const detail = diagnostics.trim()
         ? safeMessage(diagnostics.trim())
-        : 'Klik op Inloggen om opnieuw te proberen.';
+        : 'Tekrar denemek için Giriş Yap\'a tıklayın.';
 
       stop(
         new Error(
-          `Codex is gestopt (${code ?? signal ?? 'onbekend'}). ${detail}`
+          `Codex durduruldu (${code ?? signal ?? 'bilinmiyor'}). ${detail}`
         )
       );
     });
@@ -617,7 +617,7 @@ function peek() {
 async function login() {
   if (loginPending) {
     throw new Error(
-      'Er staat al een ChatGPT-login open.'
+      'Zaten açık bir ChatGPT girişi var.'
     );
   }
 
@@ -625,7 +625,7 @@ async function login() {
 
   if (loginPending) {
     throw new Error(
-      'Er staat al een ChatGPT-login open.'
+      'Zaten açık bir ChatGPT girişi var.'
     );
   }
 
@@ -658,7 +658,7 @@ async function login() {
 
     if (attempt.cancelled) {
       throw new Error(
-        'ChatGPT-login is geannuleerd.'
+        'ChatGPT girişi iptal edildi.'
       );
     }
 
@@ -668,7 +668,7 @@ async function login() {
       !result.userCode
     ) {
       throw new Error(
-        'ChatGPT gaf geen inlogcode terug. Controleer of login met een apparaatcode is toegestaan voor je account of workspace.'
+        'ChatGPT giriş kodu döndürmedi. Cihaz kodu ile girişin hesabınız veya çalışma alanınız için açık olduğunu doğrulayın.'
       );
     }
 
@@ -682,20 +682,20 @@ async function login() {
       ].includes(url.hostname)
     ) {
       throw new Error(
-        'De login-URL is niet van OpenAI.'
+        'Giriş bağlantısı OpenAI\'a ait değil.'
       );
     }
 
     const choice = await dialog.showMessageBox({
       type: 'info',
-      title: 'LumaDock · ChatGPT koppelen',
+      title: 'LumaDock · ChatGPT Bağlama',
       message:
-        `Je eenmalige inlogcode: ${result.userCode}`,
+        `Tek kullanımlık giriş kodunuz: ${result.userCode}`,
       detail:
-        'Klik hieronder om de code te kopiëren en de officiële OpenAI-inlogpagina te openen. Log in en plak daar de code. Laat LumaDock open totdat de koppeling klaar is.',
+        'Kodu kopyalamak ve resmi OpenAI giriş sayfasını açmak için aşağıya tıklayın. Giriş yapın ve kodu oraya yapıştırın. Bağlantı tamamlanana kadar LumaDock\'u açık bırakın.',
       buttons: [
-        'Kopieer code en open browser',
-        'Annuleren'
+        'Kodu Kopyala ve Tarayıcıyı Aç',
+        'İptal'
       ],
       defaultId: 0,
       cancelId: 1,
@@ -708,7 +708,7 @@ async function login() {
       child == null
     ) {
       throw new Error(
-        'ChatGPT-login is geannuleerd.'
+        'ChatGPT girişi iptal edildi.'
       );
     }
 
@@ -722,7 +722,7 @@ async function login() {
       throw new Error(
         safeMessage(
           completed.error ||
-          'ChatGPT-login is afgebroken.'
+          'ChatGPT girişi kesintiye uğradı.'
         )
       );
     }
@@ -735,7 +735,7 @@ async function login() {
     if (!account.ready) {
       throw new Error(
         account.error ||
-        'Het account is nog niet verbonden.'
+        'Hesap henüz bağlanmadı.'
       );
     }
 
@@ -765,7 +765,7 @@ async function cancelLogin() {
   attempt.cancelled = true;
 
   attempt.waiter?.cancel(
-    new Error('ChatGPT-login is geannuleerd.')
+    new Error('ChatGPT girişi iptal edildi.')
   );
 
   if (attempt.id) {
@@ -939,7 +939,7 @@ function fixInFolder(dir, prompt, images = [], sandbox = 'workspace-write') {
   return new Promise((resolve, reject) => {
     const running = spawn(runtime.executable, args, { cwd: dir, env, windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
     let diagnostics = '';
-    const timer = setTimeout(() => { try { running.kill(); } catch {} reject(new Error('Codex deed er te lang over.')); }, 300000);
+    const timer = setTimeout(() => { try { running.kill(); } catch {} reject(new Error('Codex zaman aşımına uğradı.')); }, 300000);
     running.stderr.on('data', data => { diagnostics = (diagnostics + data.toString()).slice(-2000); });
     running.stdout.on('data', () => {});
     running.on('error', error => { clearTimeout(timer); reject(new Error(`Codex kon niet starten: ${safeMessage(error.message)}`)); });

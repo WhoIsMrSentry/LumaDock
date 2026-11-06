@@ -257,17 +257,17 @@ function setup(electron, options = {}) {
   }
 
   function providerOf(payload) {
-    if (!payload || !Object.hasOwn(PROVIDERS, payload.provider)) throw new Error('Kies ChatGPT of Claude.');
+    if (!payload || !Object.hasOwn(PROVIDERS, payload.provider)) throw new Error('ChatGPT veya Claude seçin.');
     return payload.provider;
   }
   const handlers = {
     'ai-monitor:get': async () => view(),
     'ai-monitor:windows': scan,
     'ai-monitor:connect': async payload => {
-      if (chatSoon) throw new Error('ChatGPT en Claude komen binnenkort.');
+      if (chatSoon) throw new Error('ChatGPT ve Claude yakında eklenecek.');
       const provider = providerOf(payload), target = found.get(payload.targetId);
-      if (!target) throw new Error('Vernieuw de vensterlijst en kies een venster.');
-      if (answering.has(provider)) throw new Error('Wacht tot de verzending is gecontroleerd.');
+      if (!target) throw new Error('Pencere listesini yenileyip bir pencere seçin.');
+      if (answering.has(provider)) throw new Error('Gönderim kontrol edilene kadar bekleyin.');
       const result = await worker.request('read', { target }), obs = observe(result, provider);
       if (!obs.valid) return { ok: false, error: obs.detail, login: obs.login };
       const session = new Session(provider, target); session.accept(obs); sessions.set(provider, session); notifications.clear(); save(); emit();

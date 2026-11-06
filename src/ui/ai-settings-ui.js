@@ -5,6 +5,9 @@
 
   UI.SETTINGS_H = 300;
 
+  const isTr = () => window.__lumadockPrefs?.().lang === 'tr';
+  const T = (nl, en, tr) => (isTr() ? tr : (en || nl));
+
   const api = window.lumadock;
   const root = document.createElement('div');
 
@@ -14,12 +17,12 @@
     <div class="tc-settings-shell">
       <div class="tc-page-head">
         <div>
-          <p class="tc-page-title">Instellingen</p>
-          <p class="tc-page-sub">Maak LumaDock helemaal van jou</p>
+          <p class="tc-page-title">${T('Instellingen', 'Settings', 'Ayarlar')}</p>
+          <p class="tc-page-sub">${T('Maak LumaDock helemaal van jou', 'Make LumaDock completely yours', 'LumaDock\'u tamamen kendinize göre özelleştirin')}</p>
         </div>
         <div class="tc-tabs" role="tablist">
-          <button type="button" role="tab" data-tab="general">Algemeen</button>
-          <button type="button" role="tab" data-tab="karakter">Karakter</button>
+          <button type="button" role="tab" data-tab="general">${T('Algemeen', 'General', 'Genel')}</button>
+          <button type="button" role="tab" data-tab="karakter">${T('Karakter', 'Character', 'Karakter')}</button>
         </div>
       </div>
 
@@ -461,17 +464,16 @@
 
       if (!account.installed) {
         return `
-          <strong>ChatGPT koppelen</strong>
+          <strong>${T('ChatGPT koppelen', 'Connect ChatGPT', 'ChatGPT Bağla')}</strong>
 
-          <p>Installeer Codex één keer in je projectmap:</p>
+          <p>${T('Installeer Codex één keer in je projectmap:', 'Install Codex once in your project folder:', 'Codex\'i proje klasörünüze bir kez yükleyin:')}</p>
 
           <p>
             <code>npm.cmd install @openai/codex --save</code>
           </p>
 
           <p>
-            Start LumaDock daarna opnieuw en klik op
-            Inloggen met ChatGPT.
+            ${T('Start LumaDock daarna opnieuw en klik op Inloggen met ChatGPT.', 'Then restart LumaDock and click Sign in with ChatGPT.', 'Ardından LumaDock\'u yeniden başlatıp ChatGPT ile Giriş Yap\'a tıklayın.')}
           </p>
         `;
       }
@@ -480,8 +482,8 @@
         <strong>
           ${
             account.ready
-              ? 'Verbonden met ChatGPT'
-              : 'Gebruik je ChatGPT-account'
+              ? T('Verbonden met ChatGPT', 'Connected to ChatGPT', 'ChatGPT\'ye Bağlı')
+              : T('Gebruik je ChatGPT-account', 'Use your ChatGPT account', 'ChatGPT hesabınızı kullanın')
           }
         </strong>
 
@@ -493,12 +495,11 @@
                     ? ` · ${escape(account.plan)}`
                     : ''
                 }`
-              : 'Log in via de officiële pagina in je browser en kies je werkruimte.'
+              : T('Log in via de officiële pagina in je browser en kies je werkruimte.', 'Sign in via the official page in your browser and choose your workspace.', 'Tarayıcınızdaki resmi sayfadan giriş yapın ve çalışma alanınızı seçin.')
           }
 
           <br>
-          Gebruikt je bestaande Codex-ruimte en bijbehorende limieten.
-          Geen aparte API-key.
+          ${T('Gebruikt je bestaande Codex-ruimte en bijbehorende limieten. Geen aparte API-key.', 'Uses your existing Codex space and associated limits. No separate API key.', 'Mevcut Codex alanınızı ve limitlerinizi kullanır. Ayrı bir API anahtarı gerekmez.')}
         </p>
 
         ${
@@ -510,7 +511,7 @@
         <div class="tc-ai-actions">
           ${
             button(
-              account.ready ? 'Ander account' : 'Inloggen met ChatGPT',
+              account.ready ? T('Ander account', 'Other account', 'Farklı hesap') : T('Inloggen met ChatGPT', 'Sign in with ChatGPT', 'ChatGPT ile Giriş Yap'),
               'login',
               true
             )
@@ -518,8 +519,8 @@
 
           ${
             account.ready
-              ? button('Verbinding testen', 'test') +
-                button('Uitloggen', 'logout')
+              ? button(T('Verbinding testen', 'Test connection', 'Bağlantıyı test et'), 'test') +
+                button(T('Uitloggen', 'Log out', 'Çıkış yap'), 'logout')
               : ''
           }
         </div>
@@ -528,13 +529,13 @@
           loggingIn
             ? `
               <p class="tc-ai-notice">
-                Rond het inloggen af in je browser.
+                ${T('Rond het inloggen af in je browser.', 'Complete the sign-in in your browser.', 'Giriş işlemini tarayıcınızda tamamlayın.')}
               </p>
 
               <button type="button"
                       class="tc-ai-button"
                       data-action="cancel">
-                Login annuleren
+                ${T('Login annuleren', 'Cancel sign-in', 'Girişi İptal Et')}
               </button>
             `
             : ''
@@ -621,7 +622,6 @@
     return '<p>Kies de AI die je assistent moet gebruiken.</p>';
   }
 
-  const isTr = () => window.__lumadockPrefs?.().lang === 'tr';
   const sleepRow = () => `<div class="tc-setting-row tc-demo" data-demo="sleep"><div><strong>${isTr() ? 'Uyku Efekti' : 'Sleep Effect'}</strong><small>${isTr() ? 'Bir süre hiçbir şey olmadığında uyku moduna geçer' : 'He falls asleep when nothing happens for a while'}</small></div><button type="button" data-action="sleep" class="tc-toggle ${sleepEnabled ? 'on' : ''}" aria-pressed="${sleepEnabled}">${sleepEnabled ? (isTr() ? 'Açık' : 'On') : (isTr() ? 'Kapalı' : 'Off')}</button></div>`;
   // The settings app (settings-app.html) shows these same lists in its own window (settings-bridge-ui.js).
   window.__lumadockSettingsHtml = which => which === 'karakter' ? window.__lumadockSettingsCharacter?.(sleepRow()) || '' : window.__lumadockSettingsExtra?.() || '';
@@ -672,8 +672,8 @@
             card(
               'chatgpt',
               'ChatGPT',
-              'Gebruik je ChatGPT-account',
-              settings?.chatgpt?.ready ? 'Verbonden' : 'Inloggen'
+              T('Gebruik je ChatGPT-account', 'Use your ChatGPT account', 'ChatGPT hesabınızı kullanın'),
+              settings?.chatgpt?.ready ? T('Verbonden', 'Connected', 'Bağlandı') : T('Inloggen', 'Sign in', 'Giriş Yap')
             )
           }
 
@@ -796,17 +796,17 @@
 
       action(
         () => api.aiSettingsChatGPTLogin(),
-        'ChatGPT is verbonden. Je kunt terug naar Project.'
+        T('ChatGPT is verbonden. Je kunt terug naar Project.', 'ChatGPT is connected. You can return to Project.', 'ChatGPT bağlandı. Projeye geri dönebilirsiniz.')
       );
     } else if (name === 'logout') {
       action(
         () => api.aiSettingsChatGPTLogout(),
-        'Je bent uitgelogd.'
+        T('Je bent uitgelogd.', 'You have been logged out.', 'Çıkış yapıldı.')
       );
     } else if (name === 'test') {
       action(
         () => api.aiSettingsTest(),
-        'Verbinding gelukt.',
+        T('Verbinding gelukt.', 'Connection successful.', 'Bağlantı başarılı.'),
         false
       );
     } else if (name?.startsWith('key-')) {
