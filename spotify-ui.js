@@ -3,6 +3,14 @@
 // Replaces the old drawSpotify in mascot.html, which only showed the song title.
 (function spotifyScreen() {
   const api = window.lumadock;
+  const isTr = () => {
+    try {
+      const p = JSON.parse(localStorage.getItem('lumadock:prefs') || '{}');
+      return p.lang === 'tr';
+    } catch { return false; }
+  };
+  const L = (en, tr) => (isTr() ? tr : en);
+
   // Colour of the album cover (extras-ui.js), Spotify green as fallback.
   const accent = () => window.__lumadockAlbumColour || '#1ed760';
   const time = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -32,14 +40,19 @@
   }
   async function loadDevices() {
     devicesNote = '…';
-    try { const r = await api.spotifyDevices?.(); devices = r?.devices || []; devicesNote = r?.ok ? (devices.length ? '' : 'Open Spotify op een ander apparaat, dan zie je het hier.') : (r?.error || 'Kon je apparaten niet ophalen.'); }
-    catch { devicesNote = 'Kon je apparaten niet ophalen.'; }
+    try {
+      const r = await api.spotifyDevices?.();
+      devices = r?.devices || [];
+      devicesNote = r?.ok ? (devices.length ? '' : L('Open Spotify on another device to see it here.', 'Başka bir cihazda Spotify açarsanız burada görünür.')) : (r?.error || L('Could not retrieve devices.', 'Cihazlar alınamadı.'));
+    } catch {
+      devicesNote = L('Could not retrieve devices.', 'Cihazlar alınamadı.');
+    }
   }
   async function moveTo(device) {
-    devicesNote = 'Wisselen naar ' + device.name + '…';
+    devicesNote = L('Switching to ' + device.name + '…', device.name + ' cihazına geçiliyor…');
     const r = await api.spotifyTransfer?.(device.id).catch(e => ({ ok: false, error: e.message }));
     if (r?.ok) { devicesOpen = false; devicesNote = ''; window.__lumadockFlash?.('🔊  ' + device.name, 1200); window.__lumadockChime?.('pop'); setTimeout(() => refreshSpotify(), 700); }
-    else devicesNote = r?.error || 'Dat lukte niet.';
+    else devicesNote = r?.error || L('Action failed.', 'İşlem başarısız oldu.');
   }
   function control3(x, y, r, kind, key, primary) {
     const bounds = { x: x - r, y: y - r, width: r * 2, height: r * 2 }, over = inside(pointer.x, pointer.y, bounds);
@@ -55,9 +68,9 @@
     hit.ghost = null;
     if (!spotifyConnected) {
       window.__lumadockIcon?.('music', left + 24, top + 40, 30);
-      text('Spotify koppelen', left + 56, top + 36, 19, '#fff', 700);
-      text('Dan zie en bedien je je muziek hier.', left + 56, top + 56, 12, '#9aa596');
-      pill(left + 56, top + 74, 190, '♫', 'Koppel Spotify', 'spConnect');
+      text(L('Connect Spotify', 'Spotify\'ı Bağla'), left + 56, top + 36, 19, '#fff', 700);
+      text(L('See and control your music right here.', 'Müziğinizi doğrudan buradan görün ve kontrol edin.'), left + 56, top + 56, 12, '#9aa596');
+      pill(left + 56, top + 74, 190, '♫', L('Connect Spotify', 'Spotify\'ı Bağla'), 'spConnect');
       return;
     }
     const size = Math.min(content.height - 4, 132), art = albumImage?.complete && albumImage.naturalWidth, colour = accent();
@@ -77,8 +90,8 @@
     const x = left + size + 24, w = right - x, vizW = 168;
     // title + artist, visualizer on the right
     if (!track) {
-      text('Er speelt nu niks', x, top + 30, 18, '#fff', 700, 'left', w - vizW - 16);
-      text('Start muziek in Spotify, of druk op afspelen.', x, top + 50, 12.5, 'rgba(235,240,230,.6)', 500, 'left', w - vizW - 16);
+      text(L('Nothing is playing right now', 'Şu an çalan bir şey yok'), x, top + 30, 18, '#fff', 700, 'left', w - vizW - 16);
+      text(L('Start music in Spotify or press play.', 'Spotify\'da müzik başlatın veya oynat\'a basın.'), x, top + 50, 12.5, 'rgba(235,240,230,.6)', 500, 'left', w - vizW - 16);
       hit.spTitle = { x, y: top + 10, width: w - vizW, height: 28 };
     } else {
       const over = inside(pointer.x, pointer.y, { x, y: top + 10, width: w - vizW - 16, height: 28 });
@@ -90,7 +103,7 @@
     const overDev = inside(pointer.x, pointer.y, { x: bx, y: by, width: bw, height: 30 });
     box(bx, by, bw, 30, 15, devicesOpen || overDev ? 'rgba(255,255,255,.16)' : 'rgba(255,255,255,.08)');
     devIcon(dev?.type || 'Computer', bx + 18, by + 15, 15, elsewhere ? colour : '#e8ece6');
-    text(dev ? dev.name : 'Apparaten', bx + 34, by + 19.5, 11.5, elsewhere ? colour : '#e8ece6', 700, 'left', bw - 44);
+    text(dev ? dev.name : L('Devices', 'Cihazlar'), bx + 34, by + 19.5, 11.5, elsewhere ? colour : '#e8ece6', 700, 'left', bw - 44);
     hit.spDevices = { x: bx, y: by, width: bw, height: 30 };
 
     // long progress bar with times
@@ -116,7 +129,7 @@
     if (devicesOpen) {
       const px = x - 8, py = top - 2, pw = right - px + 4, ph = size + 4;
       ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 20; box(px, py, pw, ph, 16, '#121512'); ctx.restore();
-      text('Speel af op', px + 16, py + 24, 13, '#fff', 700);
+      text(L('Play on', 'Cihazda Çal'), px + 16, py + 24, 13, '#fff', 700);
       text('✕', px + pw - 18, py + 24, 13, 'rgba(255,255,255,.6)', 700, 'center'); hit.spDevClose = { x: px + pw - 32, y: py + 6, width: 28, height: 28 };
       const list = devices.slice(0, 4);
       list.forEach((d, i) => {
@@ -124,7 +137,7 @@
         if (over) box(px + 8, ry, pw - 16, 22, 8, 'rgba(255,255,255,.07)');
         devIcon(d.type, px + 24, ry + 11, 13, d.active ? colour : '#cfd5cc');
         text(d.name, px + 40, ry + 15, 12, d.active ? colour : '#eef2ec', d.active ? 700 : 600, 'left', pw - 150);
-        text(d.active ? 'Speelt nu' : d.here ? 'Deze pc' : '', px + pw - 16, ry + 15, 10.5, d.active ? colour : 'rgba(255,255,255,.45)', 600, 'right');
+        text(d.active ? L('Playing now', 'Şu an çalıyor') : d.here ? L('This PC', 'Bu bilgisayar') : '', px + pw - 16, ry + 15, 10.5, d.active ? colour : 'rgba(255,255,255,.45)', 600, 'right');
         hit['spDev' + i] = { x: px + 8, y: ry, width: pw - 16, height: 22, device: d };
       });
       if (devicesNote) text(devicesNote, px + 16, py + ph - 12, 10.5, 'rgba(255,255,255,.55)', 600, 'left', pw - 32);
@@ -143,7 +156,7 @@
   const canSwipe = (x, y) => spotifyConnected && spotifyState.track && inside(x, y, islandBounds) && (mode === 'compact' || currentView === 'spotify');
   function swipe(dir) {
     if (performance.now() - lastSwipe < 700) return; lastSwipe = performance.now();
-    window.__lumadockFlash?.(dir > 0 ? '⏭  Volgend nummer' : '⏮  Vorig nummer', 900);
+    window.__lumadockFlash?.(dir > 0 ? (L('⏭ Next track', '⏭ Sonraki parça')) : (L('⏮ Previous track', '⏮ Önceki parça')), 900);
     window.__lumadockKick?.(dir > 0 ? -0.05 : 0.05);
     control(dir > 0 ? 'next' : 'previous');
   }

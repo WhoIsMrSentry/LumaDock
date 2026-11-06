@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="en">
 
 <head>
 
@@ -4164,7 +4164,7 @@ function drawSpotify(
   text(
     spotifyState.track
       ?.name ||
-      'Geen muziek actief',
+      ((localStorage.getItem('lumadock:prefs') || '').includes('"lang":"tr"') ? 'Müzik çalmıyor' : 'No music playing'),
 
     content.x +
     110,
@@ -4179,7 +4179,7 @@ function drawSpotify(
   text(
     spotifyState.track
       ?.artist ||
-      'Open Spotify en start muziek',
+      ((localStorage.getItem('lumadock:prefs') || '').includes('"lang":"tr"') ? 'Spotify\'da müzik başlatın' : 'Start music in Spotify'),
 
     content.x +
     110,

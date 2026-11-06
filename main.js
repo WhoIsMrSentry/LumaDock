@@ -15,6 +15,7 @@ const path = require('path');
 const http = require('http');
 const crypto = require('crypto');
 const os = require('os');
+const { spawn, exec } = require('child_process');
 
 require('./project-mode-main');
 require('./ai-monitor-main.cjs');
@@ -2278,11 +2279,18 @@ async function readProjectFile(
       );
 
   } catch (error) {
+    if (process.platform === 'win32') {
+      const vkMap = { play: 179, pause: 179, next: 176, previous: 177 };
+      if (vkMap[action]) {
+        try {
+          exec(`powershell -NoProfile -NonInteractive -Command "(New-Object -ComObject WScript.Shell).SendKeys([char]${vkMap[action]})"`);
+          return { ok: true };
+        } catch {}
+      }
+    }
     return {
       ok: false,
-
-      error:
-        error.message
+      error: error.message
     };
   }
 
@@ -2425,7 +2433,9 @@ const SPOTIFY_REDIRECT_URI =
 
 const SPOTIFY_SCOPES = [
   'user-read-playback-state',
-  'user-modify-playback-state'
+  'user-modify-playback-state',
+  'user-read-currently-playing',
+  'user-read-playback-position'
 ].join(' ');
 
 
@@ -2439,6 +2449,55 @@ const SPOTIFY_TOKEN_FILE = () =>
 let spotifyAuthPromise = null;
 let spotifyRefreshPromise = null;
 let spotifyRateLimitedUntil = 0;
+
+// Windows GlobalSystemMediaTransportControls (Spotify desktop & browser media)
+let latestWindowsMedia = null;
+let mediaWatchChild = null;
+
+function startWindowsMediaWatcher() {
+  if (process.platform !== 'win32' || mediaWatchChild) return;
+  const scriptPath = path.join(__dirname, 'media-watch.ps1');
+  if (!fs.existsSync(scriptPath)) return;
+
+  try {
+    mediaWatchChild = spawn(
+      'powershell.exe',
+      [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        scriptPath,
+        '-Parent',
+        String(process.pid)
+      ],
+      { windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'ignore'] }
+    );
+
+    let buffer = '';
+    mediaWatchChild.stdout.on('data', chunk => {
+      buffer += chunk.toString();
+      let end;
+      while ((end = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, end).trim();
+        buffer = buffer.slice(end + 1);
+        if (line && line.startsWith('{')) {
+          try {
+            latestWindowsMedia = JSON.parse(line);
+          } catch {}
+        }
+      }
+    });
+
+    mediaWatchChild.on('exit', () => {
+      mediaWatchChild = null;
+    });
+  } catch (err) {
+    console.warn('[LumaDock MediaWatcher]', err.message);
+  }
+}
 
 
 // ============================================================
@@ -3066,7 +3125,7 @@ async function exchangeSpotifyCode(
     throw new Error(
       data?.error_description ||
       data?.error ||
-      'Spotify koppelen mislukt.'
+      'Spotify bağlantısı kurulamadı.'
     );
   }
 
@@ -3107,7 +3166,7 @@ async function refreshSpotifyToken(
 
 
     throw new Error(
-      'Spotify moet opnieuw gekoppeld worden.'
+      'Spotify oturumunun yenilenmesi gerekiyor.'
     );
   }
 
@@ -3159,7 +3218,7 @@ async function refreshSpotifyToken(
     throw new Error(
       data?.error_description ||
       data?.error ||
-      'Spotify token vernieuwen mislukt.'
+      'Spotify token yenileme başarısız.'
     );
   }
 
@@ -3576,7 +3635,7 @@ async function spotifyApi(
     spotifyRateLimitedUntil
   ) {
     throw new Error(
-      'Spotify vraagt even te wachten.'
+      'Spotify istek sınırı aşıldı, lütfen biraz bekleyin.'
     );
   }
 
@@ -3651,7 +3710,7 @@ async function spotifyApi(
 
 
     throw new Error(
-      'Spotify vraagt even te wachten.'
+      'Spotify istek sınırı aşıldı, lütfen biraz bekleyin.'
     );
   }
 
@@ -3689,9 +3748,35 @@ async function spotifyApi(
 // ============================================================
 
 async function getSpotifyState() {
-  if (
-    !loadSpotifyTokens()
-  ) {
+  const hasTokens = Boolean(loadSpotifyTokens());
+  const localMedia = (latestWindowsMedia && latestWindowsMedia.active && latestWindowsMedia.title) ? latestWindowsMedia : null;
+
+  if (!hasTokens) {
+    if (localMedia) {
+      return {
+        ok: true,
+        connected: true,
+        active: true,
+        is_playing: Boolean(localMedia.is_playing),
+        progress_ms: Number(localMedia.position || 0),
+        duration_ms: Number(localMedia.duration || 0),
+        track: {
+          id: 'local-' + Buffer.from(localMedia.title).toString('hex').slice(0, 12),
+          uri: '',
+          name: localMedia.title,
+          artist: localMedia.artist || 'Müzik',
+          image_url: ''
+        },
+        device: {
+          id: 'local',
+          name: os.hostname(),
+          type: 'Computer',
+          active: true,
+          volume: null,
+          here: true
+        }
+      };
+    }
     return {
       ok: true,
       connected: false,
@@ -3699,12 +3784,11 @@ async function getSpotifyState() {
     };
   }
 
-
   try {
-    let data =
-      await spotifyApi(
-        '/v1/me/player?additional_types=track,episode'
-      );
+    let data = null;
+    try {
+      data = await spotifyApi('/v1/me/player?additional_types=track,episode');
+    } catch {}
 
     // Fallback: if /v1/me/player returns 204 or no item, try /v1/me/player/currently-playing
     if (!data || !data.item) {
@@ -3716,106 +3800,95 @@ async function getSpotifyState() {
       } catch {}
     }
 
+    // Fallback to local Windows media session if Spotify Web API has no track
+    if ((!data || !data.item) && localMedia) {
+      return {
+        ok: true,
+        connected: true,
+        active: true,
+        is_playing: Boolean(localMedia.is_playing),
+        progress_ms: Number(localMedia.position || 0),
+        duration_ms: Number(localMedia.duration || 0),
+        track: {
+          id: 'local-' + Buffer.from(localMedia.title).toString('hex').slice(0, 12),
+          uri: '',
+          name: localMedia.title,
+          artist: localMedia.artist || 'Spotify',
+          image_url: ''
+        },
+        device: {
+          id: 'local',
+          name: os.hostname(),
+          type: 'Computer',
+          active: true,
+          volume: null,
+          here: true
+        }
+      };
+    }
 
-    if (
-      !data ||
-      !data.item
-    ) {
+    if (!data || !data.item) {
       return {
         ok: true,
         connected: true,
         active: false,
-
-        is_playing:
-          false,
-
-        progress_ms:
-          0,
-
-        duration_ms:
-          0,
-
-        track:
-          null
+        is_playing: false,
+        progress_ms: 0,
+        duration_ms: 0,
+        track: null
       };
     }
 
-
-    const item =
-      data.item;
-
-
-    const images =
-      item.album?.images ||
-      item.images ||
-      item.show?.images ||
-      [];
-
+    const item = data.item;
+    const images = item.album?.images || item.images || item.show?.images || [];
 
     return {
       ok: true,
       connected: true,
       active: true,
-
-      is_playing:
-        Boolean(
-          data.is_playing
-        ),
-
-      progress_ms:
-        Number(
-          data.progress_ms ||
-          0
-        ),
-
-      duration_ms:
-        Number(
-          item.duration_ms ||
-          0
-        ),
-
+      is_playing: Boolean(data.is_playing),
+      progress_ms: Number(data.progress_ms || 0),
+      duration_ms: Number(item.duration_ms || 0),
       track: {
-        id:
-          item.id ||
-          '',
-
-        uri:
-          item.uri ||
-          '',
-
-        name:
-          item.name ||
-          'Spotify',
-
-        artist:
-          item.artists
-            ?.map(
-              artist =>
-                artist.name
-            )
-            .join(', ') ||
-          item.show?.name ||
-          '',
-
-        image_url:
-          images?.[0]?.url ||
-          ''
+        id: item.id || '',
+        uri: item.uri || '',
+        name: item.name || 'Spotify',
+        artist: item.artists?.map(a => a.name).join(', ') || item.show?.name || '',
+        image_url: images?.[0]?.url || ''
       },
-
-      // where it plays: this PC, your phone, the car… (the island only grows for music on this PC)
-      device: spotifyDevice(
-        data.device
-      )
+      device: spotifyDevice(data.device)
     };
-
   } catch (error) {
+    if (localMedia) {
+      return {
+        ok: true,
+        connected: true,
+        active: true,
+        is_playing: Boolean(localMedia.is_playing),
+        progress_ms: Number(localMedia.position || 0),
+        duration_ms: Number(localMedia.duration || 0),
+        track: {
+          id: 'local-' + Buffer.from(localMedia.title).toString('hex').slice(0, 12),
+          uri: '',
+          name: localMedia.title,
+          artist: localMedia.artist || 'Spotify',
+          image_url: ''
+        },
+        device: {
+          id: 'local',
+          name: os.hostname(),
+          type: 'Computer',
+          active: true,
+          volume: null,
+          here: true
+        }
+      };
+    }
     return {
       ok: false,
       connected: true,
       active: false,
-
-      error:
-        error.message
+      error: error.message
     };
   }
 }
@@ -3911,7 +3984,7 @@ async function spotifyControl(
       ok: false,
 
       error:
-        'Onbekende Spotify-actie.'
+        'Bilinmeyen Spotify eylemi.'
     };
   }
 
@@ -3931,11 +4004,18 @@ async function spotifyControl(
     };
 
   } catch (error) {
+    if (process.platform === 'win32') {
+      const vkMap = { play: 179, pause: 179, next: 176, previous: 177 };
+      if (vkMap[action]) {
+        try {
+          exec(`powershell -NoProfile -NonInteractive -Command "(New-Object -ComObject WScript.Shell).SendKeys([char]${vkMap[action]})"`);
+          return { ok: true };
+        } catch {}
+      }
+    }
     return {
       ok: false,
-
-      error:
-        error.message
+      error: error.message
     };
   }
 }
@@ -3976,11 +4056,18 @@ async function spotifySeek(
     };
 
   } catch (error) {
+    if (process.platform === 'win32') {
+      const vkMap = { play: 179, pause: 179, next: 176, previous: 177 };
+      if (vkMap[action]) {
+        try {
+          exec(`powershell -NoProfile -NonInteractive -Command "(New-Object -ComObject WScript.Shell).SendKeys([char]${vkMap[action]})"`);
+          return { ok: true };
+        } catch {}
+      }
+    }
     return {
       ok: false,
-
-      error:
-        error.message
+      error: error.message
     };
   }
 }
@@ -4540,6 +4627,7 @@ ipcMain.on(
 app.whenReady().then(
   () => {
     createMascot();
+    startWindowsMediaWatcher();
 
 
     pointerTimer =
