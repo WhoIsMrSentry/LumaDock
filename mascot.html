@@ -5183,9 +5183,11 @@ let lumadockLastDraw = -Infinity;
 
 function render(now) {
   try {
+    // Cap at ~60 FPS max (16ms) to avoid saturating high-refresh 120Hz/144Hz/240Hz displays
+    if (now - lumadockLastDraw < 16) return;
     // Resting and the mouse is elsewhere: 30 frames a second is plenty for the small pill
     // and halves the work the PC does all day long.
-    if (mode === 'rest' && !pointer.known && now - lumadockLastDraw < 30) return;
+    if (mode === 'rest' && !pointer.known && now - lumadockLastDraw < 33) return;
     lumadockLastDraw = now;
     drawIslandFrame(now);
   } catch (error) {

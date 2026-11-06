@@ -10,12 +10,12 @@ $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-O
     $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
 })[0]
 
-function AwaitOp($winRtOp, $resultType) {
+function AwaitOp($winRtOp, $resultType, $timeoutMs = 2000) {
     if (-not $winRtOp) { return $null }
     try {
         $asTask = $asTaskGeneric.MakeGenericMethod($resultType)
         $netTask = $asTask.Invoke($null, @($winRtOp))
-        if ($netTask.Wait(800)) {
+        if ($netTask.Wait($timeoutMs)) {
             return $netTask.Result
         }
     } catch {}
@@ -23,14 +23,19 @@ function AwaitOp($winRtOp, $resultType) {
 }
 
 [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media, ContentType = WindowsRuntime] | Out-Null
-$mgr = AwaitOp ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
 
-if (-not $mgr) {
-    Write-Output '{"active":false,"error":"No media session manager"}'
-    exit 0
+$mgr = $null
+function EnsureManager() {
+    if ($script:mgr) { return $script:mgr }
+    try {
+        $script:mgr = AwaitOp ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]) 2500
+    } catch {}
+    return $script:mgr
 }
 
 $lastJson = ''
+$lastEmittedTime = 0
+$lastEmittedPos = 0
 $tick = 0
 $cmdFile = "$env:TEMP\lumadock-media-cmd.txt"
 $cachedProps = $null
@@ -42,28 +47,38 @@ function InvalidatePropsCache() {
 }
 
 function GetActiveSession() {
-    $current = $mgr.GetCurrentSession()
-    if ($current) {
-        $info = $current.GetPlaybackInfo()
-        if ($info -and $info.PlaybackStatus -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing) {
-            return $current
+    $m = EnsureManager
+    if (-not $m) { return $null }
+
+    try {
+        $current = $m.GetCurrentSession()
+        if ($current) {
+            $info = $current.GetPlaybackInfo()
+            if ($info -and $info.PlaybackStatus -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing) {
+                return $current
+            }
         }
-    }
+    } catch {}
 
-    $sessions = $mgr.GetSessions()
-    if (-not $sessions -or $sessions.Count -eq 0) {
-        return $current
-    }
-
-    foreach ($s in $sessions) {
-        $info = $s.GetPlaybackInfo()
-        if ($info -and $info.PlaybackStatus -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing) {
-            return $s
+    try {
+        $sessions = $m.GetSessions()
+        if ($sessions -and $sessions.Count -gt 0) {
+            # 1. Prefer actively playing session
+            for ($i = 0; $i -lt $sessions.Count; $i++) {
+                $s = $sessions[$i]
+                $info = $s.GetPlaybackInfo()
+                if ($info -and $info.PlaybackStatus -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing) {
+                    return $s
+                }
+            }
+            # 2. If current session exists (even paused), use it
+            if ($current) { return $current }
+            # 3. Otherwise return the first available session (e.g. paused Spotify)
+            return $sessions[0]
         }
-    }
+    } catch {}
 
-    if ($current) { return $current }
-    return $sessions[0]
+    return $current
 }
 
 function ReadSessionInfo() {
@@ -74,7 +89,7 @@ function ReadSessionInfo() {
 
     $nowMs = [System.Environment]::TickCount
     if (-not $script:cachedProps -or ($nowMs - $script:cachedPropsTime) -gt 1500 -or $session.SourceAppId -ne $script:lastSessionSource) {
-        $newProps = AwaitOp ($session.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+        $newProps = AwaitOp ($session.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties]) 1000
         if ($newProps -and ($newProps.Title -or $newProps.Artist)) {
             $script:cachedProps = $newProps
             $script:cachedPropsTime = $nowMs
@@ -134,9 +149,9 @@ function HandleControlCommand([string]$cmd) {
     } catch {}
 }
 
-# Run loop - non-blocking, fast polling
+# Run loop - non-blocking, clean event throttling
 while ($true) {
-    if ($Parent -and (++$tick % 25 -eq 0) -and -not (Get-Process -Id $Parent -ErrorAction SilentlyContinue)) {
+    if ($Parent -and (++$tick % 30 -eq 0) -and -not (Get-Process -Id $Parent -ErrorAction SilentlyContinue)) {
         exit 0
     }
 
@@ -155,7 +170,7 @@ while ($true) {
     }
 
     if ($hadCmd) {
-        Start-Sleep -Milliseconds 40
+        Start-Sleep -Milliseconds 30
     }
 
     try {
@@ -163,12 +178,43 @@ while ($true) {
     } catch {
         $now = $lastJson
     }
+
+    $currentTime = [System.Environment]::TickCount
+    $shouldEmit = $false
+
     if ($now -ne $lastJson) {
+        # Check if the change is significant (metadata, play state, or duration changed)
+        # We don't want to flood IPC 5x a second for routine 200ms position ticks
+        try {
+            $prevObj = if ($lastJson) { $lastJson | ConvertFrom-Json } else { $null }
+            $currObj = if ($now) { $now | ConvertFrom-Json } else { $null }
+
+            if (-not $prevObj -or -not $currObj) {
+                $shouldEmit = $true
+            } elseif ($currObj.active -ne $prevObj.active -or $currObj.is_playing -ne $prevObj.is_playing -or $currObj.title -ne $prevObj.title -or $currObj.artist -ne $prevObj.artist) {
+                $shouldEmit = $true
+            } elseif ([Math]::Abs([long]($currObj.position - $script:lastEmittedPos)) -gt 2500) {
+                # Seek or skip occurred
+                $shouldEmit = $true
+            } elseif (($currentTime - $script:lastEmittedTime) -ge 900) {
+                # Periodic sync tick every ~1 second for timeline accuracy
+                $shouldEmit = $true
+            }
+        } catch {
+            $shouldEmit = $true
+        }
+    }
+
+    if ($shouldEmit) {
         [Console]::Out.WriteLine($now)
         [Console]::Out.Flush()
         $lastJson = $now
+        $script:lastEmittedTime = $currentTime
+        try {
+            $objParsed = $now | ConvertFrom-Json
+            $script:lastEmittedPos = if ($objParsed.position) { [long]$objParsed.position } else { 0 }
+        } catch {}
     }
-    if (-not $hadCmd) {
-        Start-Sleep -Milliseconds 200
-    }
+
+    Start-Sleep -Milliseconds 150
 }

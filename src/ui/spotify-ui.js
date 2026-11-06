@@ -59,6 +59,35 @@
       lyricsLoading = false;
     }
   }
+
+  window.__lumadockLoadLyrics = loadLyrics;
+  window.__lumadockGetActiveLyric = () => {
+    if (!spotifyState.is_playing || !lyrics?.lines?.length) return null;
+    const curPos = position();
+    if (typeof lyrics.lines.findLast === 'function') {
+      return lyrics.lines.findLast(l => l.timeMs <= curPos) || null;
+    }
+    for (let i = lyrics.lines.length - 1; i >= 0; i--) {
+      if (lyrics.lines[i].timeMs <= curPos) return lyrics.lines[i];
+    }
+    return null;
+  };
+  window.__lumadockGetLyrics = () => lyrics;
+
+  window.lumadock?.onMediaStateChanged?.(data => {
+    if (data?.title && data.active) {
+      loadLyrics(data.title, data.artist, data.duration);
+    }
+  });
+
+  setInterval(() => {
+    if (spotifyState.track?.name && !lyricsLoading) {
+      const key = `${spotifyState.track.name}:::${spotifyState.track.artist || ''}`.toLowerCase();
+      if (key !== lastLyricsKey) {
+        loadLyrics(spotifyState.track.name, spotifyState.track.artist, spotifyState.duration_ms);
+      }
+    }
+  }, 1200);
   // ---- Spotify Connect: where the music plays (this PC, your phone, the car…) and moving it, like Spotify's speaker button ----
   let devicesOpen = false, devices = [], devicesNote = '';
   function devIcon(type, x, y, s, colour) { // small line icons per kind of device

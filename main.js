@@ -2576,6 +2576,9 @@ function startWindowsMediaWatcher() {
 
     mediaWatchChild.on('exit', () => {
       mediaWatchChild = null;
+      if (!app.isQuitting) {
+        setTimeout(startWindowsMediaWatcher, 2000);
+      }
     });
   } catch (err) {
     console.warn('[LumaDock MediaWatcher]', err.message);
@@ -3833,36 +3836,38 @@ async function spotifyApi(
 // ============================================================
 
 async function getSpotifyState() {
-  const hasTokens = Boolean(loadSpotifyTokens());
   const localMedia = (latestWindowsMedia && latestWindowsMedia.active && latestWindowsMedia.title) ? latestWindowsMedia : null;
 
-  if (!hasTokens) {
-    if (localMedia) {
-      const cover = getArtworkOrFetchBackground(localMedia.title, localMedia.artist);
-      return {
-        ok: true,
-        connected: true,
+  // 1. Instant local Windows GSMTC session (0ms latency, zero rate limits, no hangs)
+  if (localMedia) {
+    const cover = getArtworkOrFetchBackground(localMedia.title, localMedia.artist);
+    return {
+      ok: true,
+      connected: true,
+      active: true,
+      is_playing: Boolean(localMedia.is_playing),
+      progress_ms: Number(localMedia.position || 0),
+      duration_ms: Number(localMedia.duration || 0),
+      track: {
+        id: 'local-' + Buffer.from(localMedia.title).toString('hex').slice(0, 12),
+        uri: '',
+        name: localMedia.title,
+        artist: localMedia.artist || 'Müzik',
+        image_url: cover || ''
+      },
+      device: {
+        id: 'local',
+        name: os.hostname(),
+        type: 'Computer',
         active: true,
-        is_playing: Boolean(localMedia.is_playing),
-        progress_ms: Number(localMedia.position || 0),
-        duration_ms: Number(localMedia.duration || 0),
-        track: {
-          id: 'local-' + Buffer.from(localMedia.title).toString('hex').slice(0, 12),
-          uri: '',
-          name: localMedia.title,
-          artist: localMedia.artist || 'Müzik',
-          image_url: cover || ''
-        },
-        device: {
-          id: 'local',
-          name: os.hostname(),
-          type: 'Computer',
-          active: true,
-          volume: null,
-          here: true
-        }
-      };
-    }
+        volume: null,
+        here: true
+      }
+    };
+  }
+
+  const hasTokens = Boolean(loadSpotifyTokens());
+  if (!hasTokens) {
     return {
       ok: true,
       connected: false,

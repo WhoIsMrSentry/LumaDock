@@ -721,7 +721,7 @@
       if (typeof refreshSpotify === 'function') await refreshSpotify();
       settleSize();
     } catch {}
-  }, 1000);
+  }, 2500);
   drawExpanded = function (alpha) {
     if (currentView === 'shortcuts') { drawHeader(alpha); drawShortcuts(contentRect()); return; }
     if (!['monitor', 'assistant'].includes(currentView)) return oldDrawExpanded(alpha);
@@ -861,9 +861,31 @@
       } else { box(left, cy - cover / 2, cover, cover, 7, '#1b211a'); icon('music'); }
       // the song, not a fake sound wave (the wave could never follow the real beat)
       const tr = spotifyState.track || {}, timer = (focus?.active() ? 60 : 0) + 26;
-      text(tr.name || 'Spotify', mid0, cy + 4, 11.5, '#f2f5ed', 700, 'left', Math.max(40, (mid1 - mid0 - timer) * 0.62));
-      const nameW = Math.min((mid1 - mid0 - timer) * 0.62, (ctx.measureText ? (ctx.font = '700 11.5px "Segoe UI"', ctx.measureText(tr.name || 'Spotify').width) : 80));
-      if (tr.artist) text(tr.artist, mid0 + nameW + 8, cy + 4, 11, 'rgba(235,240,230,.5)', 600, 'left', Math.max(0, mid1 - timer - mid0 - nameW - 8));
+      const activeLyric = window.__lumadockGetActiveLyric?.();
+      if (activeLyric && activeLyric.text && spotifyState.is_playing) {
+        const availW = Math.max(60, mid1 - mid0 - timer - 14);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(mid0, cy - 11, availW, 22);
+        ctx.clip();
+        const lrcText = '♪ ' + activeLyric.text;
+        ctx.font = '600 11.5px "Segoe UI"';
+        const tw = ctx.measureText ? ctx.measureText(lrcText).width : 100;
+        let ox = 0;
+        if (tw > availW) {
+          const shift = Math.floor((performance.now() / 28) % (tw + 48));
+          ox = -shift;
+        }
+        text(lrcText, mid0 + ox, cy + 4, 11.5, window.__lumadockAlbumColour || '#1ed760', 600, 'left');
+        if (tw > availW && ox < 0) {
+          text(lrcText, mid0 + ox + tw + 48, cy + 4, 11.5, window.__lumadockAlbumColour || '#1ed760', 600, 'left');
+        }
+        ctx.restore();
+      } else {
+        text(tr.name || 'Spotify', mid0, cy + 4, 11.5, '#f2f5ed', 700, 'left', Math.max(40, (mid1 - mid0 - timer) * 0.62));
+        const nameW = Math.min((mid1 - mid0 - timer) * 0.62, (ctx.measureText ? (ctx.font = '700 11.5px "Segoe UI"', ctx.measureText(tr.name || 'Spotify').width) : 80));
+        if (tr.artist) text(tr.artist, mid0 + nameW + 8, cy + 4, 11, 'rgba(235,240,230,.5)', 600, 'left', Math.max(0, mid1 - timer - mid0 - nameW - 8));
+      }
       if (focus?.active()) text(focus.label(), mid1 - 26, cy + 4, 11.5, '#ffd28a', 700, 'right');
       if (p) drawLamp(p, right - 20, cy);
       // a small chevron: up = make it small, down = keep showing the music
@@ -1356,7 +1378,7 @@
     const tx = r.x + s + 24, tw = r.x + r.width - tx - 14;
     text(t.name, tx, r.y + 30, 14.5, '#fff', 700, 'left', tw);
     text(artist, tx, r.y + 48, 11.5, '#9aa596', 500, 'left', tw);
-    if (spotifyState.device && !spotifyState.device.here) text('Speelt op ' + spotifyState.device.name, tx, r.y + 68, 10.5, window.__lumadockAlbumColour || '#1ed760', 600, 'left', tw); // where it plays (no fake sound wave)
+    if (spotifyState.device && !spotifyState.device.here) text(T('Speelt op ', 'Playing on ', 'Çalınan cihaz: ') + spotifyState.device.name, tx, r.y + 68, 10.5, window.__lumadockAlbumColour || '#1ed760', 600, 'left', tw); // where it plays (no fake sound wave)
     const py = r.y + r.height - 50;
     ctx.save(); ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.beginPath(); ctx.roundRect(tx, py, tw, 4, 2); ctx.fill(); ctx.fillStyle = '#f4f7f0'; ctx.beginPath(); ctx.roundRect(tx, py, Math.max(4, tw * part), 4, 2); ctx.fill(); ctx.restore();
     const cy = r.y + r.height - 24, mid = tx + tw / 2;
@@ -1658,18 +1680,18 @@
   }
   drawApps = function (area) {
     const PAGE = window.__lumadockPage, focus = window.__lumadockFocus, p = top();
-    PAGE.title(area, 'Apps', 'Alles wat LumaDock voor je kan doen · Ctrl+Alt+1–6 = sneltoets');
+    PAGE.title(area, 'Apps', T('Alles wat LumaDock voor je kan doen · Ctrl+Alt+1–6 = sneltoets', 'Everything LumaDock can do for you · Ctrl+Alt+1–6 = shortcut', 'LumaDock ile yapabileceğiniz her şey · Ctrl+Alt+1–6 = kısayol'));
     const cols = 4, x = area.x + PAGE.contentX, gap = 10, w = Math.floor((area.width - PAGE.contentX * 2 - gap * (cols - 1)) / cols);
     const y = area.y + PAGE.bodyY, h = Math.min(84, Math.floor((area.height - PAGE.bodyY - gap - 4) / 2));
     const tray = window.__lumadockTrayCount?.() || 0;
     const tiles = [
-      ['music', 'Spotify', spotifyState.track ? short(spotifyState.track.name, 22) : spotifyConnected ? 'Niks aan het spelen' : 'Nog niet gekoppeld', 'spotifyApp', window.__lumadockAlbumColour || TILE_TINT.music],
+      ['music', 'Spotify', spotifyState.track ? short(spotifyState.track.name, 22) : (spotifyConnected ? T('Niks aan het spelen', 'No music playing', 'Müzik çalmıyor') : T('Nog niet gekoppeld', 'Not connected', 'Bağlı değil')), 'spotifyApp', window.__lumadockAlbumColour || TILE_TINT.music],
       ['terminal', 'AI', p ? p.name + ' · ' + (p.detail || labels[p.state]) : 'Claude, ChatGPT, Codex', 'monitor_claudecode', p ? colourOf(p.state) : TILE_TINT.terminal],
       ['timer', 'Focus', focus?.active() ? `Nog ${focus.label()}` : `${focus?.minutes?.() || 25} min`, 'focusApp', TILE_TINT.timer],
-      ['tray', 'Lade', tray ? `${tray} bestand${tray === 1 ? '' : 'en'}` : 'Leeg', 'trayApp', TILE_TINT.tray],
-      ['copy', 'Klembord', 'Je laatste kopieën', 'clipsApp', '#5ad1c4'],
-      ['note', 'Notitie', 'Snel iets opschrijven', 'noteApp', '#ffd166'],
-      ['gear', 'Instellingen', 'Kleuren, geluid en meer', 'settingsApp', TILE_TINT.gear]
+      ['tray', T('Lade', 'Tray', 'Çekmece'), tray ? `${tray} ` + T('bestand', 'file', 'dosya') : T('Leeg', 'Empty', 'Boş'), 'trayApp', TILE_TINT.tray],
+      ['copy', T('Klembord', 'Clipboard', 'Pano'), T('Je laatste kopieën', 'Recent clippings', 'Son kopyalananlar'), 'clipsApp', '#5ad1c4'],
+      ['note', T('Notitie', 'Notes', 'Notlar'), T('Snel iets opschrijven', 'Quick note', 'Hızlı not al'), 'noteApp', '#ffd166'],
+      ['gear', T('Instellingen', 'Settings', 'Ayarlar'), T('Kleuren, geluid en meer', 'Colors, sound and more', 'Renkler, ses ve fazlası'), 'settingsApp', TILE_TINT.gear]
     ];
     // apps you removed in LumaDock Instellingen → Apps are not here (Instellingen itself always is)
     const off = window.__lumadockAppsOff?.() || new Set(), shown = tiles.filter(t => !off.has(APP_OF_KEY[t[3]]));
@@ -1680,7 +1702,7 @@
     ctx.save(); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.roundRect(tx + 0.5, ty + 0.5, w - 1, h - 1, 15.5); ctx.strokeStyle = 'rgba(255,255,255,.1)'; ctx.stroke(); ctx.restore();
     text('TIP', tx + 16, ty + h / 2 - 16, 9.5, '#c6e994', 700);
     text('Ctrl + Alt + T', tx + 16, ty + h / 2 + 2, 13, '#fff', 700, 'left', w - 32);
-    text('opent LumaDock overal', tx + 16, ty + h / 2 + 18, 10.5, '#8f998d', 500, 'left', w - 32);
+    text(T('opent LumaDock overal', 'opens LumaDock anywhere', 'LumaDock\'u her yerde açar'), tx + 16, ty + h / 2 + 18, 10.5, '#8f998d', 500, 'left', w - 32);
     delete hit.todayApp; delete hit.assistantApp; delete hit.projectApp;
   };
   // ---- Your shortcuts (the + button): you choose which apps are here (max 4). The same apps are on the home card. ----
@@ -1688,11 +1710,11 @@
     spotify: { icon: 'music', label: 'Spotify', key: 'spotifyApp', tint: () => window.__lumadockAlbumColour || '#1ed760' },
     claude: { icon: 'terminal', label: 'AI', key: 'monitor_claudecode', tint: () => '#c6e994' },
     focus: { icon: 'timer', label: 'Focus', key: 'focusApp', tint: () => '#ffb35c' },
-    tray: { icon: 'tray', label: 'Lade', key: 'trayApp', tint: () => '#7ab8ff' },
-    clips: { icon: 'copy', label: 'Klembord', key: 'clipsApp', tint: () => '#5ad1c4' },
-    note: { icon: 'note', label: 'Notitie', key: 'noteApp', tint: () => '#ffd166' },
-    settings: { icon: 'gear', label: 'Instellingen', key: 'settingsApp', tint: () => '#b98cff' },
-    clock: { icon: 'clock', label: 'Klok', key: 'clockApp', tint: () => '#8ab4ff' }
+    tray: { icon: 'tray', label: T('Lade', 'Tray', 'Çekmece'), key: 'trayApp', tint: () => '#7ab8ff' },
+    clips: { icon: 'copy', label: T('Klembord', 'Clipboard', 'Pano'), key: 'clipsApp', tint: () => '#5ad1c4' },
+    note: { icon: 'note', label: T('Notitie', 'Notes', 'Notlar'), key: 'noteApp', tint: () => '#ffd166' },
+    settings: { icon: 'gear', label: T('Instellingen', 'Settings', 'Ayarlar'), key: 'settingsApp', tint: () => '#b98cff' },
+    clock: { icon: 'clock', label: T('Klok', 'Clock', 'Saat'), key: 'clockApp', tint: () => '#8ab4ff' }
   };
   const APP_OF_KEY = Object.fromEntries(Object.entries(APPS).map(([id, a]) => [a.key, id]));
   const MAX_SHORTCUTS = 4, DEFAULT_SHORTCUTS = ['spotify', 'focus', 'tray', 'settings'];
@@ -1703,14 +1725,14 @@
   let editShortcuts = false;
   function appStatus(id) {
     const focus = window.__lumadockFocus, p = top(), tray = window.__lumadockTrayCount?.() || 0;
-    if (id === 'spotify') return spotifyState.track ? short(spotifyState.track.name, 20) : 'Muziek';
-    if (id === 'claude') return p ? p.detail || labels[p.state] : 'Rustig';
+    if (id === 'spotify') return spotifyState.track ? short(spotifyState.track.name, 20) : T('Muziek', 'Music', 'Müzik');
+    if (id === 'claude') return p ? p.detail || labels[p.state] : T('Rustig', 'Idle', 'Boşta');
     if (id === 'focus') return focus?.active() ? `Nog ${focus.label()}` : `${focus?.minutes?.() || 25} min`;
-    if (id === 'tray') return tray ? `${tray} bestand${tray === 1 ? '' : 'en'}` : 'Leeg';
-    if (id === 'clips') return 'Laatste kopieën';
-    if (id === 'note') return 'Opschrijven';
+    if (id === 'tray') return tray ? `${tray} ` + T('bestand', 'file', 'dosya') : T('Leeg', 'Empty', 'Boş');
+    if (id === 'clips') return T('Laatste kopieën', 'Recent clips', 'Son kopyalar');
+    if (id === 'note') return T('Opschrijven', 'Write note', 'Not yaz');
     if (id === 'clock') return new Date().toLocaleTimeString(LOCALE(), { hour: '2-digit', minute: '2-digit' });
-    return 'Kleuren, geluid';
+    return T('Kleuren, geluid', 'Colors, sound', 'Renkler, ses');
   }
   function drawShortcuts(area) {
     const PAGE = window.__lumadockPage, list = shortcuts();
