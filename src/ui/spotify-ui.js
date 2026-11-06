@@ -31,6 +31,34 @@
     ctx.fill(); ctx.restore();
   }
   window.__lumadockMediaIcon = mediaIcon;
+
+  // ---- Spotify Lyrics (Time-synced lyrics with timestamps) ----
+  let lyrics = null, lyricsLoading = false, lastLyricsKey = '', lyricsOpen = false;
+
+  async function loadLyrics(trackName, artistName, dur) {
+    if (!trackName) { lyrics = null; return; }
+    const key = `${trackName}:::${artistName || ''}`.toLowerCase();
+    if (key === lastLyricsKey && lyrics) return;
+    lastLyricsKey = key;
+    lyricsLoading = true;
+    try {
+      const res = await api.spotifyLyrics?.({ title: trackName, artist: artistName, duration: dur });
+      if (res?.ok && res.lines?.length) {
+        lyrics = res;
+      } else if (res?.plain) {
+        lyrics = {
+          synced: false,
+          lines: res.plain.split('\n').filter(Boolean).map(t => ({ displayTime: '--:--', timeMs: 0, text: t.trim() }))
+        };
+      } else {
+        lyrics = null;
+      }
+    } catch {
+      lyrics = null;
+    } finally {
+      lyricsLoading = false;
+    }
+  }
   // ---- Spotify Connect: where the music plays (this PC, your phone, the car…) and moving it, like Spotify's speaker button ----
   let devicesOpen = false, devices = [], devicesNote = '';
   function devIcon(type, x, y, s, colour) { // small line icons per kind of device
@@ -115,16 +143,34 @@
     else window.__lumadockIcon?.('music', left + size / 2, top + size / 2, 40, '#5d6858');
 
     const x = left + size + 24, w = right - x, vizW = 168;
+
+    // Load time-synced lyrics if track changed
+    if (track?.name && `${track.name}:::${track.artist || ''}`.toLowerCase() !== lastLyricsKey && !lyricsLoading) {
+      loadLyrics(track.name, track.artist, spotifyState.duration_ms);
+    }
+
     // title + artist, visualizer on the right
     if (!track) {
-      text(L('Nothing is playing right now', 'Şu an çalan bir şey yok'), x, top + 30, 18, '#fff', 700, 'left', w - vizW - 16);
-      text(L('Start music in Spotify or press play.', 'Spotify\'da müzik başlatın veya oynat\'a basın.'), x, top + 50, 12.5, 'rgba(235,240,230,.6)', 500, 'left', w - vizW - 16);
+      text(L('Nothing is playing right now', 'Şu an çalan bir şey yok'), x, top + 26, 17, '#fff', 700, 'left', w - vizW - 16);
+      text(L('Start music in Spotify or press play.', 'Spotify\'da müzik başlatın veya oynat\'a basın.'), x, top + 44, 12, 'rgba(235,240,230,.6)', 500, 'left', w - vizW - 16);
       hit.spTitle = { x, y: top + 10, width: w - vizW, height: 28 };
     } else {
-      const over = inside(pointer.x, pointer.y, { x, y: top + 10, width: w - vizW - 16, height: 28 });
-      text(track.name, x, top + 30, 18, over ? colour : '#fff', 700, 'left', w - vizW - 16);
-      text(track.artist, x, top + 50, 12.5, 'rgba(235,240,230,.62)', 500, 'left', w - vizW - 16);
-      hit.spTitle = { x, y: top + 10, width: w - vizW - 16, height: 28 };
+      const over = inside(pointer.x, pointer.y, { x, y: top + 10, width: w - vizW - 16, height: 24 });
+      text(track.name, x, top + 26, 17, over ? colour : '#fff', 700, 'left', w - vizW - 16);
+      text(track.artist, x, top + 44, 12, 'rgba(235,240,230,.62)', 500, 'left', w - vizW - 16);
+      hit.spTitle = { x, y: top + 10, width: w - vizW, height: 24 };
+
+      // Live timestamped lyrics line
+      const curPos = position();
+      const activeLine = lyrics?.lines?.findLast?.(l => l.timeMs <= curPos);
+      if (activeLine) {
+        const overLrc = inside(pointer.x, pointer.y, { x, y: top + 49, width: w - 30, height: 18 });
+        text(`[${activeLine.displayTime}]`, x, top + 61, 10, colour, 700, 'left');
+        text(activeLine.text, x + 38, top + 61, 11, overLrc ? '#fff' : 'rgba(240,245,235,.88)', 600, 'left', w - 60);
+        hit.spLiveLrc = { x, y: top + 49, width: w - 30, height: 18 };
+      } else if (lyricsLoading) {
+        text(L('Loading lyrics…', 'Sözler yükleniyor…'), x, top + 61, 10.5, 'rgba(255,255,255,.4)', 500, 'left');
+      }
     }
     const dev = spotifyState.device, elsewhere = dev && !dev.here, bw = 150, bx = right - bw, by = top + 12;
     const overDev = inside(pointer.x, pointer.y, { x: bx, y: by, width: bw, height: 30 });
@@ -152,8 +198,48 @@
     const ox = right - 14, overOpen = inside(pointer.x, pointer.y, { x: ox - 16, y: cy - 16, width: 32, height: 32 });
     window.__lumadockIcon?.('music', ox, cy, 16, overOpen ? colour : 'rgba(235,240,230,.55)');
     hit.spOpen = { x: ox - 16, y: cy - 16, width: 32, height: 32 };
+
+    // LRC Lyrics button
+    const lx = right - 46, overLrcBtn = inside(pointer.x, pointer.y, { x: lx - 16, y: cy - 16, width: 32, height: 32 });
+    if (lyricsOpen || overLrcBtn) {
+      box(lx - 15, cy - 11, 30, 22, 6, lyricsOpen ? colour : 'rgba(255,255,255,.12)');
+    }
+    text('LRC', lx, cy + 3.5, 9.5, lyricsOpen ? '#050605' : (overLrcBtn ? '#fff' : (lyrics ? colour : 'rgba(235,240,230,.5)')), 700, 'center');
+    hit.spLyrics = { x: lx - 16, y: cy - 16, width: 32, height: 32 };
+
     for (let i = 0; i < 5; i++) hit['spDev' + i] = null;
-    if (devicesOpen) {
+    for (let i = 0; i < 4; i++) hit['spLrc' + i] = null;
+
+    if (lyricsOpen) {
+      const px = x - 8, py = top - 2, pw = right - px + 4, ph = size + 4;
+      ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.65)'; ctx.shadowBlur = 20; box(px, py, pw, ph, 16, '#121512'); ctx.restore();
+      text('♫ ' + L('Lyrics · Timestamped', 'Şarkı Sözleri · Zaman Damgalı'), px + 16, py + 24, 13, colour, 700);
+      text('✕', px + pw - 18, py + 24, 13, 'rgba(255,255,255,.6)', 700, 'center');
+      hit.spLyricsClose = { x: px + pw - 32, y: py + 6, width: 28, height: 28 };
+
+      if (!lyrics || !lyrics.lines?.length) {
+        text(lyricsLoading ? L('Loading lyrics…', 'Sözler yükleniyor…') : L('No lyrics found for this track.', 'Bu parça için söz bulunamadı.'), px + 16, py + 56, 12, 'rgba(255,255,255,.5)', 500);
+      } else {
+        const curPos = position();
+        let curIdx = lyrics.lines.findLastIndex(l => l.timeMs <= curPos);
+        if (curIdx < 0) curIdx = 0;
+        const start = Math.max(0, Math.min(lyrics.lines.length - 4, curIdx - 1));
+        const slice = lyrics.lines.slice(start, start + 4);
+
+        slice.forEach((l, i) => {
+          const globalIdx = start + i;
+          const isCur = globalIdx === curIdx;
+          const ry = py + 36 + i * 24;
+          const over = inside(pointer.x, pointer.y, { x: px + 8, y: ry, width: pw - 16, height: 22 });
+          if (over || isCur) {
+            box(px + 8, ry, pw - 16, 22, 6, isCur ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.06)');
+          }
+          text(l.displayTime, px + 16, ry + 15, 10.5, isCur ? colour : 'rgba(255,255,255,.45)', 700, 'left');
+          text(l.text, px + 58, ry + 15, isCur ? 12 : 11, isCur ? '#ffffff' : (over ? '#eef2ec' : 'rgba(235,240,230,.6)'), isCur ? 700 : 500, 'left', pw - 76);
+          hit['spLrc' + i] = { x: px + 8, y: ry, width: pw - 16, height: 22, timeMs: l.timeMs };
+        });
+      }
+    } else if (devicesOpen) {
       const px = x - 8, py = top - 2, pw = right - px + 4, ph = size + 4;
       ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 20; box(px, py, pw, ph, 16, '#121512'); ctx.restore();
       text(L('Play on', 'Cihazda Çal'), px + 16, py + 24, 13, '#fff', 700);
@@ -231,7 +317,19 @@
     const x = event.clientX, y = event.clientY, hits = {
       spDevClose: () => { devicesOpen = false; },
       ...Object.fromEntries([0, 1, 2, 3].map(i => ['spDev' + i, () => hit['spDev' + i]?.device && moveTo(hit['spDev' + i].device)])),
-      spDevices: () => { devicesOpen = !devicesOpen; if (devicesOpen) loadDevices(); },
+      spDevices: () => { devicesOpen = !devicesOpen; if (devicesOpen) { lyricsOpen = false; loadDevices(); } },
+      spLyrics: () => { lyricsOpen = !lyricsOpen; if (lyricsOpen) devicesOpen = false; },
+      spLyricsClose: () => { lyricsOpen = false; },
+      spLiveLrc: () => { lyricsOpen = true; devicesOpen = false; },
+      ...Object.fromEntries([0, 1, 2, 3].map(i => ['spLrc' + i, () => {
+        const item = hit['spLrc' + i];
+        if (item && item.timeMs !== undefined) {
+          spotifyState.progress_ms = item.timeMs;
+          spotifySyncAt = performance.now();
+          api.spotifySeek(item.timeMs).catch(() => {});
+          setTimeout(() => refreshSpotify(), 80);
+        }
+      }])),
       spPrev: () => control('previous'), spNext: () => control('next'),
       spPlay: () => control(spotifyState.is_playing ? 'pause' : 'play'), spOpen: () => control('open'), spTitle: () => control('open'),
       spConnect: async () => { try { await api.spotifyConnect(); } catch {} refreshSpotify(); },
@@ -246,6 +344,7 @@
         setTimeout(() => refreshSpotify(), 300);
       }
     };
+    if (lyricsOpen && !['spLyrics', 'spLyricsClose', 'spLrc0', 'spLrc1', 'spLrc2', 'spLrc3'].some(k => inside(x, y, hit[k]))) { lyricsOpen = false; event.preventDefault(); event.stopImmediatePropagation(); return; }
     if (devicesOpen && !['spDevices', 'spDevClose', 'spDev0', 'spDev1', 'spDev2', 'spDev3'].some(k => inside(x, y, hit[k]))) { devicesOpen = false; event.preventDefault(); event.stopImmediatePropagation(); return; } // a click elsewhere closes the list
     for (const [key, run] of Object.entries(hits)) {
       if (inside(x, y, hit[key])) { event.preventDefault(); event.stopImmediatePropagation(); run(); return; }

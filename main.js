@@ -4080,6 +4080,90 @@ async function spotifySeek(positionMs) {
   return { ok: true };
 }
 
+// ============================================================
+// SPOTIFY LYRICS (LRCLIB Time-synced Lyrics)
+// ============================================================
+
+const lyricsCache = new Map();
+
+async function fetchLyrics(title, artist, durationMs) {
+  if (!title) return { ok: false, error: 'No track title' };
+  const cleanTitle = title.replace(/\s*[\(\[\-].*$/, '').trim() || title;
+  const cacheKey = `${cleanTitle}:::${artist || ''}`.toLowerCase();
+  if (lyricsCache.has(cacheKey)) {
+    return lyricsCache.get(cacheKey);
+  }
+
+  let lrcData = null;
+  // 1. Direct get from LRCLIB
+  try {
+    const params = new URLSearchParams({
+      track_name: cleanTitle,
+      artist_name: artist || ''
+    });
+    if (durationMs) params.append('duration', String(Math.round(durationMs / 1000)));
+    const res = await fetch(`https://lrclib.net/api/get?${params}`, {
+      headers: { 'User-Agent': 'LumaDock/1.2.0 (https://github.com/WhoIsMrSentry/LumaDock)' },
+      signal: AbortSignal.timeout(3500)
+    });
+    if (res.ok) lrcData = await res.json();
+  } catch {}
+
+  // 2. Search fallback
+  if (!lrcData || (!lrcData.syncedLyrics && !lrcData.plainLyrics)) {
+    try {
+      const q = encodeURIComponent(`${cleanTitle} ${artist || ''}`.trim());
+      const res = await fetch(`https://lrclib.net/api/search?q=${q}`, {
+        headers: { 'User-Agent': 'LumaDock/1.2.0' },
+        signal: AbortSignal.timeout(3500)
+      });
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list) && list.length) {
+          lrcData = list.find(x => x.syncedLyrics) || list[0];
+        }
+      }
+    } catch {}
+  }
+
+  if (!lrcData || (!lrcData.syncedLyrics && !lrcData.plainLyrics)) {
+    const empty = { ok: false, error: 'Lyrics not found' };
+    lyricsCache.set(cacheKey, empty);
+    return empty;
+  }
+
+  const lines = [];
+  if (lrcData.syncedLyrics) {
+    for (const rawLine of lrcData.syncedLyrics.split('\n')) {
+      const match = rawLine.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)$/);
+      if (match) {
+        const min = parseInt(match[1], 10);
+        const sec = parseInt(match[2], 10);
+        const ms = parseInt(match[3].padEnd(3, '0').slice(0, 3), 10);
+        const timeMs = min * 60000 + sec * 1000 + ms;
+        const text = match[4].trim();
+        if (text) {
+          lines.push({
+            timeMs,
+            displayTime: `${min}:${String(sec).padStart(2, '0')}`,
+            text
+          });
+        }
+      }
+    }
+  }
+
+  const result = {
+    ok: true,
+    synced: lines.length > 0,
+    lines,
+    plain: lrcData.plainLyrics || ''
+  };
+
+  lyricsCache.set(cacheKey, result);
+  return result;
+}
+
 
 // ============================================================
 // WINDOW POSITION
@@ -4514,6 +4598,7 @@ ipcMain.handle(
 
 ipcMain.handle('spotify:devices', () => spotifyDevices()); // Spotify Connect: where it can play
 ipcMain.handle('spotify:transfer', (_event, id) => spotifyTransfer(id));
+ipcMain.handle('spotify:lyrics', (_event, q) => fetchLyrics(q?.title, q?.artist, q?.duration));
 
 ipcMain.handle(
   'spotify:seek',

@@ -26,6 +26,7 @@
       ipcRenderer.invoke('spotify:control', action),
     spotifyDevices: () => ipcRenderer.invoke('spotify:devices'),
     spotifyTransfer: id => ipcRenderer.invoke('spotify:transfer', id),
+    spotifyLyrics: query => ipcRenderer.invoke('spotify:lyrics', query),
     spotifySeek: positionMs =>
       ipcRenderer.invoke('spotify:seek', positionMs),
     spotifyDisconnect: () =>
