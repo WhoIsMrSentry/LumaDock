@@ -1,3 +1,4 @@
+delete process.env.ELECTRON_RUN_AS_NODE;
 require('./tray-main.cjs'); // first: tray icon + only one LumaDock at a time
 require('./island-window-main');
 const {

@@ -1,3 +1,4 @@
+delete process.env.ELECTRON_RUN_AS_NODE;
 // LumaDock in the Windows tray (next to the clock): Robo's face, with a menu to open the island,
 // start with Windows, restart and quit. The island itself has no taskbar button, so this is the
 // place where you can always find and close LumaDock. Also: only one LumaDock runs at a time.

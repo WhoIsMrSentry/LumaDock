@@ -10,5 +10,7 @@ if not exist "node_modules\electron\dist\electron.exe" (
     exit /b 1
   )
 )
-call npm.cmd start
-pause
+"node_modules\electron\dist\electron.exe" .
+if errorlevel 1 (
+  pause
+)
