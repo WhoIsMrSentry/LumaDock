@@ -85,9 +85,12 @@
     }
   }
 
+  let lastLrcPlayAt = 0;
   window.__lumadockLoadLyrics = loadLyrics;
   window.__lumadockGetActiveLyric = () => {
-    if (!spotifyState.is_playing || !lyrics?.synced || !lyrics?.lines?.length) return null;
+    if (spotifyState.is_playing) lastLrcPlayAt = performance.now();
+    const recentlyPlaying = spotifyState.is_playing || (spotifyState.active && (performance.now() - lastLrcPlayAt) < 3500);
+    if (!recentlyPlaying || !lyrics?.synced || !lyrics?.lines?.length) return null;
     const curPos = lrcPosition();
     for (let i = lyrics.lines.length - 1; i >= 0; i--) {
       const line = lyrics.lines[i];
@@ -332,7 +335,7 @@
     for (let i = 0; i < 4; i++) hit['spLrc' + i] = null;
     for (let i = 0; i < 8; i++) hit['spPlTile' + i] = null;
     hit.spLyricsClose = hit.spLrcMinus = hit.spLrcReset = hit.spLrcPlus = null;
-    hit.spDevClose = hit.spPlClose = hit.spPlRefresh = hit.spPlPrev = hit.spPlNext = hit.spPlAuth = null;
+    hit.spDevClose = hit.spPlClose = hit.spPlRefresh = hit.spPlPrev = hit.spPlNext = hit.spPlAuth = hit.spPlAddClip = hit.spPlSettings = null;
 
     const anyDrawer = lyricsOpen || devicesOpen || playlistsOpen;
     drawerAnim += ((anyDrawer ? 1 : 0) - drawerAnim) * (1 - Math.exp(-20 * dt));
@@ -351,15 +354,19 @@
       const totalPages = Math.max(1, Math.ceil(playlists.length / 8));
       if (plPage >= totalPages) plPage = totalPages - 1;
 
-      const rx = px + pw - 44, overRef = inside(pointer.x, pointer.y, { x: rx - 12, y: py + 6, width: 24, height: 24 });
+      const ax = px + pw - 66, overAdd = inside(pointer.x, pointer.y, { x: ax - 11, y: py + 6, width: 22, height: 24 });
+      text('+', ax, py + 23, 15.5, overAdd ? colour : 'rgba(255,255,255,.72)', 700, 'center');
+      hit.spPlAddClip = { x: ax - 11, y: py + 6, width: 22, height: 24 };
+
+      const rx = px + pw - 42, overRef = inside(pointer.x, pointer.y, { x: rx - 11, y: py + 6, width: 22, height: 24 });
       text('↻', rx, py + 23, 13.5, overRef ? '#fff' : 'rgba(255,255,255,.6)', 700, 'center');
-      hit.spPlRefresh = { x: rx - 12, y: py + 6, width: 24, height: 24 };
+      hit.spPlRefresh = { x: rx - 11, y: py + 6, width: 22, height: 24 };
 
       text('✕', px + pw - 18, py + 23, 13, 'rgba(255,255,255,.65)', 700, 'center');
       hit.spPlClose = { x: px + pw - 30, y: py + 6, width: 24, height: 24 };
 
       if (totalPages > 1) {
-        const ax1 = px + pw - 92, ax2 = px + pw - 68;
+        const ax1 = px + pw - 114, ax2 = px + pw - 90;
         const o1 = inside(pointer.x, pointer.y, { x: ax1 - 10, y: py + 6, width: 20, height: 24 });
         const o2 = inside(pointer.x, pointer.y, { x: ax2 - 10, y: py + 6, width: 20, height: 24 });
         text('‹', ax1, py + 23, 15, plPage > 0 ? (o1 ? '#fff' : 'rgba(255,255,255,.75)') : 'rgba(255,255,255,.2)', 700, 'center');
@@ -369,15 +376,20 @@
       }
 
       if (playlistsAuthNeed) {
-        text(L('Spotify permission needed for playlists.', 'Çalma listeleri için Spotify izni gerekli.'), px + 16, py + 52, 11.5, 'rgba(255,255,255,.78)', 600, 'left', pw - 32);
-        if (playlistsNote) text(playlistsNote, px + 16, py + 68, 10.5, '#ffb35c', 500, 'left', pw - 32);
-        pill(px + 16, py + 82, 230, '♫', L('Authorize Playlists', 'Spotify Bağla / Yetkilendir'), 'spPlAuth');
+        text(L('Spotify permission needed for auto-sync.', 'Otomatik liste için Spotify izni veya link ekleme kullanın.'), px + 16, py + 48, 11, 'rgba(255,255,255,.8)', 600, 'left', pw - 32);
+        if (playlistsNote) text(playlistsNote, px + 16, py + 64, 10, '#ffb35c', 500, 'left', pw - 32);
+        const btnW = Math.floor((pw - 40) / 2);
+        pill(px + 16, py + 82, btnW, '♫', L('Authorize', 'Spotify Yetki'), 'spPlAuth');
+        pill(px + 24 + btnW, py + 82, btnW, '+', L('Paste Link', 'Pano\'dan Ekle'), 'spPlAddClip');
       } else if (playlistsLoading && !playlists.length) {
         text(L('Loading covers…', 'Kapaklar yükleniyor…'), px + 16, py + 64, 12, 'rgba(255,255,255,.5)', 500);
       } else if (!playlists.length) {
-        const msg = String(playlistsNote || L('No playlist covers found.', 'Kapaklı çalma listesi bulunamadı.'));
-        text(msg.slice(0, 62), px + 16, py + 56, 11, '#ffb35c', 600, 'left', pw - 32);
-        if (msg.length > 62) text(msg.slice(62), px + 16, py + 72, 10.5, 'rgba(255,255,255,.65)', 500, 'left', pw - 32);
+        const msg = String(playlistsNote || L('Copy a Spotify playlist link or set Client ID in Connections.', 'Spotify\'dan playlist linki kopyalayıp ekleyin veya Client ID girin.'));
+        text(msg, px + 16, py + 52, 10.8, '#ffb35c', 600, 'left', pw - 32);
+        text(L('Tip: Right-click any Spotify playlist -> Share -> Copy link', 'İpucu: Spotify\'da playlist\'e sağ tık -> Paylaş -> Bağlantıyı Kopyala'), px + 16, py + 68, 10, 'rgba(255,255,255,.55)', 500, 'left', pw - 32);
+        const btnW = Math.floor((pw - 40) / 2);
+        pill(px + 16, py + 84, btnW, '+', L('Add from Clipboard', 'Pano\'dan Ekle'), 'spPlAddClip');
+        pill(px + 24 + btnW, py + 84, btnW, '⚙', L('Connections', 'Bağlantılar'), 'spPlSettings');
       } else {
         // Cover-only 4x2 grid (NO playlist names shown!)
         const cols = 4, padX = 16, gapX = 12, gapY = 8;
@@ -569,6 +581,18 @@
       },
       spPlClose: () => { playlistsOpen = false; },
       spPlRefresh: () => { loadPlaylists(true); },
+      spPlAddClip: async () => {
+        const res = await api.spotifyAddPlaylistUrl?.({ fromClipboard: true }).catch(e => ({ ok: false, error: e?.message }));
+        if (res?.ok) {
+          playlistsAuthNeed = false;
+          playlistsNote = '';
+          window.__lumadockChime?.('pop');
+          await loadPlaylists(true);
+        } else {
+          playlistsNote = res?.error || L('No playlist URL in clipboard.', 'Panoda playlist bağlantısı yok.');
+        }
+      },
+      spPlSettings: () => { api.settingsOpen?.('connect'); },
       spPlPrev: () => { if (plPage > 0) plPage--; },
       spPlNext: () => { plPage++; },
       spPlAuth: async () => {
@@ -600,7 +624,7 @@
       }
     };
     const lrcKeys = ['spLyrics', 'spLyricsClose', 'spLrcMinus', 'spLrcReset', 'spLrcPlus', 'spLrc0', 'spLrc1', 'spLrc2', 'spLrc3'];
-    const plKeys = ['spPlaylists', 'spPlClose', 'spPlRefresh', 'spPlPrev', 'spPlNext', 'spPlAuth', ...[0, 1, 2, 3, 4, 5, 6, 7].map(i => 'spPlTile' + i)];
+    const plKeys = ['spPlaylists', 'spPlClose', 'spPlRefresh', 'spPlAddClip', 'spPlSettings', 'spPlPrev', 'spPlNext', 'spPlAuth', ...[0, 1, 2, 3, 4, 5, 6, 7].map(i => 'spPlTile' + i)];
     if (playlistsOpen && !plKeys.some(k => inside(x, y, hit[k]))) { playlistsOpen = false; event.preventDefault(); event.stopImmediatePropagation(); return; }
     if (lyricsOpen && !lrcKeys.some(k => inside(x, y, hit[k]))) { lyricsOpen = false; event.preventDefault(); event.stopImmediatePropagation(); return; }
     if (devicesOpen && !['spDevices', 'spDevClose', 'spDev0', 'spDev1', 'spDev2', 'spDev3'].some(k => inside(x, y, hit[k]))) { devicesOpen = false; event.preventDefault(); event.stopImmediatePropagation(); return; }

@@ -123,6 +123,22 @@ function renderSpotifyCallbackHtml(ok, detail = '') {
   return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>LumaDock — Spotify</title></head><body style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#0b0e0b;color:#fff;padding:50px;text-align:center;"><h2>${title}</h2><p style="color:#a7b4a5">${body}</p></body></html>`;
 }
 
+/** Extract and validate a Spotify playlist ID from an open.spotify.com URL or spotify:playlist URI. */
+function parseSpotifyPlaylistInput(input) {
+  const raw = String(input || '').trim();
+  const uriMatch = /^spotify:playlist:([A-Za-z0-9]{10,40})$/.exec(raw);
+  if (uriMatch) {
+    const id = uriMatch[1];
+    return { id, uri: `spotify:playlist:${id}`, url: `https://open.spotify.com/playlist/${id}` };
+  }
+  const urlMatch = /open\.spotify\.com\/(?:intl-[a-z-]+\/)?playlist\/([A-Za-z0-9]{10,40})(?:[/?#]|$)/i.exec(raw);
+  if (urlMatch) {
+    const id = urlMatch[1];
+    return { id, uri: `spotify:playlist:${id}`, url: `https://open.spotify.com/playlist/${id}` };
+  }
+  return null;
+}
+
 module.exports = {
   DEFAULT_SPOTIFY_CLIENT_ID,
   isValidSpotifyClientId,
@@ -131,5 +147,6 @@ module.exports = {
   buildLyricsQueries,
   parseLrcLines,
   classifySpotifyPlaylistsError,
-  renderSpotifyCallbackHtml
+  renderSpotifyCallbackHtml,
+  parseSpotifyPlaylistInput
 };

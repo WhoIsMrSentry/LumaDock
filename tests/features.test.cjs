@@ -160,7 +160,8 @@ test('spotify helpers normalize Turkish/remastered metadata, parse extended LRC 
     buildLyricsQueries,
     parseLrcLines,
     classifySpotifyPlaylistsError,
-    renderSpotifyCallbackHtml
+    renderSpotifyCallbackHtml,
+    parseSpotifyPlaylistInput
   } = require(path.join(ROOT, 'src', 'main', 'spotify-helpers.cjs'));
 
   assert.equal(isValidSpotifyClientId(DEFAULT_SPOTIFY_CLIENT_ID), true);
@@ -199,6 +200,14 @@ test('spotify helpers normalize Turkish/remastered metadata, parse extended LRC 
   const html = renderSpotifyCallbackHtml(true);
   assert.match(html, /<meta charset="utf-8">/i);
   assert.match(html, /Spotify bağlandı/);
+
+  const plUrl = parseSpotifyPlaylistInput('https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M?si=abc123');
+  assert.deepEqual(plUrl, {
+    id: '37i9dQZF1DXcBWIGoYBM5M',
+    uri: 'spotify:playlist:37i9dQZF1DXcBWIGoYBM5M',
+    url: 'https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M'
+  });
+  assert.equal(parseSpotifyPlaylistInput('https://example.com/not-spotify'), null);
 });
 
 test('Windows media watcher preserves Turkish UTF-8 characters without mojibake', () => {

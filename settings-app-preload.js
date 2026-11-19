@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('settingsApp', {
   spotify: {
     getConfig: () => ipcRenderer.invoke('spotify:get-config'),
     setClientId: id => ipcRenderer.invoke('spotify:set-client-id', id),
+    addPlaylistUrl: payload => ipcRenderer.invoke('spotify:add-playlist-url', payload),
+    removeCustomPlaylist: id => ipcRenderer.invoke('spotify:remove-custom-playlist', id),
     connect: opts => ipcRenderer.invoke('spotify:connect', opts),
     disconnect: () => ipcRenderer.invoke('spotify:disconnect')
   },

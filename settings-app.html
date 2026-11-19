@@ -864,17 +864,28 @@ function drawConnect() {
   const spSub = lang === 'tr'
     ? 'Çalma listeleri ve cihaz kontrolü için Spotify OAuth bağlantısı. Redirect URI: http://127.0.0.1:8888/callback'
     : 'Spotify OAuth for playlist covers and remote devices. Redirect URI: http://127.0.0.1:8888/callback';
+  const customPls = (spCfg?.customPlaylists || []).map(pl =>
+    `<span class="tag">${esc(pl.name)} <button type="button" class="iconbtn" style="width:18px;height:18px;font-size:12px" data-sp="del-pl" data-id="${esc(pl.id)}" title="Sil">×</button></span>`
+  ).join(' ');
   const spCard = spCfg ? `<p class="section">Spotify</p><div class="group">
     <div class="row"><span class="tile" style="--c:#1ed760">${icon('music')}</span><div class="text"><b>Spotify</b><small>${esc(spSub)}</small></div>
       ${spCfg.connected ? `<span class="tag good"><i></i>${t().cxOn}</span>` : ''}
       <button class="btn ${spCfg.connected ? 'ghost' : 'main'}" data-sp="connect" ${spBusy ? 'disabled' : ''}>${spCfg.connected ? (lang === 'tr' ? 'Yeniden Yetkilendir' : 'Reauthorize') : (lang === 'tr' ? 'Bağlan' : 'Connect')}</button>
       ${spCfg.connected ? `<button class="btn ghost" data-sp="disconnect" ${spBusy ? 'disabled' : ''}>${t().logout}</button>` : ''}
     </div>
-    <div class="row"><div class="text"><b>${lang === 'tr' ? 'Özel Spotify Client ID (İsteğe Bağlı)' : 'Custom Spotify Client ID (Optional)'}</b>
-      <small>${lang === 'tr' ? 'Yetki ekranı adını veya Geliştirici Modunu özelleştirmek için kendi Client ID\'nizi kullanın.' : 'Set your own Client ID to customize the Spotify consent screen app name.'}</small></div>
-      <div class="tc-step"><input class="field" id="spClientIdIn" value="${spCfg.isCustom ? esc(spCfg.clientId) : ''}" placeholder="4cd26d1c69a14dffa0649606f75a4418" spellcheck="false" autocomplete="off">
+    <div class="row"><div class="text"><b>${lang === 'tr' ? 'Özel Spotify Client ID (403 veya Uygulama İsmi için)' : 'Custom Spotify Client ID'}</b>
+      <small>${lang === 'tr' ? 'developer.spotify.com üzerinden uygulama açıp Redirect URI olarak http://127.0.0.1:8888/callback ekleyin ve Client ID yapıştırın.' : 'Create an app on developer.spotify.com with Redirect URI http://127.0.0.1:8888/callback and paste Client ID.'}</small></div>
+      <div class="tc-step"><a class="btn ghost" href="https://developer.spotify.com/dashboard" target="_blank" rel="noreferrer" style="text-decoration:none">Dashboard ↗</a>
+      <button class="btn ghost" type="button" data-sp="copy-uri">${lang === 'tr' ? 'URI Kopyala' : 'Copy URI'}</button>
+      <input class="field" id="spClientIdIn" value="${spCfg.isCustom ? esc(spCfg.clientId) : ''}" placeholder="4cd26d1c69a14dffa0649606f75a4418" spellcheck="false" autocomplete="off">
       <button class="btn main" data-sp="save-id" ${spBusy ? 'disabled' : ''}>${t().saveAll}</button>
       ${spCfg.isCustom ? `<button class="btn ghost" data-sp="reset-id" ${spBusy ? 'disabled' : ''}>${lang === 'tr' ? 'Sıfırla' : 'Reset'}</button>` : ''}</div>
+    </div>
+    <div class="row"><div class="text"><b>${lang === 'tr' ? 'Sabit Çalma Listeleri (403 OAuth Gerektirmez)' : 'Pinned Playlists (Zero-Auth Covers)'}</b>
+      <small>${lang === 'tr' ? 'Spotify\'dan Paylaş -> Bağlantıyı Kopyala ile aldığınız playlist linkini ekleyin; ada üzerinde kapağıyla listelenir.' : 'Paste any open.spotify.com/playlist/... link to pin its cover directly in the island.'}</small>
+      ${customPls ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${customPls}</div>` : ''}</div>
+      <div class="tc-step"><input class="field" id="spPlaylistUrlIn" placeholder="https://open.spotify.com/playlist/..." spellcheck="false" autocomplete="off">
+      <button class="btn main" data-sp="add-pl" ${spBusy ? 'disabled' : ''}>+ ${lang === 'tr' ? 'Ekle' : 'Add'}</button></div>
     </div></div>` : '';
   paint(`<p class="lead">${t().cxHow}</p><p class="section">${t().cxAgents}</p><div class="group">${agents}</div><p class="section">${t().cxChats}</p><div class="group">${wmRow}${chats}</div>${spCard}`, false);
   $('#connectDot').classList.toggle('on', !cxs.list.some(c => c.on && !c.soon));
@@ -902,6 +913,11 @@ list.addEventListener('click', e => {
   if (tab === 'connect' && b.dataset.cx) { b.classList.toggle('on'); toggleConnect(b.dataset.cx, b.classList.contains('on')); return; }
   if (tab === 'connect' && b.dataset.sp && S.spotify) {
     const act = b.dataset.sp;
+    if (act === 'copy-uri') {
+      navigator.clipboard?.writeText('http://127.0.0.1:8888/callback').catch(() => {});
+      toast(lang === 'tr' ? 'Redirect URI kopyalandı' : 'Redirect URI copied');
+      return;
+    }
     spBusy = true; drawConnect();
     (async () => {
       if (act === 'connect') await S.spotify.connect({ force: true });
@@ -913,6 +929,14 @@ list.addEventListener('click', e => {
       if (act === 'reset-id') {
         const r = await S.spotify.setClientId('');
         if (!r?.ok) throw new Error(r?.error || 'Error');
+      }
+      if (act === 'add-pl') {
+        const url = $('#spPlaylistUrlIn')?.value.trim() || '';
+        const r = await S.spotify.addPlaylistUrl({ url });
+        if (!r?.ok) throw new Error(r?.error || 'Error');
+      }
+      if (act === 'del-pl') {
+        await S.spotify.removeCustomPlaylist(b.dataset.id || '');
       }
       toast(t().saved);
     })().catch(err => toast(String(err?.message || err), true)).finally(() => { spBusy = false; loadConnect(); });

@@ -4139,6 +4139,7 @@ async function refreshSpotify() {
           ?.image_url ||
         ''
       );
+      window.__lumadockSettleSize?.(true);
     }
 
   } catch {}
@@ -4176,6 +4177,7 @@ window.lumadock?.onMediaStateChanged?.(data => {
     };
     spotifySyncAt = performance.now();
     if (data.image_url) setAlbum(data.image_url);
+    window.__lumadockSettleSize?.(true);
   } else if (!data.active && spotifyState) {
     spotifyState.active = false;
     spotifyState.is_playing = false;
@@ -5359,9 +5361,15 @@ canvas.addEventListener(
         islandBounds
       )
     ) {
-      setMode(
-        'expanded'
-      );
+      if (window.__lumadockPreferSpotifyOnClick?.()) {
+        try {
+          setView('spotify');
+        } catch {
+          setMode('expanded');
+        }
+      } else {
+        setMode('expanded');
+      }
 
 
       return;

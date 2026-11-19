@@ -681,41 +681,42 @@
   const oldSetView = setView;
   setView = function (next) { if (next !== 'monitor') markSeen(); return oldSetView(next); };
 
-  // ---- Three sizes: small (rest), medium (compact: music), large (expanded) ----
-  const music = () => Boolean(spotifyConnected && spotifyState.is_playing && spotifyState.track);
-  // Medium size stays while music plays or a focus timer runs.
-  // ...and while it shows a short message (startup "Hoi!", volume bar, battery), so that isn't closed right away.
+  // ---- Three sizes: small (rest), medium (compact: music + lyrics bar), large (expanded) ----
+  let lastPlayingAt = 0;
+  try { localStorage.removeItem('lumadock:music-tucked'); } catch {}
+  const music = () => {
+    const playing = Boolean(spotifyConnected && spotifyState.is_playing && spotifyState.track);
+    if (playing) {
+      lastPlayingAt = performance.now();
+      return true;
+    }
+    return Boolean(spotifyConnected && spotifyState.active && spotifyState.track && (performance.now() - lastPlayingAt) < 3500);
+  };
   const needsAnswer = () => { const p = top(); return Boolean(p && (p.permission || p.state === 'question')); };
-  // While music plays the island shows it at medium size. The little button on it tucks the music away
-  // (the island stays small, the line under it still shows how far the song is); hover the island and press it again to bring it back.
-  let musicTucked = false; try { musicTucked = localStorage.getItem('lumadock:music-tucked') === '1'; } catch {}
-  function tuckMusic(on) {
-    musicTucked = on; try { localStorage.setItem('lumadock:music-tucked', on ? '1' : '0'); } catch {}
-    window.__lumadockChime?.('pop'); oldSetMode(on ? 'rest' : 'compact', false); if (on) holdClosed = true;
-  }
-  const medium = () => (music() && !musicTucked) || Boolean(window.__lumadockFocus?.active()) || Boolean(window.__lumadockCompactMessage?.()) || Boolean(window.__lumadockNextMeeting?.()) || needsAnswer();
+  // Never drop into tiny pill while music is playing: keep the wide lyrics bar active
+  const medium = () => music() || Boolean(window.__lumadockFocus?.active()) || Boolean(window.__lumadockCompactMessage?.()) || Boolean(window.__lumadockNextMeeting?.()) || needsAnswer();
   window.__lumadockStatus = () => top();
   let holdClosed = false;
   window.__lumadockHoldClosed = () => { holdClosed = true; };
+  window.__lumadockPreferSpotifyOnClick = () => music() && !needsAnswer() && !window.__lumadockCompactMessage?.() && !window.__lumadockNextMeeting?.() && !(top() && performance.now() < attentionUntil);
   // While Claude waits for an answer the small island pops open and gets wider (room for the buttons).
   let wideFor = '', lastRenderedLyric = '', prevRenderedLyric = '', lyricStartedAt = 0, lyricSwitchedAt = 0;
   let compactControlsAnim = 0, compactAnimAt = 0, lastPickedColour = null;
   function askSize() {
     const want = needsAnswer();
-    const hasMusic = music() && !musicTucked;
+    const hasMusic = music();
     const hasMeet = Boolean(window.__lumadockNextMeeting?.() && !hasMusic);
-    const lrc = window.__lumadockGetActiveLyric?.();
     let targetW = 300;
     if (want) {
       targetW = 440;
     } else if (hasMusic) {
-      // Widen horizontally so song, lyrics, and hover mini-controls fit comfortably
-      targetW = (lrc && lrc.text) ? 580 : 510;
+      // Steady wide lyrics bar width while music plays
+      targetW = 560;
     } else if (hasMeet) {
       targetW = 420;
     }
 
-    const key = `${want}:${hasMusic}:${hasMeet}:${Boolean(lrc?.text)}:${targetW}`;
+    const key = `${want}:${hasMusic}:${hasMeet}:${targetW}`;
     if (key === wideFor && UI.COMPACT_W === targetW) return;
     wideFor = key;
     UI.COMPACT_W = targetW;
@@ -724,13 +725,15 @@
   }
   const oldTargetHeight = targetHeight, oldSetMode = setMode, oldDrawExpanded = drawExpanded, oldDrawSmall = drawSmall, oldHover = updateHover;
   targetHeight = function () { return ['monitor', 'assistant'].includes(currentView) ? 300 : oldTargetHeight(); };
-  // While music plays, the island rests at medium size so the sound wave stays visible.
+  // While music plays, the island stays at compact lyrics bar size instead of dropping into rest pill.
   setMode = function (next, playSound = true) { return oldSetMode(next === 'rest' && medium() ? 'compact' : next, playSound); };
-  function settleSize() {
-    if (!introFinished || pointer.known && inside(pointer.x, pointer.y, islandBounds)) return;
+  function settleSize(force = false) {
+    if (!introFinished) return;
+    const over = pointer.known && inside(pointer.x, pointer.y, islandBounds);
     askSize();
-    if (medium() && mode === 'rest') setMode('compact', false);
-    else if (!medium() && mode === 'compact') oldSetMode('rest', false);
+    if (medium() && mode === 'rest') { setMode('compact', false); return; }
+    if (!force && over) return;
+    if (!medium() && mode === 'compact') oldSetMode('rest', false);
   }
   window.__lumadockSettleSize = settleSize;
   setInterval(async () => {
@@ -821,7 +824,6 @@
     if (mode !== 'compact') return;
     const at = b => b && inside(e.clientX, e.clientY, b);
     const stop = () => { e.preventDefault(); e.stopImmediatePropagation(); swallowTuckClick = true; };
-    if (music() && at(tuckBox)) { stop(); tuckMusic(!musicTucked); return; }
     if (music() && at(hit.cPrev)) { stop(); window.__lumadockSpotifyControl?.('previous'); sound('click'); return; }
     if (music() && at(hit.cPlay)) { stop(); window.__lumadockSpotifyControl?.('toggle'); sound('click'); return; }
     if (music() && at(hit.cNext)) { stop(); window.__lumadockSpotifyControl?.('next'); sound('click'); return; }
@@ -932,13 +934,12 @@
       if (albumImage?.complete && albumImage.naturalWidth) {
         ctx.save(); ctx.beginPath(); ctx.roundRect(left, cy - cover / 2, cover, cover, 7); ctx.clip(); ctx.drawImage(albumImage, left, cy - cover / 2, cover, cover); ctx.restore();
       } else { box(left, cy - cover / 2, cover, cover, 7, '#1b211a'); icon('music'); }
-      const tr = spotifyState.track || {}, timer = (focus?.active() ? 60 : 0) + 26;
+      const tr = spotifyState.track || {}, timer = focus?.active() ? 60 : 8;
       const priv = window.__lumadockPrivacy?.();
       const privW = (priv?.mic ? 10 : 0) + (priv?.cam ? 10 : 0);
       const ctrlW = Math.round(compactControlsAnim * 76);
-      const tx = right - (p ? 40 : 18);
-      if (privW) drawPrivacyDots(tx - 16 - (p ? 18 : 0), cy);
-      const rightEdge = tx - 16 - (p ? 18 : 0) - privW - (privW ? 4 : 0);
+      const rightEdge = right - (p ? 38 : 14) - privW - (privW ? 4 : 0);
+      if (privW) drawPrivacyDots(right - (p ? 36 : 14), cy);
       hit.cCtrlZone = { x: rightEdge - 74, y: 0, width: Math.max(88, right - (rightEdge - 74) + 4), height: H };
       // Smooth hover mini playback controls (previous, play/pause, next)
       if (compactControlsAnim > 0.03) {
@@ -964,7 +965,7 @@
       }
       const activeLyric = window.__lumadockGetActiveLyric?.();
       const availW = Math.max(50, mid1 - mid0 - timer - privW - ctrlW - 14);
-      if (activeLyric && activeLyric.text && spotifyState.is_playing) {
+      if (activeLyric && activeLyric.text) {
         ctx.save();
         ctx.beginPath();
         ctx.rect(mid0, cy - 12, availW, 24);
@@ -1007,14 +1008,8 @@
         const nameW = Math.min(titleAvail, (ctx.measureText ? (ctx.font = '700 11.5px "Segoe UI"', ctx.measureText(tr.name || 'Spotify').width) : 80));
         if (tr.artist) text(tr.artist, mid0 + nameW + 10, cy + 4, 11, 'rgba(235,240,230,.55)', 600, 'left', Math.max(0, mid1 - timer - privW - ctrlW - mid0 - nameW - 10));
       }
-      if (focus?.active()) text(focus.label(), mid1 - 26 - privW - ctrlW, cy + 4, 11.5, '#ffd28a', 700, 'right');
-      if (p) drawLamp(p, right - 20, cy);
-      // a small chevron: up = make it small, down = keep showing the music
-      const over = inside(pointer.x, pointer.y, { x: tx - 11, y: cy - 11, width: 22, height: 22 });
-      ctx.save(); if (over) { ctx.beginPath(); ctx.arc(tx, cy, 10, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fill(); }
-      ctx.strokeStyle = over ? '#fff' : 'rgba(235,240,230,.55)'; ctx.lineWidth = 1.8; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
-      const d = musicTucked ? 1 : -1; ctx.moveTo(tx - 4, cy - d * 2); ctx.lineTo(tx, cy + d * 2); ctx.lineTo(tx + 4, cy - d * 2); ctx.stroke(); ctx.restore();
-      hit.musicTuck = tuckBox = { x: tx - 12, y: 0, width: 24, height: H };
+      if (focus?.active()) text(focus.label(), mid1 - 8 - privW - ctrlW, cy + 4, 11.5, '#ffd28a', 700, 'right');
+      if (p) drawLamp(p, right - 18, cy);
       return;
     }
     if (focus?.active()) {

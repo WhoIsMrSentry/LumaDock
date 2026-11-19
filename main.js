@@ -8,7 +8,8 @@ const {
   shell,
   safeStorage,
   screen,
-  dialog
+  dialog,
+  clipboard
 } = require('electron');
 
 const fs = require('fs');
@@ -26,7 +27,8 @@ const {
   buildLyricsQueries,
   parseLrcLines,
   classifySpotifyPlaylistsError,
-  renderSpotifyCallbackHtml
+  renderSpotifyCallbackHtml,
+  parseSpotifyPlaylistInput
 } = require('./src/main/spotify-helpers.cjs');
 
 require('./src/main/project-mode-main');
@@ -3879,8 +3881,10 @@ async function spotifyApi(
   if (
     !response.ok
   ) {
+    const plainErr = typeof data === 'string' ? data.trim().slice(0, 140) : '';
     const err = new Error(
       data?.error?.message ||
+      plainErr ||
       `Spotify HTTP ${response.status}`
     );
     err.status = response.status;
@@ -4154,16 +4158,98 @@ async function spotifySeek(positionMs) {
 
 let playlistsCache = null;
 
+const SPOTIFY_CUSTOM_PLAYLISTS_FILE = () =>
+  path.join(app.getPath('userData'), 'spotify-custom-playlists.json');
+
+function loadCustomPlaylists() {
+  const saved = readJson(SPOTIFY_CUSTOM_PLAYLISTS_FILE());
+  return Array.isArray(saved) ? saved.filter(p => p && p.id && p.uri && p.image_url) : [];
+}
+
+function saveCustomPlaylists(list) {
+  try {
+    writeJson(SPOTIFY_CUSTOM_PLAYLISTS_FILE(), Array.isArray(list) ? list.slice(0, 32) : []);
+  } catch {}
+}
+
+function mergePlaylists(customList, apiList = []) {
+  const seen = new Set();
+  const out = [];
+  for (const item of [...customList, ...apiList]) {
+    if (!item?.uri || !item?.image_url || seen.has(item.uri)) continue;
+    seen.add(item.uri);
+    out.push(item);
+  }
+  return out;
+}
+
+async function addCustomSpotifyPlaylist(payload = {}) {
+  const rawInput = payload?.fromClipboard ? clipboard.readText() : payload?.url;
+  const parsed = parseSpotifyPlaylistInput(rawInput);
+  if (!parsed) {
+    return {
+      ok: false,
+      error: payload?.fromClipboard
+        ? 'Panoda geçerli Spotify çalma listesi bağlantısı bulunamadı. Spotify\'da playlist\'e sağ tık -> Paylaş -> Bağlantıyı Kopyala yapın.'
+        : 'Geçersiz Spotify çalma listesi bağlantısı (https://open.spotify.com/playlist/...).'
+    };
+  }
+  try {
+    const oembedRes = await fetch(
+      `https://open.spotify.com/oembed?url=${encodeURIComponent(parsed.url)}`,
+      { signal: AbortSignal.timeout(4500), headers: { 'User-Agent': 'LumaDock/1.2.0' } }
+    );
+    if (!oembedRes.ok) {
+      return { ok: false, error: `Spotify playlist kapağı alınamadı (HTTP ${oembedRes.status}).` };
+    }
+    const meta = await oembedRes.json();
+    const imageUrl = String(meta?.thumbnail_url || '').trim();
+    if (!imageUrl) {
+      return { ok: false, error: 'Bu çalma listesi için kapak fotoğrafı bulunamadı.' };
+    }
+    const item = {
+      id: parsed.id,
+      name: String(meta?.title || 'Spotify Playlist').trim(),
+      uri: parsed.uri,
+      image_url: imageUrl,
+      external_url: parsed.url,
+      tracks_total: 0,
+      custom: true
+    };
+    const next = [item, ...loadCustomPlaylists().filter(p => p.id !== parsed.id)];
+    saveCustomPlaylists(next);
+    playlistsCache = null;
+    return { ok: true, playlist: item, customPlaylists: next };
+  } catch (err) {
+    return { ok: false, error: err?.message || 'Playlist kapağı yüklenemedi.' };
+  }
+}
+
+function removeCustomSpotifyPlaylist(id) {
+  const cleanId = String(id || '').trim();
+  const next = loadCustomPlaylists().filter(p => p.id !== cleanId);
+  saveCustomPlaylists(next);
+  playlistsCache = null;
+  return { ok: true, customPlaylists: next };
+}
+
 async function spotifyPlaylists(force = false) {
+  const custom = loadCustomPlaylists();
   const tokens = loadSpotifyTokens();
   if (!tokens?.access_token && !tokens?.refresh_token) {
+    if (custom.length) {
+      return { ok: true, playlists: custom, customOnly: true };
+    }
     return { ok: false, needsAuth: true, playlists: [] };
   }
   if (!hasSpotifyPlaylistScope(tokens)) {
+    if (custom.length) {
+      return { ok: true, playlists: custom, partialError: 'Çalma listesi okuma izni eksik.' };
+    }
     return { ok: false, needsReauth: true, playlists: [], error: 'Çalma listesi okuma izni eksik; yeniden yetkilendirin.' };
   }
   if (!force && playlistsCache && Date.now() - playlistsCache.at < 60000) {
-    return { ok: true, playlists: playlistsCache.items };
+    return { ok: true, playlists: mergePlaylists(custom, playlistsCache.items) };
   }
   try {
     const data = await spotifyApi('/v1/me/playlists?limit=24');
@@ -4178,9 +4264,13 @@ async function spotifyPlaylists(force = false) {
         tracks_total: Number(p.tracks?.total || 0)
       }));
     playlistsCache = { at: Date.now(), items };
-    return { ok: true, playlists: items };
+    return { ok: true, playlists: mergePlaylists(custom, items) };
   } catch (error) {
-    return classifySpotifyPlaylistsError(error, playlistsCache?.items || []);
+    const classified = classifySpotifyPlaylistsError(error, playlistsCache?.items || []);
+    if (custom.length) {
+      return { ok: true, playlists: mergePlaylists(custom, playlistsCache?.items || []), partialError: classified.error };
+    }
+    return classified;
   }
 }
 
@@ -4789,6 +4879,8 @@ ipcMain.handle('spotify:transfer', (_event, id) => spotifyTransfer(id));
 ipcMain.handle('spotify:lyrics', (_event, q) => fetchLyrics(q?.title, q?.artist, q?.duration));
 ipcMain.handle('spotify:playlists', (_event, force) => spotifyPlaylists(Boolean(force)));
 ipcMain.handle('spotify:play-playlist', (_event, payload) => spotifyPlayPlaylist(payload));
+ipcMain.handle('spotify:add-playlist-url', (_event, payload) => addCustomSpotifyPlaylist(payload));
+ipcMain.handle('spotify:remove-custom-playlist', (_event, id) => removeCustomSpotifyPlaylist(id));
 ipcMain.handle('spotify:get-config', () => {
   const tokens = loadSpotifyTokens();
   return {
@@ -4796,7 +4888,8 @@ ipcMain.handle('spotify:get-config', () => {
     isCustom: isCustomSpotifyClientId(),
     connected: Boolean(tokens?.refresh_token),
     scope: tokens?.scope || '',
-    hasPlaylistScope: Boolean(tokens?.refresh_token && hasSpotifyPlaylistScope(tokens))
+    hasPlaylistScope: Boolean(tokens?.refresh_token && hasSpotifyPlaylistScope(tokens)),
+    customPlaylists: loadCustomPlaylists()
   };
 });
 ipcMain.handle('spotify:set-client-id', (_event, clientId) => setSpotifyClientId(clientId));

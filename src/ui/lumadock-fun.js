@@ -70,7 +70,7 @@
     roze: ['Nebula', 'Nebula'],
     goud: ['Solar Gold', 'Solar Altın']
   };
-  const SPEEDS = { snel: { t: 0.5, peek: 140, musicPeek: 1100, home: 300, view: 1500, mon: 600 }, normaal: { t: 0.8, peek: 260, musicPeek: 1300, home: 400, view: 2200, mon: 800 } };
+  const SPEEDS = { snel: { t: 0.5, peek: 140, musicPeek: 1800, home: 300, view: 1500, mon: 600 }, normaal: { t: 0.8, peek: 260, musicPeek: 2000, home: 400, view: 2200, mon: 800 } };
 
   // All body colours use the sleek Cyber-Bot chassis ('blob' renderer in mascot.html)
   window.__lumadockLook = () => ({
