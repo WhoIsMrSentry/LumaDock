@@ -161,7 +161,8 @@ test('spotify helpers normalize Turkish/remastered metadata, parse extended LRC 
     parseLrcLines,
     classifySpotifyPlaylistsError,
     renderSpotifyCallbackHtml,
-    parseSpotifyPlaylistInput
+    parseSpotifyPlaylistInput,
+    extractPlaylistTracks
   } = require(path.join(ROOT, 'src', 'main', 'spotify-helpers.cjs'));
 
   assert.equal(DEFAULT_SPOTIFY_CLIENT_ID, '');
@@ -209,6 +210,18 @@ test('spotify helpers normalize Turkish/remastered metadata, parse extended LRC 
     url: 'https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M'
   });
   assert.equal(parseSpotifyPlaylistInput('https://example.com/not-spotify'), null);
+
+  const tracks = extractPlaylistTracks({
+    items: [
+      { track: { id: 't1', name: 'Şarkı 1', artists: [{ name: 'Sanatçı' }], uri: 'spotify:track:t1', duration_ms: 185000, album: { images: [{ url: 'https://img/0' }] } } },
+      { item: { id: 't2', name: 'Song 2', artists: [{ name: 'Artist A' }, { name: 'Artist B' }], uri: 'spotify:track:t2', duration_ms: 210000 } },
+      { track: null }
+    ]
+  });
+  assert.equal(tracks.length, 2);
+  assert.equal(tracks[0].name, 'Şarkı 1');
+  assert.equal(tracks[0].image_url, 'https://img/0');
+  assert.equal(tracks[1].artist, 'Artist A, Artist B');
 });
 
 test('Windows media watcher preserves Turkish UTF-8 characters without mojibake', () => {

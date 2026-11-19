@@ -139,6 +139,22 @@ function parseSpotifyPlaylistInput(input) {
   return null;
 }
 
+/** Normalize Spotify playlist items response (/items and legacy /tracks) into uniform track entries. */
+function extractPlaylistTracks(data) {
+  return (data?.items || [])
+    .map(entry => entry?.track || entry?.item)
+    .filter(t => t && t.uri && t.name)
+    .map(t => ({
+      id: String(t.id || ''),
+      name: String(t.name || ''),
+      artist: Array.isArray(t.artists) ? t.artists.map(a => a.name).filter(Boolean).join(', ') : (t.show?.name || ''),
+      uri: String(t.uri || ''),
+      image_url: String(t.album?.images?.[2]?.url || t.album?.images?.[0]?.url || t.images?.[0]?.url || ''),
+      duration_ms: Number(t.duration_ms || 0),
+      external_url: String(t.external_urls?.spotify || '')
+    }));
+}
+
 module.exports = {
   DEFAULT_SPOTIFY_CLIENT_ID,
   isValidSpotifyClientId,
@@ -148,5 +164,6 @@ module.exports = {
   parseLrcLines,
   classifySpotifyPlaylistsError,
   renderSpotifyCallbackHtml,
-  parseSpotifyPlaylistInput
+  parseSpotifyPlaylistInput,
+  extractPlaylistTracks
 };

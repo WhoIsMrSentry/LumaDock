@@ -28,7 +28,8 @@ const {
   parseLrcLines,
   classifySpotifyPlaylistsError,
   renderSpotifyCallbackHtml,
-  parseSpotifyPlaylistInput
+  parseSpotifyPlaylistInput,
+  extractPlaylistTracks
 } = require('./src/main/spotify-helpers.cjs');
 
 require('./src/main/project-mode-main');
@@ -4295,23 +4296,54 @@ async function spotifyPlaylists(force = false) {
   }
 }
 
+const playlistTracksCache = new Map();
+
+async function spotifyPlaylistTracks(playlistId) {
+  const id = String(playlistId || '').trim();
+  if (!/^[A-Za-z0-9]{10,40}$/.test(id)) {
+    return { ok: false, tracks: [], error: 'Geçersiz çalma listesi kimliği.' };
+  }
+  const cached = playlistTracksCache.get(id);
+  if (cached && Date.now() - cached.at < 60000) {
+    return { ok: true, tracks: cached.items };
+  }
+  try {
+    let data = null;
+    try {
+      data = await spotifyApi(`/v1/playlists/${encodeURIComponent(id)}/items?limit=50`, { signal: AbortSignal.timeout(4000) });
+    } catch {
+      data = await spotifyApi(`/v1/playlists/${encodeURIComponent(id)}/tracks?limit=50`, { signal: AbortSignal.timeout(4000) });
+    }
+    const items = extractPlaylistTracks(data);
+    playlistTracksCache.set(id, { at: Date.now(), items });
+    return { ok: true, tracks: items };
+  } catch (error) {
+    return { ok: false, tracks: cached?.items || [], error: error?.message || 'Şarkılar alınamadı.' };
+  }
+}
+
 async function spotifyPlayPlaylist(payload) {
   const uri = String(payload?.uri || '').trim();
   const extUrl = String(payload?.url || '').trim();
+  const offsetUri = String(payload?.offsetUri || '').trim();
+  const validOffset = /^spotify:track:[A-Za-z0-9]+$/.test(offsetUri) ? offsetUri : '';
   if (!/^spotify:playlist:[A-Za-z0-9]+$/.test(uri)) {
     return { ok: false, error: 'Geçersiz çalma listesi URI.' };
   }
   try {
+    const body = validOffset
+      ? { context_uri: uri, offset: { uri: validOffset } }
+      : { context_uri: uri };
     await spotifyApi('/v1/me/player/play', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ context_uri: uri })
+      body: JSON.stringify(body)
     });
     return { ok: true, method: 'api' };
   } catch (error) {
-    // Spotify Free veya aktif uzak cihaz yoksa masaüstü Spotify uygulamasında çalma listesini aç
+    // Spotify Free veya aktif uzak cihaz yoksa masaüstü Spotify uygulamasında aç
     try {
-      await shell.openExternal(uri);
+      await shell.openExternal(validOffset || uri);
       return { ok: true, method: 'uri', fallback: true, note: error?.message };
     } catch {
       if (/^https:\/\/open\.spotify\.com\/playlist\//.test(extUrl)) {
@@ -4899,6 +4931,7 @@ ipcMain.handle('spotify:devices', () => spotifyDevices()); // Spotify Connect: w
 ipcMain.handle('spotify:transfer', (_event, id) => spotifyTransfer(id));
 ipcMain.handle('spotify:lyrics', (_event, q) => fetchLyrics(q?.title, q?.artist, q?.duration));
 ipcMain.handle('spotify:playlists', (_event, force) => spotifyPlaylists(Boolean(force)));
+ipcMain.handle('spotify:playlist-tracks', (_event, id) => spotifyPlaylistTracks(id));
 ipcMain.handle('spotify:play-playlist', (_event, payload) => spotifyPlayPlaylist(payload));
 ipcMain.handle('spotify:add-playlist-url', (_event, payload) => addCustomSpotifyPlaylist(payload));
 ipcMain.handle('spotify:remove-custom-playlist', (_event, id) => removeCustomSpotifyPlaylist(id));
