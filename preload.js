@@ -28,7 +28,7 @@
     spotifyDevices: () => ipcRenderer.invoke('spotify:devices'),
     spotifyTransfer: id => ipcRenderer.invoke('spotify:transfer', id),
     spotifyPlaylists: force => ipcRenderer.invoke('spotify:playlists', force),
-    spotifyPlaylistTracks: id => ipcRenderer.invoke('spotify:playlist-tracks', id),
+    spotifyPlaylistTracks: (id, force) => ipcRenderer.invoke('spotify:playlist-tracks', id, Boolean(force)),
     spotifyPlayPlaylist: (uri, url, offsetUri) => ipcRenderer.invoke('spotify:play-playlist', { uri, url, offsetUri }),
     spotifyAddPlaylistUrl: payload => ipcRenderer.invoke('spotify:add-playlist-url', payload),
     spotifyRemoveCustomPlaylist: id => ipcRenderer.invoke('spotify:remove-custom-playlist', id),

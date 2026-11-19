@@ -162,7 +162,10 @@ test('spotify helpers normalize Turkish/remastered metadata, parse extended LRC 
     classifySpotifyPlaylistsError,
     renderSpotifyCallbackHtml,
     parseSpotifyPlaylistInput,
-    extractPlaylistTracks
+    extractPlaylistTracks,
+    parseSpotifyNextPath,
+    collectPagedSpotifyTracks,
+    collectPagedSpotifyPlaylists
   } = require(path.join(ROOT, 'src', 'main', 'spotify-helpers.cjs'));
 
   assert.equal(DEFAULT_SPOTIFY_CLIENT_ID, '');
@@ -215,13 +218,113 @@ test('spotify helpers normalize Turkish/remastered metadata, parse extended LRC 
     items: [
       { track: { id: 't1', name: 'Şarkı 1', artists: [{ name: 'Sanatçı' }], uri: 'spotify:track:t1', duration_ms: 185000, album: { images: [{ url: 'https://img/0' }] } } },
       { item: { id: 't2', name: 'Song 2', artists: [{ name: 'Artist A' }, { name: 'Artist B' }], uri: 'spotify:track:t2', duration_ms: 210000 } },
+      { item: { id: 'e3', type: 'episode', name: 'Podcast Bölümü', show: { name: 'Podcast Show' }, duration_ms: 600000 } },
       { track: null }
     ]
   });
-  assert.equal(tracks.length, 2);
+  assert.equal(tracks.length, 3);
   assert.equal(tracks[0].name, 'Şarkı 1');
   assert.equal(tracks[0].image_url, 'https://img/0');
   assert.equal(tracks[1].artist, 'Artist A, Artist B');
+  assert.equal(tracks[2].uri, 'spotify:episode:e3');
+  assert.equal(tracks[2].artist, 'Podcast Show');
+
+  assert.equal(
+    parseSpotifyNextPath('https://api.spotify.com/v1/playlists/pl123/items?offset=100&limit=100'),
+    '/v1/playlists/pl123/items?offset=100&limit=100'
+  );
+  assert.equal(parseSpotifyNextPath('https://evil.example.com/v1/playlists/pl123/items'), '');
+});
+
+test('Spotify playlist pagination collects all tracks and playlists across multiple pages', async () => {
+  const {
+    collectPagedSpotifyTracks,
+    collectPagedSpotifyPlaylists
+  } = require(path.join(ROOT, 'src', 'main', 'spotify-helpers.cjs'));
+
+  // 1. Multi-page playlist (>100 tracks: 235 total across 3 pages)
+  const makeTrack = i => ({
+    item: {
+      id: `trk${i}`,
+      name: `Parça ${i}`,
+      artists: [{ name: `Sanatçı ${i}` }],
+      uri: `spotify:track:trk${i}`,
+      duration_ms: 180000 + i
+    }
+  });
+  const seenRoutes = [];
+  const resAll = await collectPagedSpotifyTracks(async route => {
+    seenRoutes.push(route);
+    if (route.includes('offset=0')) {
+      return {
+        items: Array.from({ length: 100 }, (_, i) => makeTrack(i)),
+        total: 235,
+        next: 'https://api.spotify.com/v1/playlists/abc123456789/items?offset=100&limit=100&additional_types=track,episode'
+      };
+    }
+    if (route.includes('offset=100')) {
+      return {
+        items: Array.from({ length: 100 }, (_, i) => makeTrack(100 + i)),
+        total: 235,
+        next: 'https://api.spotify.com/v1/playlists/abc123456789/items?offset=200&limit=100&additional_types=track,episode'
+      };
+    }
+    return {
+      items: Array.from({ length: 35 }, (_, i) => makeTrack(200 + i)),
+      total: 235,
+      next: null
+    };
+  }, 'abc123456789');
+
+  assert.equal(resAll.tracks.length, 235);
+  assert.equal(resAll.total, 235);
+  assert.equal(resAll.partial, false);
+  assert.equal(resAll.tracks[234].id, 'trk234');
+  assert.equal(seenRoutes.length, 3);
+
+  // 2. Fallback from /items to legacy /tracks on page 0 continues subsequent pages via /tracks + offset
+  const fallbackRoutes = [];
+  const resFallback = await collectPagedSpotifyTracks(async route => {
+    fallbackRoutes.push(route);
+    if (route.includes('/items?')) throw new Error('Spotify HTTP 404');
+    if (route.includes('offset=0')) {
+      return {
+        items: Array.from({ length: 100 }, (_, i) => makeTrack(i)),
+        total: 120,
+        next: null
+      };
+    }
+    return {
+      items: Array.from({ length: 20 }, (_, i) => makeTrack(100 + i)),
+      total: 120,
+      next: null
+    };
+  }, 'fallback123456');
+
+  assert.equal(resFallback.tracks.length, 120);
+  assert.ok(fallbackRoutes[1].includes('/tracks?'));
+  assert.ok(fallbackRoutes[2].includes('/tracks?') && fallbackRoutes[2].includes('offset=100'));
+
+  // 3. Playlists pagination (>50 playlists)
+  const pls = await collectPagedSpotifyPlaylists(async route => {
+    if (route.includes('offset=0')) {
+      return {
+        items: Array.from({ length: 50 }, (_, i) => ({
+          id: `pl${i}`, name: `Liste ${i}`, uri: `spotify:playlist:pl${i}`, items: { total: i + 10 }
+        })),
+        next: 'https://api.spotify.com/v1/me/playlists?offset=50&limit=50'
+      };
+    }
+    return {
+      items: Array.from({ length: 12 }, (_, i) => ({
+        id: `pl${50 + i}`, name: `Liste ${50 + i}`, uri: `spotify:playlist:pl${50 + i}`, tracks: { total: i + 5 }
+      })),
+      next: null
+    };
+  });
+  assert.equal(pls.length, 62);
+  assert.equal(pls[0].tracks_total, 10);
+  assert.equal(pls[61].tracks_total, 16);
 });
 
 test('Windows media watcher preserves Turkish UTF-8 characters without mojibake', () => {

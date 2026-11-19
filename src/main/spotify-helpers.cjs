@@ -142,17 +142,159 @@ function parseSpotifyPlaylistInput(input) {
 /** Normalize Spotify playlist items response (/items and legacy /tracks) into uniform track entries. */
 function extractPlaylistTracks(data) {
   return (data?.items || [])
-    .map(entry => entry?.track || entry?.item)
-    .filter(t => t && t.uri && t.name)
-    .map(t => ({
-      id: String(t.id || ''),
-      name: String(t.name || ''),
-      artist: Array.isArray(t.artists) ? t.artists.map(a => a.name).filter(Boolean).join(', ') : (t.show?.name || ''),
-      uri: String(t.uri || ''),
-      image_url: String(t.album?.images?.[2]?.url || t.album?.images?.[0]?.url || t.images?.[0]?.url || ''),
-      duration_ms: Number(t.duration_ms || 0),
-      external_url: String(t.external_urls?.spotify || '')
-    }));
+    .map(entry => entry?.track || entry?.item || (entry?.name ? entry : null))
+    .map(t => {
+      if (!t || !t.name) return null;
+      const type = t.type === 'episode' ? 'episode' : 'track';
+      const uri = String(t.uri || (t.id ? `spotify:${type}:${t.id}` : '')).trim();
+      if (!uri) return null;
+      const artist = Array.isArray(t.artists)
+        ? t.artists.map(a => a?.name).filter(Boolean).join(', ')
+        : (t.show?.name || (Array.isArray(t.album?.artists) ? t.album.artists.map(a => a?.name).filter(Boolean).join(', ') : ''));
+      return {
+        id: String(t.id || ''),
+        name: String(t.name || ''),
+        artist,
+        uri,
+        image_url: String(t.album?.images?.[2]?.url || t.album?.images?.[0]?.url || t.images?.[0]?.url || ''),
+        duration_ms: Number(t.duration_ms || 0),
+        external_url: String(t.external_urls?.spotify || '')
+      };
+    })
+    .filter(Boolean);
+}
+
+/** Convert a full Spotify API pagination URL into a safe relative /v1/... path. */
+function parseSpotifyNextPath(nextUrl) {
+  if (!nextUrl || typeof nextUrl !== 'string') return '';
+  try {
+    const u = new URL(nextUrl.trim());
+    if (u.protocol !== 'https:' || u.hostname !== 'api.spotify.com') return '';
+    return `${u.pathname}${u.search}`;
+  } catch {
+    return '';
+  }
+}
+
+/** Fetch all pages of a Spotify playlist track list up to maxTracks, preferring /items and falling back to /tracks. */
+async function collectPagedSpotifyTracks(fetchPage, playlistId, options = {}) {
+  const encId = encodeURIComponent(String(playlistId || '').trim());
+  const pageLimit = Math.max(1, Math.min(100, Number(options.pageLimit) || 100));
+  const maxTracks = Math.max(pageLimit, Number(options.maxTracks) || 2000);
+  const maxPages = Math.ceil(maxTracks / pageLimit) + 4;
+
+  let endpoint = 'items';
+  let route = `/v1/playlists/${encId}/${endpoint}?limit=${pageLimit}&offset=0&additional_types=track,episode`;
+  let data;
+  try {
+    data = await fetchPage(route);
+  } catch {
+    endpoint = 'tracks';
+    route = `/v1/playlists/${encId}/${endpoint}?limit=${pageLimit}&offset=0&additional_types=track,episode`;
+    data = await fetchPage(route);
+  }
+
+  const tracks = [];
+  const seenRoutes = new Set([route]);
+  let offset = 0;
+  let apiTotal = 0;
+  let partial = false;
+  let truncated = false;
+
+  for (let page = 0; page < maxPages; page++) {
+    if (page > 0) {
+      try {
+        data = await fetchPage(route);
+      } catch {
+        try {
+          data = await fetchPage(route);
+        } catch {
+          partial = true;
+          break;
+        }
+      }
+    }
+
+    const batch = extractPlaylistTracks(data);
+    for (const item of batch) {
+      if (tracks.length >= maxTracks) {
+        truncated = true;
+        break;
+      }
+      tracks.push(item);
+    }
+
+    const rawCount = Array.isArray(data?.items) ? data.items.length : 0;
+    if (Number.isFinite(Number(data?.total))) {
+      apiTotal = Math.max(apiTotal, Number(data.total));
+    }
+    offset += rawCount;
+
+    if (tracks.length >= maxTracks) {
+      if (apiTotal > tracks.length) truncated = true;
+      break;
+    }
+
+    let nextRoute = parseSpotifyNextPath(data?.next);
+    if (!nextRoute && rawCount > 0 && apiTotal > offset) {
+      nextRoute = `/v1/playlists/${encId}/${endpoint}?limit=${pageLimit}&offset=${offset}&additional_types=track,episode`;
+    }
+    if (!nextRoute || seenRoutes.has(nextRoute)) break;
+    seenRoutes.add(nextRoute);
+    route = nextRoute;
+  }
+
+  return {
+    tracks,
+    total: Math.max(tracks.length, apiTotal),
+    partial,
+    truncated
+  };
+}
+
+/** Fetch all pages of the user's Spotify playlists up to maxPlaylists. */
+async function collectPagedSpotifyPlaylists(fetchPage, options = {}) {
+  const pageLimit = Math.max(1, Math.min(50, Number(options.pageLimit) || 50));
+  const maxPlaylists = Math.max(pageLimit, Number(options.maxPlaylists) || 250);
+  const maxPages = Math.ceil(maxPlaylists / pageLimit) + 2;
+
+  let route = `/v1/me/playlists?limit=${pageLimit}&offset=0`;
+  const seenRoutes = new Set([route]);
+  const playlists = [];
+
+  for (let page = 0; page < maxPages; page++) {
+    let data;
+    try {
+      data = await fetchPage(route);
+    } catch (err) {
+      if (page === 0) throw err;
+      break;
+    }
+
+    const items = (data?.items || [])
+      .filter(p => p && p.uri)
+      .map(p => ({
+        id: String(p.id || ''),
+        name: String(p.name || ''),
+        uri: String(p.uri || ''),
+        image_url: String(p.images?.[0]?.url || ''),
+        external_url: String(p.external_urls?.spotify || ''),
+        tracks_total: Number(p.items?.total ?? p.tracks?.total ?? 0)
+      }));
+
+    for (const item of items) {
+      if (playlists.length >= maxPlaylists) break;
+      playlists.push(item);
+    }
+    if (playlists.length >= maxPlaylists) break;
+
+    const nextRoute = parseSpotifyNextPath(data?.next);
+    if (!nextRoute || seenRoutes.has(nextRoute)) break;
+    seenRoutes.add(nextRoute);
+    route = nextRoute;
+  }
+
+  return playlists;
 }
 
 module.exports = {
@@ -165,5 +307,8 @@ module.exports = {
   classifySpotifyPlaylistsError,
   renderSpotifyCallbackHtml,
   parseSpotifyPlaylistInput,
-  extractPlaylistTracks
+  extractPlaylistTracks,
+  parseSpotifyNextPath,
+  collectPagedSpotifyTracks,
+  collectPagedSpotifyPlaylists
 };

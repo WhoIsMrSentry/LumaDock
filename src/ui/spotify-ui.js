@@ -125,9 +125,9 @@
 
   // ---- Spotify Cover-Only Playlists & Track Selection ----
   const MAX_PL_TILES = 48;
-  const MAX_PL_TRACKS = 10;
+  const MAX_PL_TRACKS = 16;
   let playlistsOpen = false, playlistsExpanded = true, playlistsLoading = false, playlists = [], playlistsAuthNeed = false, playlistsNote = '', plPage = 0, currentPerPage = 16;
-  let selectedPlaylist = null, plTracks = [], plTracksLoading = false, plTracksNote = '', plTrackPage = 0, currentTrackPerPage = 5;
+  let selectedPlaylist = null, plTracks = [], plTracksLoading = false, plTracksNote = '', plTrackOffset = 0, currentTrackPerPage = 6, plTrackWheelAcc = 0;
   let drawerBounds = null;
   const playlistImages = new Map();
   const plHover = new Array(MAX_PL_TILES).fill(0);
@@ -205,15 +205,19 @@
     setTimeout(() => refreshSpotify(), 350);
   }
 
-  async function selectPlaylist(pl) {
+  async function selectPlaylist(pl, force = false) {
     if (!pl?.id) return openPlaylist(pl);
+    const samePlaylist = selectedPlaylist?.id === pl.id;
     selectedPlaylist = pl;
-    plTracks = [];
-    plTrackPage = 0;
+    if (!samePlaylist) {
+      plTracks = [];
+      plTrackOffset = 0;
+      plTrackWheelAcc = 0;
+    }
     plTracksNote = '';
-    plTracksLoading = true;
+    plTracksLoading = !plTracks.length || Boolean(force);
     try {
-      const r = await api.spotifyPlaylistTracks?.(pl.id);
+      const r = await api.spotifyPlaylistTracks?.(pl.id, Boolean(force));
       plTracks = Array.isArray(r?.tracks) ? r.tracks : [];
       if (!r?.ok && r?.error) plTracksNote = r.error;
       else if (!plTracks.length) plTracksNote = L('No playable tracks found in this playlist.', 'Bu çalma listesinde parça bulunamadı.');
@@ -420,7 +424,7 @@
     for (let i = 0; i < 5; i++) hit['spDev' + i] = null;
     for (let i = 0; i < MAX_PL_TILES; i++) hit['spPlTile' + i] = null;
     for (let i = 0; i < MAX_PL_TRACKS; i++) hit['spPlTrack' + i] = null;
-    hit.spDevClose = hit.spPlClose = hit.spPlRefresh = hit.spPlPrev = hit.spPlNext = hit.spPlAuth = hit.spPlAddClip = hit.spPlSettings = hit.spPlExpand = hit.spPlBack = hit.spPlPlayAll = null;
+    hit.spDevClose = hit.spPlClose = hit.spPlRefresh = hit.spPlPrev = hit.spPlNext = hit.spPlAuth = hit.spPlAddClip = hit.spPlSettings = hit.spPlExpand = hit.spPlBack = hit.spPlPlayAll = hit.spPlScroll = null;
 
     drawerAnim += ((modalOpen ? 1 : 0) - drawerAnim) * (1 - Math.exp(-20 * dt));
     if (!modalOpen || drawerAnim < 0.02) { drawerBounds = null; return; }
@@ -457,17 +461,18 @@
       }
 
       // Play entire playlist button in header
-      const playAllX = px + 68, playAllW = 92;
+      const playAllX = px + 66, playAllW = fullMode ? 90 : 78;
       const overPlayAll = inside(pointer.x, pointer.y, { x: playAllX, y: py + 7, width: playAllW, height: 22 });
       box(playAllX, py + 7, playAllW, 22, 11, overPlayAll ? colour : 'rgba(255,255,255,.1)');
-      text('▶ ' + L('Play All', 'Tümünü Çal'), playAllX + playAllW / 2, py + 21.5, 10, overPlayAll ? '#050605' : '#eef2ec', 700, 'center');
+      text('▶ ' + L('Play All', 'Tümünü Çal'), playAllX + playAllW / 2, py + 21.5, fullMode ? 10 : 9.5, overPlayAll ? '#050605' : '#eef2ec', 700, 'center');
       hit.spPlPlayAll = { x: playAllX, y: py + 7, width: playAllW, height: 22 };
 
-      const rowH = fullMode ? 38 : 42;
+      const rowH = fullMode ? 33 : 38;
       const perTrackPage = Math.max(2, Math.min(MAX_PL_TRACKS, Math.floor((ph - headerH - 6) / rowH)));
       currentTrackPerPage = perTrackPage;
-      const totalTrPages = Math.max(1, Math.ceil(plTracks.length / perTrackPage));
-      if (plTrackPage >= totalTrPages) plTrackPage = totalTrPages - 1;
+      const maxOffset = Math.max(0, plTracks.length - perTrackPage);
+      if (plTrackOffset > maxOffset) plTrackOffset = maxOffset;
+      if (plTrackOffset < 0) plTrackOffset = 0;
 
       const ex = px + pw - 66, overExp = inside(pointer.x, pointer.y, { x: ex - 11, y: py + 6, width: 22, height: 24 });
       expandIcon(ex, py + 19, playlistsExpanded, playlistsExpanded ? colour : (overExp ? '#fff' : 'rgba(255,255,255,.72)'));
@@ -480,14 +485,27 @@
       text('✕', px + pw - 18, py + 23, 13, 'rgba(255,255,255,.65)', 700, 'center');
       hit.spPlClose = { x: px + pw - 30, y: py + 6, width: 24, height: 24 };
 
-      if (totalTrPages > 1) {
+      const hasScroll = maxOffset > 0;
+      if (hasScroll) {
         const ax1 = px + pw - 114, ax2 = px + pw - 90;
         const o1 = inside(pointer.x, pointer.y, { x: ax1 - 10, y: py + 6, width: 20, height: 24 });
         const o2 = inside(pointer.x, pointer.y, { x: ax2 - 10, y: py + 6, width: 20, height: 24 });
-        text('‹', ax1, py + 23, 15, plTrackPage > 0 ? (o1 ? '#fff' : 'rgba(255,255,255,.75)') : 'rgba(255,255,255,.2)', 700, 'center');
-        text('›', ax2, py + 23, 15, plTrackPage < totalTrPages - 1 ? (o2 ? '#fff' : 'rgba(255,255,255,.75)') : 'rgba(255,255,255,.2)', 700, 'center');
-        if (plTrackPage > 0) hit.spPlPrev = { x: ax1 - 10, y: py + 6, width: 20, height: 24 };
-        if (plTrackPage < totalTrPages - 1) hit.spPlNext = { x: ax2 - 10, y: py + 6, width: 20, height: 24 };
+        text('‹', ax1, py + 23, 15, plTrackOffset > 0 ? (o1 ? '#fff' : 'rgba(255,255,255,.75)') : 'rgba(255,255,255,.2)', 700, 'center');
+        text('›', ax2, py + 23, 15, plTrackOffset < maxOffset ? (o2 ? '#fff' : 'rgba(255,255,255,.75)') : 'rgba(255,255,255,.2)', 700, 'center');
+        if (plTrackOffset > 0) hit.spPlPrev = { x: ax1 - 10, y: py + 6, width: 20, height: 24 };
+        if (plTrackOffset < maxOffset) hit.spPlNext = { x: ax2 - 10, y: py + 6, width: 20, height: 24 };
+      }
+
+      if (plTracks.length && !plTracksLoading) {
+        const startNum = plTrackOffset + 1;
+        const endNum = Math.min(plTracks.length, plTrackOffset + perTrackPage);
+        const countLabel = `${startNum}–${endNum} / ${plTracks.length}`;
+        const countLeft = playAllX + playAllW + 8;
+        const countRight = (hasScroll ? px + pw - 126 : px + pw - 82);
+        const countSpace = countRight - countLeft;
+        if (countSpace >= 42) {
+          text(countLabel, countRight, py + 22, 10, 'rgba(235,240,230,.58)', 600, 'right', countSpace);
+        }
       }
 
       if (plTracksLoading) {
@@ -496,13 +514,14 @@
         text(plTracksNote || L('No tracks loaded.', 'Şarkılar yüklenemedi.'), px + 16, py + headerH + 22, 11, '#ffb35c', 600, 'left', pw - 32);
         pill(px + 16, py + headerH + 38, 220, '♫', L('Open Playlist in Spotify', 'Spotify\'da Başlat'), 'spPlPlayAll');
       } else {
-        const slice = plTracks.slice(plTrackPage * perTrackPage, plTrackPage * perTrackPage + perTrackPage);
+        const sbPad = hasScroll ? 12 : 0;
+        const slice = plTracks.slice(plTrackOffset, plTrackOffset + perTrackPage);
         slice.forEach((trItem, i) => {
           const ry = py + headerH + 2 + i * rowH;
-          const rowBounds = { x: px + 10, y: ry, width: pw - 20, height: rowH - 3 };
+          const rowBounds = { x: px + 10, y: ry, width: pw - 20 - sbPad, height: rowH - 3 };
           const overRow = inside(pointer.x, pointer.y, rowBounds);
           if (overRow) box(rowBounds.x, rowBounds.y, rowBounds.width, rowBounds.height, 9, 'rgba(255,255,255,.08)');
-          const thumbS = rowH - 11;
+          const thumbS = rowH - 9;
           const thumbX = px + 16, thumbY = ry + Math.round((rowBounds.height - thumbS) / 2);
           const tImg = getPlaylistImage(trItem.image_url);
           if (tImg) {
@@ -510,22 +529,35 @@
             ctx.drawImage(tImg, thumbX, thumbY, thumbS, thumbS); ctx.restore();
           } else {
             box(thumbX, thumbY, thumbS, thumbS, 6, '#1f261e');
-            window.__lumadockIcon?.('music', thumbX + thumbS / 2, thumbY + thumbS / 2, 12, '#667262');
+            window.__lumadockIcon?.('music', thumbX + thumbS / 2, thumbY + thumbS / 2, 11, '#667262');
           }
           if (overRow) {
             ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.55)';
             ctx.beginPath(); ctx.roundRect(thumbX, thumbY, thumbS, thumbS, 6); ctx.fill();
-            mediaIcon('play', thumbX + thumbS / 2 + 1, thumbY + thumbS / 2, 9, '#fff');
+            mediaIcon('play', thumbX + thumbS / 2 + 1, thumbY + thumbS / 2, 8.5, '#fff');
             ctx.restore();
           }
           const textX = thumbX + thumbS + 10;
           const durW = 38;
           const textW = Math.max(80, rowBounds.width - (textX - rowBounds.x) - durW - 8);
-          text(trItem.name, textX, ry + (fullMode ? 15 : 17), 11.5, overRow ? colour : '#f2f5ed', 700, 'left', textW);
-          if (trItem.artist) text(trItem.artist, textX, ry + (fullMode ? 28 : 30), 10, 'rgba(235,240,230,.55)', 500, 'left', textW);
-          if (trItem.duration_ms) text(time(trItem.duration_ms), rowBounds.x + rowBounds.width - 8, ry + Math.round(rowBounds.height / 2) + 4, 10, 'rgba(235,240,230,.45)', 600, 'right');
+          text(trItem.name, textX, ry + (fullMode ? 12.5 : 15), fullMode ? 11 : 11.5, overRow ? colour : '#f2f5ed', 700, 'left', textW);
+          if (trItem.artist) text(trItem.artist, textX, ry + (fullMode ? 24.5 : 27.5), fullMode ? 9.5 : 10, 'rgba(235,240,230,.55)', 500, 'left', textW);
+          if (trItem.duration_ms) text(time(trItem.duration_ms), rowBounds.x + rowBounds.width - 8, ry + Math.round(rowBounds.height / 2) + 3.5, 10, 'rgba(235,240,230,.45)', 600, 'right');
           hit['spPlTrack' + i] = { ...rowBounds, track: trItem };
         });
+
+        if (hasScroll) {
+          const sbX = px + pw - 14;
+          const sbY = py + headerH + 4;
+          const sbH = Math.max(24, ph - headerH - 12);
+          const thumbH = Math.max(18, Math.round(sbH * (perTrackPage / plTracks.length)));
+          const thumbY = sbY + Math.round(((sbH - thumbH) * plTrackOffset) / Math.max(1, maxOffset));
+          const sbHit = { x: sbX - 6, y: sbY, width: 16, height: sbH, sbY, sbH, thumbH, maxOffset };
+          const overSb = inside(pointer.x, pointer.y, sbHit);
+          box(sbX, sbY, 4, sbH, 2, 'rgba(255,255,255,.08)');
+          box(sbX, thumbY, 4, thumbH, 2, overSb ? colour : 'rgba(255,255,255,.38)');
+          hit.spPlScroll = sbHit;
+        }
       }
     } else if (playlistsOpen) {
       // Dynamic cover grid filling all available drawer width & height
@@ -709,12 +741,26 @@
   canvas.addEventListener('wheel', e => {
     if (currentView === 'spotify' && mode === 'expanded' && playlistsOpen && inside(e.clientX, e.clientY, islandBounds)) {
       if (selectedPlaylist && plTracks.length > currentTrackPerPage) {
-        const totalTrPages = Math.ceil(plTracks.length / currentTrackPerPage);
-        if (e.deltaY > 0 || e.deltaX > 0) plTrackPage = Math.min(totalTrPages - 1, plTrackPage + 1);
-        else if (e.deltaY < 0 || e.deltaX < 0) plTrackPage = Math.max(0, plTrackPage - 1);
+        e.preventDefault();
+        const rawDelta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+        const dy = e.deltaMode === 1 ? rawDelta * 32 : rawDelta;
+        if (dy !== 0) {
+          plTrackWheelAcc += dy;
+          const stepPx = 45;
+          const steps = Math.trunc(plTrackWheelAcc / stepPx);
+          const maxOffset = Math.max(0, plTracks.length - currentTrackPerPage);
+          if (steps !== 0) {
+            plTrackWheelAcc -= steps * stepPx;
+            plTrackOffset = Math.max(0, Math.min(maxOffset, plTrackOffset + steps));
+          } else if (Math.abs(plTrackWheelAcc) >= 24) {
+            plTrackOffset = Math.max(0, Math.min(maxOffset, plTrackOffset + (plTrackWheelAcc > 0 ? 1 : -1)));
+            plTrackWheelAcc = 0;
+          }
+        }
         return;
       }
       if (!selectedPlaylist && playlists.length > currentPerPage) {
+        e.preventDefault();
         const totalPages = Math.ceil(playlists.length / currentPerPage);
         if (e.deltaY > 0 || e.deltaX > 0) plPage = Math.min(totalPages - 1, plPage + 1);
         else if (e.deltaY < 0 || e.deltaX < 0) plPage = Math.max(0, plPage - 1);
@@ -724,7 +770,7 @@
     if (!canSwipe(e.clientX, e.clientY) || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
     const now = performance.now(); if (now - wheelAt > 250) wheelX = 0; wheelAt = now; wheelX += e.deltaX;
     if (Math.abs(wheelX) > 90) { swipe(wheelX > 0 ? 1 : -1); wheelX = 0; }
-  }, { passive: true });
+  }, { passive: false });
   canvas.addEventListener('click', async event => {
     if (currentView !== 'spotify' || mode !== 'expanded') return;
     const x = event.clientX, y = event.clientY;
@@ -733,10 +779,10 @@
     if (playlistsOpen) {
       const plHits = {
         spPlClose: () => { playlistsOpen = false; selectedPlaylist = null; },
-        spPlBack: () => { selectedPlaylist = null; plTracks = []; plTrackPage = 0; },
+        spPlBack: () => { selectedPlaylist = null; plTracks = []; plTrackOffset = 0; plTrackWheelAcc = 0; },
         spPlPlayAll: () => { if (selectedPlaylist) openPlaylist(selectedPlaylist); },
-        spPlExpand: () => { playlistsExpanded = !playlistsExpanded; plPage = 0; plTrackPage = 0; },
-        spPlRefresh: () => { if (selectedPlaylist) selectPlaylist(selectedPlaylist); else loadPlaylists(true); },
+        spPlExpand: () => { playlistsExpanded = !playlistsExpanded; plPage = 0; plTrackWheelAcc = 0; },
+        spPlRefresh: () => { if (selectedPlaylist) selectPlaylist(selectedPlaylist, true); else loadPlaylists(true); },
         spPlAddClip: async () => {
           const res = await api.spotifyAddPlaylistUrl?.({ fromClipboard: true }).catch(e => ({ ok: false, error: e?.message }));
           if (res?.ok) {
@@ -748,8 +794,26 @@
           }
         },
         spPlSettings: () => { api.settingsOpen?.('connect'); },
-        spPlPrev: () => { if (selectedPlaylist) { if (plTrackPage > 0) plTrackPage--; } else if (plPage > 0) plPage--; },
-        spPlNext: () => { if (selectedPlaylist) plTrackPage++; else plPage++; },
+        spPlPrev: () => {
+          if (selectedPlaylist) plTrackOffset = Math.max(0, plTrackOffset - currentTrackPerPage);
+          else if (plPage > 0) plPage--;
+        },
+        spPlNext: () => {
+          if (selectedPlaylist) {
+            const maxOffset = Math.max(0, plTracks.length - currentTrackPerPage);
+            plTrackOffset = Math.min(maxOffset, plTrackOffset + currentTrackPerPage);
+          } else {
+            plPage++;
+          }
+        },
+        spPlScroll: () => {
+          const sb = hit.spPlScroll;
+          if (!sb || sb.maxOffset <= 0) return;
+          const span = Math.max(1, sb.sbH - sb.thumbH);
+          const ratio = Math.max(0, Math.min(1, (y - sb.sbY - sb.thumbH / 2) / span));
+          plTrackOffset = Math.round(ratio * sb.maxOffset);
+          plTrackWheelAcc = 0;
+        },
         spPlAuth: async () => {
           playlistsNote = L('Waiting for Spotify browser approval…', 'Tarayıcıda Spotify onayı bekleniyor…');
           try {

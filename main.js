@@ -29,7 +29,8 @@ const {
   classifySpotifyPlaylistsError,
   renderSpotifyCallbackHtml,
   parseSpotifyPlaylistInput,
-  extractPlaylistTracks
+  collectPagedSpotifyTracks,
+  collectPagedSpotifyPlaylists
 } = require('./src/main/spotify-helpers.cjs');
 
 require('./src/main/project-mode-main');
@@ -4274,17 +4275,10 @@ async function spotifyPlaylists(force = false) {
     return { ok: true, playlists: mergePlaylists(custom, playlistsCache.items) };
   }
   try {
-    const data = await spotifyApi('/v1/me/playlists?limit=50');
-    const items = (data?.items || [])
-      .filter(p => p && p.uri)
-      .map(p => ({
-        id: String(p.id || ''),
-        name: String(p.name || ''),
-        uri: String(p.uri || ''),
-        image_url: String(p.images?.[0]?.url || ''),
-        external_url: String(p.external_urls?.spotify || ''),
-        tracks_total: Number(p.tracks?.total || 0)
-      }));
+    const items = await collectPagedSpotifyPlaylists(
+      route => spotifyApi(route, { signal: AbortSignal.timeout(5000) }),
+      { pageLimit: 50, maxPlaylists: 250 }
+    );
     playlistsCache = { at: Date.now(), items };
     return { ok: true, playlists: mergePlaylists(custom, items) };
   } catch (error) {
@@ -4298,27 +4292,49 @@ async function spotifyPlaylists(force = false) {
 
 const playlistTracksCache = new Map();
 
-async function spotifyPlaylistTracks(playlistId) {
-  const id = String(playlistId || '').trim();
+async function spotifyPlaylistTracks(playlistId, force = false) {
+  const id = String(typeof playlistId === 'object' ? playlistId?.id : playlistId || '').trim();
+  const bypassCache = Boolean(force || (typeof playlistId === 'object' && playlistId?.force));
   if (!/^[A-Za-z0-9]{10,40}$/.test(id)) {
-    return { ok: false, tracks: [], error: 'Geçersiz çalma listesi kimliği.' };
+    return { ok: false, tracks: [], total: 0, error: 'Geçersiz çalma listesi kimliği.' };
   }
   const cached = playlistTracksCache.get(id);
-  if (cached && Date.now() - cached.at < 60000) {
-    return { ok: true, tracks: cached.items };
+  if (!bypassCache && cached && Date.now() - cached.at < 60000) {
+    return {
+      ok: true,
+      tracks: cached.items,
+      total: cached.total || cached.items.length,
+      partial: Boolean(cached.partial),
+      truncated: Boolean(cached.truncated)
+    };
   }
   try {
-    let data = null;
-    try {
-      data = await spotifyApi(`/v1/playlists/${encodeURIComponent(id)}/items?limit=50`, { signal: AbortSignal.timeout(4000) });
-    } catch {
-      data = await spotifyApi(`/v1/playlists/${encodeURIComponent(id)}/tracks?limit=50`, { signal: AbortSignal.timeout(4000) });
-    }
-    const items = extractPlaylistTracks(data);
-    playlistTracksCache.set(id, { at: Date.now(), items });
-    return { ok: true, tracks: items };
+    const result = await collectPagedSpotifyTracks(
+      route => spotifyApi(route, { signal: AbortSignal.timeout(6000) }),
+      id,
+      { pageLimit: 100, maxTracks: 2000 }
+    );
+    playlistTracksCache.set(id, {
+      at: Date.now(),
+      items: result.tracks,
+      total: result.total,
+      partial: result.partial,
+      truncated: result.truncated
+    });
+    return {
+      ok: true,
+      tracks: result.tracks,
+      total: result.total,
+      partial: result.partial,
+      truncated: result.truncated
+    };
   } catch (error) {
-    return { ok: false, tracks: cached?.items || [], error: error?.message || 'Şarkılar alınamadı.' };
+    return {
+      ok: false,
+      tracks: cached?.items || [],
+      total: cached?.total || cached?.items?.length || 0,
+      error: error?.message || 'Şarkılar alınamadı.'
+    };
   }
 }
 
@@ -4326,7 +4342,7 @@ async function spotifyPlayPlaylist(payload) {
   const uri = String(payload?.uri || '').trim();
   const extUrl = String(payload?.url || '').trim();
   const offsetUri = String(payload?.offsetUri || '').trim();
-  const validOffset = /^spotify:track:[A-Za-z0-9]+$/.test(offsetUri) ? offsetUri : '';
+  const validOffset = /^spotify:(?:track|episode):[A-Za-z0-9]+$/.test(offsetUri) ? offsetUri : '';
   if (!/^spotify:playlist:[A-Za-z0-9]+$/.test(uri)) {
     return { ok: false, error: 'Geçersiz çalma listesi URI.' };
   }
@@ -4931,7 +4947,7 @@ ipcMain.handle('spotify:devices', () => spotifyDevices()); // Spotify Connect: w
 ipcMain.handle('spotify:transfer', (_event, id) => spotifyTransfer(id));
 ipcMain.handle('spotify:lyrics', (_event, q) => fetchLyrics(q?.title, q?.artist, q?.duration));
 ipcMain.handle('spotify:playlists', (_event, force) => spotifyPlaylists(Boolean(force)));
-ipcMain.handle('spotify:playlist-tracks', (_event, id) => spotifyPlaylistTracks(id));
+ipcMain.handle('spotify:playlist-tracks', (_event, id, force) => spotifyPlaylistTracks(id, Boolean(force)));
 ipcMain.handle('spotify:play-playlist', (_event, payload) => spotifyPlayPlaylist(payload));
 ipcMain.handle('spotify:add-playlist-url', (_event, payload) => addCustomSpotifyPlaylist(payload));
 ipcMain.handle('spotify:remove-custom-playlist', (_event, id) => removeCustomSpotifyPlaylist(id));
