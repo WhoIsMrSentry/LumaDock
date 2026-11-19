@@ -2481,6 +2481,9 @@ function setSpotifyClientId(clientId) {
     try { fs.unlinkSync(SPOTIFY_CONFIG_FILE()); } catch {}
     clearSpotifyTokens();
     playlistsCache = null;
+    if (mascotWindow && !mascotWindow.isDestroyed()) {
+      try { mascotWindow.webContents.send('spotify:auth-updated', { connected: false, isCustom: false }); } catch {}
+    }
     return { ok: true, clientId: getSpotifyClientId(), isCustom: false };
   }
   if (!isValidSpotifyClientId(trimmed)) {
@@ -2489,6 +2492,9 @@ function setSpotifyClientId(clientId) {
   writeJson(SPOTIFY_CONFIG_FILE(), { clientId: trimmed });
   clearSpotifyTokens();
   playlistsCache = null;
+  if (mascotWindow && !mascotWindow.isDestroyed()) {
+    try { mascotWindow.webContents.send('spotify:auth-updated', { connected: false, isCustom: trimmed !== DEFAULT_SPOTIFY_CLIENT_ID }); } catch {}
+  }
   return { ok: true, clientId: trimmed, isCustom: trimmed !== DEFAULT_SPOTIFY_CLIENT_ID };
 }
 

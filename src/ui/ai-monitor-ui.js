@@ -818,8 +818,8 @@
     ctx.beginPath(); ctx.roundRect(x0, y, Math.max(3, w * part), 2.2, 1.1); ctx.fill();
     ctx.restore();
   }
-  // Compact interactive buttons (tuck music, mini playback, download open, meeting join) caught in capture phase
-  let swallowTuckClick = false, tuckBox = null;
+  // Compact interactive buttons (mini playback, download open, meeting join) caught in capture phase
+  let swallowTuckClick = false, tuckBox = null, ctrlZoneBox = null, dlBox = null, joinBox = null;
   window.addEventListener('pointerdown', e => {
     if (mode !== 'compact') return;
     const at = b => b && inside(e.clientX, e.clientY, b);
@@ -865,6 +865,7 @@
   drawSmall = function () {
     askSize();
     hit.musicTuck = hit.cPrev = hit.cPlay = hit.cNext = hit.cCtrlZone = hit.cDl = hit.cJoin = null;
+    ctrlZoneBox = dlBox = joinBox = null;
     if (mode !== 'compact') tuckBox = null;
     const now = performance.now();
     const dt = Math.min(0.05, Math.max(0.001, (now - (compactAnimAt || now)) / 1000));
@@ -901,7 +902,7 @@
         text(message, left + 4, cy + 4, 11.5, '#f2f5ed', 700, 'left', bx - left - 12);
         ctx.save(); ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, bh / 2); ctx.fillStyle = overDl ? '#d9f7b3' : '#c6e994'; ctx.fill(); ctx.restore();
         text(T('Openen', 'Open', 'Aç'), bx + bw / 2, cy + 4, 10.5, '#10180c', 700, 'center');
-        hit.cDl = { x: bx, y: by, width: bw, height: bh, path: dl.completed.path };
+        hit.cDl = dlBox = { x: bx, y: by, width: bw, height: bh, path: dl.completed.path };
         return;
       }
       text(message, left + 4, cy + 4, 11.5, '#f2f5ed', 700, 'left', mid1 - left); return;
@@ -940,18 +941,25 @@
       const ctrlW = Math.round(compactControlsAnim * 76);
       const rightEdge = right - (p ? 38 : 14) - privW - (privW ? 4 : 0);
       if (privW) drawPrivacyDots(right - (p ? 36 : 14), cy);
-      hit.cCtrlZone = { x: rightEdge - 74, y: 0, width: Math.max(88, right - (rightEdge - 74) + 4), height: H };
-      // Smooth hover mini playback controls (previous, play/pause, next)
+      hit.cCtrlZone = ctrlZoneBox = { x: rightEdge - 78, y: 0, width: Math.max(92, right - (rightEdge - 78) + 6), height: H + 4 };
+      // Always register mini control hitboxes while hovering compact music bar; render animated controls as they slide in
+      const slideOffset = (1 - compactControlsAnim) * 14;
+      const ctrlButtons = [
+        ['previous', 'cPrev', rightEdge - 60],
+        [spotifyState.is_playing ? 'pause' : 'play', 'cPlay', rightEdge - 36],
+        ['next', 'cNext', rightEdge - 12]
+      ];
+      if (overCompact || compactControlsAnim > 0.03) {
+        for (const [, key, baseBx] of ctrlButtons) {
+          const rad = key === 'cPlay' ? 11 : 9;
+          hit[key] = { x: baseBx - rad, y: cy - rad, width: rad * 2, height: rad * 2 };
+        }
+      }
       if (compactControlsAnim > 0.03) {
-        const slideOffset = (1 - compactControlsAnim) * 14;
-        const buttons = [
-          ['previous', 'cPrev', rightEdge - 60 + slideOffset],
-          [spotifyState.is_playing ? 'pause' : 'play', 'cPlay', rightEdge - 36 + slideOffset],
-          ['next', 'cNext', rightEdge - 12 + slideOffset]
-        ];
         ctx.save();
         ctx.globalAlpha *= compactControlsAnim;
-        for (const [kind, key, bx] of buttons) {
+        for (const [kind, key, baseBx] of ctrlButtons) {
+          const bx = baseBx + slideOffset;
           const rad = key === 'cPlay' ? 11 : 9;
           const bb = { x: bx - rad, y: cy - rad, width: rad * 2, height: rad * 2 };
           const overBtn = inside(pointer.x, pointer.y, bb);
@@ -959,7 +967,7 @@
           ctx.fillStyle = key === 'cPlay' ? (overBtn ? '#ffffff' : 'rgba(255,255,255,.92)') : (overBtn ? 'rgba(255,255,255,.22)' : 'rgba(255,255,255,.09)');
           ctx.fill();
           window.__lumadockMediaIcon?.(kind, bx, cy, key === 'cPlay' ? 9.5 : 8, key === 'cPlay' ? '#0b0c0d' : '#f2f5ed');
-          if (compactControlsAnim > 0.08) hit[key] = bb;
+          hit[key] = bb;
         }
         ctx.restore();
       }
@@ -1031,7 +1039,7 @@
       text(`📅 ${whenLbl} · ${meet.title}`, mid0, cy + 4, 11.5, '#f2f5ed', 700, 'left', bx - mid0 - 8);
       ctx.save(); ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, bh / 2); ctx.fillStyle = overJoin ? '#d9f7b3' : '#22e05a'; ctx.fill(); ctx.restore();
       text(T('Deelnemen', 'Join', 'Katıl'), bx + bw / 2, cy + 4, 10.5, '#09150c', 700, 'center');
-      hit.cJoin = { x: bx, y: by, width: bw, height: bh, url: meet.url };
+      hit.cJoin = joinBox = { x: bx, y: by, width: bw, height: bh, url: meet.url };
       return;
     }
     if (p) { icon('terminal'); line(smallStatus(p)); }
@@ -1048,8 +1056,17 @@
     }
     // Folded in with the collapse button: stay closed until the mouse has left the island once.
     if (holdClosed) { if (pointer.known && inside(pointer.x, pointer.y, islandBounds)) { hoverStartedAt = null; return; } holdClosed = false; }
+    // Playback controls on the right side of the compact music bar NEVER trigger expanded hover; rest of bar triggers after delay
+    if (mode === 'compact' && music() && pointer.known && inside(pointer.x, pointer.y, islandBounds)) {
+      const pNow = top();
+      const privNow = window.__lumadockPrivacy?.();
+      const privW = (privNow?.mic ? 10 : 0) + (privNow?.cam ? 10 : 0);
+      const rightEdge = islandBounds.x + islandBounds.width - (pNow ? 38 : 14) - privW - (privW ? 4 : 0);
+      const liveCtrlZone = { x: rightEdge - 78, y: 0, width: Math.max(92, (islandBounds.x + islandBounds.width) - (rightEdge - 78) + 6), height: islandBounds.height + 4 };
+      if (inside(pointer.x, pointer.y, liveCtrlZone) || (ctrlZoneBox && inside(pointer.x, pointer.y, ctrlZoneBox))) { hoverStartedAt = null; return; }
+    }
     // On compact interactive controls (tuck, mini playback zone, download open, meeting join) keep compact so user can click cleanly
-    if (mode === 'compact' && pointer.known && [tuckBox, hit.cCtrlZone, hit.cPrev, hit.cPlay, hit.cNext, hit.cDl, hit.cJoin].some(b => b && inside(pointer.x, pointer.y, b))) { hoverStartedAt = null; return; }
+    if (mode === 'compact' && pointer.known && [tuckBox, ctrlZoneBox, dlBox, joinBox].some(b => b && inside(pointer.x, pointer.y, b))) { hoverStartedAt = null; return; }
     const pa = top(); // (only when there are buttons to press; a plain question just opens on hover)
     if (mode === 'compact' && pa && (pa.permission || pa.ask || pa.plan) && pointer.known && inside(pointer.x, pointer.y, islandBounds)) { hoverStartedAt = null; return; }
     return oldHover(now);
