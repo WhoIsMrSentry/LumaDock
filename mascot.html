@@ -4146,10 +4146,12 @@ async function refreshSpotify() {
 
 window.lumadock?.onMediaStateChanged?.(data => {
   if (!data) return;
-  if (data.active && data.title) {
+  if (data.active && (data.cleanTitle || data.title)) {
     spotifyConnected = true;
+    const trackName = data.cleanTitle || data.title;
+    const trackArtist = data.cleanArtist || data.artist || 'Müzik';
     const incomingPos = Number(data.position || 0);
-    const sameTrack = Boolean(spotifyState?.track?.name && data.title && spotifyState.track.name === data.title);
+    const sameTrack = Boolean(spotifyState?.track?.name && trackName && spotifyState.track.name === trackName);
     let finalPos = incomingPos;
     if (sameTrack && spotifyState?.is_playing && data.is_playing) {
       const curPos = (spotifyState.progress_ms || 0) + (performance.now() - spotifySyncAt);
@@ -4165,9 +4167,9 @@ window.lumadock?.onMediaStateChanged?.(data => {
       progress_ms: finalPos,
       duration_ms: Number(data.duration || 0),
       track: {
-        id: 'local-' + String(data.title).slice(0, 12),
-        name: data.title,
-        artist: data.artist || 'Müzik',
+        id: 'local-' + String(trackName).slice(0, 12),
+        name: trackName,
+        artist: trackArtist,
         image_url: data.image_url || albumUrl || ''
       },
       device: { id: 'local', name: 'Bu Bilgisayar', type: 'Computer', active: true, here: true }
@@ -4591,10 +4593,14 @@ function updateHover(
       }
 
 
+      const peekDelay = (typeof music === 'function' && music())
+        ? (UI.MUSIC_PEEK_DELAY || 1100)
+        : UI.NORMAL_PEEK_DELAY;
+
       if (
         now -
         hoverStartedAt >
-        UI.NORMAL_PEEK_DELAY
+        peekDelay
       ) {
         setMode(
           'expanded'

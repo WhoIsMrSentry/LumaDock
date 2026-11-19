@@ -70,7 +70,7 @@
     roze: ['Nebula', 'Nebula'],
     goud: ['Solar Gold', 'Solar Altın']
   };
-  const SPEEDS = { snel: { t: 0.5, peek: 140, home: 300, view: 1500, mon: 600 }, normaal: { t: 0.8, peek: 260, home: 400, view: 2200, mon: 800 } };
+  const SPEEDS = { snel: { t: 0.5, peek: 140, musicPeek: 1100, home: 300, view: 1500, mon: 600 }, normaal: { t: 0.8, peek: 260, musicPeek: 1300, home: 400, view: 2200, mon: 800 } };
 
   // All body colours use the sleek Cyber-Bot chassis ('blob' renderer in mascot.html)
   window.__lumadockLook = () => ({
@@ -90,7 +90,7 @@
   };
   function apply() {
     const s = SPEEDS[prefs.speed];
-    UI.NORMAL_PEEK_DELAY = s.peek; UI.HOME_LEAVE_DELAY = s.home; UI.VIEW_LEAVE_DELAY = s.view; UI.MONITOR_LEAVE_DELAY = s.mon;
+    UI.NORMAL_PEEK_DELAY = s.peek; UI.MUSIC_PEEK_DELAY = s.musicPeek; UI.HOME_LEAVE_DELAY = s.home; UI.VIEW_LEAVE_DELAY = s.view; UI.MONITOR_LEAVE_DELAY = s.mon;
     window.lumadock?.aiMonitorSetNotify?.(prefs.notify).catch?.(() => {});
     window.lumadock?.setWindowPrefs?.({
       fullscreenHide: Boolean(prefs.fullscreenHide),
@@ -165,6 +165,7 @@
     : prefs.outfit !== 'auto' && unlocked(prefs.outfit) ? prefs.outfit
     : season() || [...OUTFITS].reverse().find(o => unlocked(o.id))?.id || null;
   window.__lumadockOutfitOn = () => { const o = outfit(); return Boolean(o && o !== 'shades' && o !== 'headphones'); };
+  window.__lumadockCurrentOutfit = () => outfit();
   window.__lumadockOutfits = { count: () => doneCount, next: () => OUTFITS.find(o => doneCount < o.at) || null };
   function countDone(status) {
     doneCount++; store.set('lumadock:done-count', doneCount);

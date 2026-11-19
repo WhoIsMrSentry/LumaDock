@@ -30,12 +30,15 @@
     spotifyPlaylists: force => ipcRenderer.invoke('spotify:playlists', force),
     spotifyPlayPlaylist: (uri, url) => ipcRenderer.invoke('spotify:play-playlist', { uri, url }),
     spotifyLyrics: query => ipcRenderer.invoke('spotify:lyrics', query),
+    spotifyGetConfig: () => ipcRenderer.invoke('spotify:get-config'),
+    spotifySetClientId: clientId => ipcRenderer.invoke('spotify:set-client-id', clientId),
     spotifySeek: positionMs =>
       ipcRenderer.invoke('spotify:seek', positionMs),
     spotifyDisconnect: () =>
       ipcRenderer.invoke('spotify:disconnect'),
     onMediaStateChanged: callback => subscribe('media:state-changed', callback),
     onMediaArtworkLoaded: callback => subscribe('media:artwork-loaded', callback),
+    onSpotifyAuthUpdated: callback => subscribe('spotify:auth-updated', callback),
 
     projectGet: () => ipcRenderer.invoke('project:get'),
     projectChoose: () => ipcRenderer.invoke('project:choose'),

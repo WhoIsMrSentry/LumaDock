@@ -2,6 +2,7 @@
 # and "F <fullscreen 0/1>" when a third-party app enters/exits fullscreen.
 param([int]$Parent = 0)
 $ErrorActionPreference = 'Stop'
+try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false) } catch {}
 
 Add-Type -TypeDefinition @'
 using System;

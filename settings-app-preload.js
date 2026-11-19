@@ -32,6 +32,12 @@ contextBridge.exposeInMainWorld('settingsApp', {
     chatgptLogout: () => ipcRenderer.invoke('ai-settings:chatgpt-logout')
   },
   displays: () => ipcRenderer.invoke('island:displays'),
+  spotify: {
+    getConfig: () => ipcRenderer.invoke('spotify:get-config'),
+    setClientId: id => ipcRenderer.invoke('spotify:set-client-id', id),
+    connect: opts => ipcRenderer.invoke('spotify:connect', opts),
+    disconnect: () => ipcRenderer.invoke('spotify:disconnect')
+  },
   onGoto: callback => { const fn = (_e, tab) => callback(tab); ipcRenderer.on('settings-app:goto', fn); return () => ipcRenderer.removeListener('settings-app:goto', fn); },
   onFace: callback => { const fn = (_e, url) => callback(url); ipcRenderer.on('settings-app:face', fn); return () => ipcRenderer.removeListener('settings-app:face', fn); }
 });

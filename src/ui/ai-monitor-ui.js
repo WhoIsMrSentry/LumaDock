@@ -862,7 +862,7 @@
   }
   drawSmall = function () {
     askSize();
-    hit.musicTuck = hit.cPrev = hit.cPlay = hit.cNext = hit.cDl = hit.cJoin = null;
+    hit.musicTuck = hit.cPrev = hit.cPlay = hit.cNext = hit.cCtrlZone = hit.cDl = hit.cJoin = null;
     if (mode !== 'compact') tuckBox = null;
     const now = performance.now();
     const dt = Math.min(0.05, Math.max(0.001, (now - (compactAnimAt || now)) / 1000));
@@ -938,9 +938,10 @@
       const ctrlW = Math.round(compactControlsAnim * 76);
       const tx = right - (p ? 40 : 18);
       if (privW) drawPrivacyDots(tx - 16 - (p ? 18 : 0), cy);
+      const rightEdge = tx - 16 - (p ? 18 : 0) - privW - (privW ? 4 : 0);
+      hit.cCtrlZone = { x: rightEdge - 74, y: 0, width: Math.max(88, right - (rightEdge - 74) + 4), height: H };
       // Smooth hover mini playback controls (previous, play/pause, next)
       if (compactControlsAnim > 0.03) {
-        const rightEdge = tx - 16 - (p ? 18 : 0) - privW - (privW ? 4 : 0);
         const slideOffset = (1 - compactControlsAnim) * 14;
         const buttons = [
           ['previous', 'cPrev', rightEdge - 60 + slideOffset],
@@ -957,7 +958,7 @@
           ctx.fillStyle = key === 'cPlay' ? (overBtn ? '#ffffff' : 'rgba(255,255,255,.92)') : (overBtn ? 'rgba(255,255,255,.22)' : 'rgba(255,255,255,.09)');
           ctx.fill();
           window.__lumadockMediaIcon?.(kind, bx, cy, key === 'cPlay' ? 9.5 : 8, key === 'cPlay' ? '#0b0c0d' : '#f2f5ed');
-          if (compactControlsAnim > 0.35) hit[key] = bb;
+          if (compactControlsAnim > 0.08) hit[key] = bb;
         }
         ctx.restore();
       }
@@ -974,16 +975,16 @@
           lyricStartedAt = now;
           lyricSwitchedAt = now;
         }
-        const swapP = Math.min(1, (now - lyricSwitchedAt) / 260);
+        const swapP = Math.min(1, (now - lyricSwitchedAt) / 220);
         const easeP = 1 - Math.pow(1 - swapP, 3);
         const lrcColour = window.__lumadockAlbumColour || '#1ed760';
         if (prevRenderedLyric && swapP < 1) {
-          ctx.save(); ctx.globalAlpha *= (1 - easeP) * 0.85;
-          text('♪ ' + prevRenderedLyric, mid0, cy + 4 - easeP * 8, 11.5, lrcColour, 600, 'left', availW);
+          ctx.save(); ctx.globalAlpha *= (1 - easeP) * 0.75;
+          text('♪ ' + prevRenderedLyric, mid0, cy + 4 - easeP * 6, 11.5, lrcColour, 600, 'left', availW);
           ctx.restore();
         }
         const lrcText = '♪ ' + activeLyric.text;
-        ctx.font = '600 11.5px "Segoe UI"';
+        ctx.font = '600 11.5px "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif';
         const tw = ctx.measureText ? ctx.measureText(lrcText).width : 100;
         let ox = 0;
         if (tw > availW) {
@@ -996,8 +997,8 @@
             else ox = -(0.5 + 0.5 * Math.cos(((cycle - 6.0) / 3.0) * Math.PI)) * maxShift;
           }
         }
-        ctx.globalAlpha *= easeP;
-        text(lrcText, mid0 + ox, cy + 4 + (1 - easeP) * 7, 11.5, lrcColour, 600, 'left');
+        ctx.globalAlpha *= (0.35 + 0.65 * easeP);
+        text(lrcText, mid0 + ox, cy + 4 + (1 - easeP) * 5, 11.5, lrcColour, 600, 'left');
         ctx.restore();
       } else {
         lastRenderedLyric = ''; prevRenderedLyric = '';
@@ -1052,8 +1053,8 @@
     }
     // Folded in with the collapse button: stay closed until the mouse has left the island once.
     if (holdClosed) { if (pointer.known && inside(pointer.x, pointer.y, islandBounds)) { hoverStartedAt = null; return; } holdClosed = false; }
-    // On compact interactive controls (tuck, mini playback, download open, meeting join) keep compact so user can click cleanly
-    if (mode === 'compact' && pointer.known && [tuckBox, hit.cPrev, hit.cPlay, hit.cNext, hit.cDl, hit.cJoin].some(b => b && inside(pointer.x, pointer.y, b))) { hoverStartedAt = null; return; }
+    // On compact interactive controls (tuck, mini playback zone, download open, meeting join) keep compact so user can click cleanly
+    if (mode === 'compact' && pointer.known && [tuckBox, hit.cCtrlZone, hit.cPrev, hit.cPlay, hit.cNext, hit.cDl, hit.cJoin].some(b => b && inside(pointer.x, pointer.y, b))) { hoverStartedAt = null; return; }
     const pa = top(); // (only when there are buttons to press; a plain question just opens on hover)
     if (mode === 'compact' && pa && (pa.permission || pa.ask || pa.plan) && pointer.known && inside(pointer.x, pointer.y, islandBounds)) { hoverStartedAt = null; return; }
     return oldHover(now);
@@ -1123,14 +1124,36 @@
     c.beginPath(); c.roundRect(0, 0, 48, 48, 13); c.fillStyle = g; c.fill(); c.restore();
     c.save(); c.beginPath(); c.roundRect(0, 0, 48, 48, 13); c.clip(); c.fillStyle = 'rgba(255,255,255,.22)'; c.beginPath(); c.ellipse(16, 4, 26, 14, -0.2, 0, Math.PI * 2); c.fill(); c.restore();
     const ink = '#1d1b26', hx = 24, hy = icon === 'terminal' ? 23 : icon === 'tray' ? 27 : 26;
-    const eyesCol = icon === 'terminal' && working ? '#ff9a3d' : '#5fd0ff';
-    // Robo's head
+    const look = window.__lumadockLook?.() || {};
+    const shell1 = look.shell1 || '#ffffff';
+    const shell2 = look.shell2 || '#dbe7e2';
+    const wear = window.__lumadockCurrentOutfit?.() || null;
+    const hexLum = hxStr => {
+      const m = /^#([0-9a-f]{6})$/i.exec(String(hxStr || '').trim());
+      if (!m) return 220;
+      const n = parseInt(m[1], 16);
+      return ((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114;
+    };
+    const darkShell = hexLum(shell1) < 130;
+    const eyesCol = icon === 'terminal' && working ? '#ff9a3d' : (look.eye || '#5fd0ff');
+    // Robo's head (synced live to user's main Robo chassis colour, eye visor colour & wardrobe gear)
     const head = () => {
-      if (!['music', 'gear', 'home'].includes(icon)) { c.strokeStyle = '#e8efec'; c.lineWidth = 1.8; c.lineCap = 'round'; c.beginPath(); c.moveTo(hx, hy - 10); c.lineTo(hx, hy - 15); c.stroke(); c.beginPath(); c.arc(hx, hy - 16.5, 2.2 + 0.6 * h, 0, Math.PI * 2); c.fillStyle = working ? '#ff9a3d' : '#c6e994'; c.shadowColor = c.fillStyle; c.shadowBlur = 8 * h; c.fill(); c.shadowBlur = 0; }
-      c.fillStyle = '#dfe9e5'; c.beginPath(); c.roundRect(hx - 15.5, hy - 2, 3, 6, 1.5); c.roundRect(hx + 12.5, hy - 2, 3, 6, 1.5); c.fill();
-      const hg = c.createLinearGradient(0, hy - 12, 0, hy + 12); hg.addColorStop(0, '#ffffff'); hg.addColorStop(1, '#dbe7e2');
-      c.beginPath(); c.ellipse(hx, hy, 14, 11.5, 0, 0, Math.PI * 2); c.fillStyle = hg; c.fill(); c.strokeStyle = 'rgba(0,0,0,.12)'; c.lineWidth = 0.8; c.stroke();
-      c.beginPath(); c.roundRect(hx - 10, hy - 5.5, 20, 12, 5.5); c.fillStyle = ink; c.fill();
+      if (!['music', 'home'].includes(icon)) {
+        const antTop = ['hat', 'horns', 'crown', 'santa', 'witch'].includes(wear) ? hy - 20 : hy - 15;
+        c.strokeStyle = darkShell ? 'rgba(255,255,255,.7)' : '#e8efec';
+        c.lineWidth = 1.8; c.lineCap = 'round';
+        c.beginPath(); c.moveTo(hx, hy - 10); c.lineTo(hx, antTop); c.stroke();
+        c.beginPath(); c.arc(hx, antTop - 1.5, 2.2 + 0.6 * h, 0, Math.PI * 2);
+        c.fillStyle = working ? '#ff9a3d' : (look.eye || '#c6e994');
+        c.shadowColor = c.fillStyle; c.shadowBlur = 8 * h; c.fill(); c.shadowBlur = 0;
+      }
+      c.fillStyle = shell2;
+      c.beginPath(); c.roundRect(hx - 15.5, hy - 2, 3, 6, 1.5); c.roundRect(hx + 12.5, hy - 2, 3, 6, 1.5); c.fill();
+      c.strokeStyle = darkShell ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.14)'; c.lineWidth = 0.7; c.stroke();
+      const hg = c.createLinearGradient(0, hy - 12, 0, hy + 12); hg.addColorStop(0, shell1); hg.addColorStop(1, shell2);
+      c.beginPath(); c.ellipse(hx, hy, 14, 11.5, 0, 0, Math.PI * 2); c.fillStyle = hg; c.fill();
+      c.strokeStyle = darkShell ? 'rgba(255,255,255,.26)' : 'rgba(0,0,0,.14)'; c.lineWidth = 0.85; c.stroke();
+      c.beginPath(); c.roundRect(hx - 10, hy - 5.5, 20, 12, 5.5); c.fillStyle = '#0c0d12'; c.fill();
       c.fillStyle = eyesCol; c.strokeStyle = eyesCol; c.lineWidth = 1.6; c.lineCap = 'round';
       const blink = Math.floor(now / 3200 + size) % 7 === 0 && (now % 3200) < 140;
       for (const s of [-1, 1]) {
@@ -1139,6 +1162,43 @@
         else if (icon === 'timer' || icon === 'terminal') { c.beginPath(); c.ellipse(ex, ey, 2, 1.3, 0, 0, Math.PI * 2); c.fill(); }
         else if (blink) { c.beginPath(); c.moveTo(ex - 2, ey); c.lineTo(ex + 2, ey); c.stroke(); }
         else { c.beginPath(); c.ellipse(ex, ey, 1.7, 2.7, 0, 0, Math.PI * 2); c.fill(); }
+      }
+      // Equipped wardrobe gear scaled to mini Robo
+      if (wear === 'shades') {
+        const vg = c.createLinearGradient(hx - 10, hy - 3, hx + 10, hy + 2);
+        vg.addColorStop(0, '#ff2a85'); vg.addColorStop(0.5, '#7b2cbf'); vg.addColorStop(1, '#00e5ff');
+        c.save(); c.fillStyle = vg; c.strokeStyle = '#ffffff'; c.lineWidth = 0.9;
+        c.beginPath(); c.roundRect(hx - 10.5, hy - 3.6, 21, 5.2, 2); c.fill(); c.stroke(); c.restore();
+      } else if (wear === 'hat') {
+        const hover = Math.sin(now / 320) * 0.8;
+        c.save(); c.strokeStyle = '#00e5ff'; c.shadowColor = '#00e5ff'; c.shadowBlur = 6; c.lineWidth = 2;
+        c.beginPath(); c.ellipse(hx, hy - 14.5 + hover, 9.5, 2.5, 0, 0, Math.PI * 2); c.stroke();
+        c.strokeStyle = '#fff'; c.lineWidth = 0.8; c.beginPath(); c.ellipse(hx, hy - 14.5 + hover, 9.5, 2.5, 0, 0, Math.PI); c.stroke(); c.restore();
+      } else if (wear === 'horns') {
+        c.save(); c.strokeStyle = '#ff7aa2'; c.lineWidth = 0.9;
+        for (const s of [-1, 1]) {
+          const hg2 = c.createLinearGradient(hx, hy - 10, hx + s * 11, hy - 18);
+          hg2.addColorStop(0, '#1e293b'); hg2.addColorStop(1, '#ff3b6b');
+          c.fillStyle = hg2; c.beginPath(); c.moveTo(hx + s * 5, hy - 9.5); c.lineTo(hx + s * 12, hy - 18.5); c.lineTo(hx + s * 10, hy - 8); c.closePath(); c.fill(); c.stroke();
+        }
+        c.restore();
+      } else if (wear === 'crown') {
+        c.save(); c.fillStyle = '#ffd23f'; c.shadowColor = '#ffd23f'; c.shadowBlur = 5;
+        c.beginPath(); c.moveTo(hx - 8, hy - 9.5); c.lineTo(hx - 9, hy - 17); c.lineTo(hx - 4, hy - 13); c.lineTo(hx, hy - 19); c.lineTo(hx + 4, hy - 13); c.lineTo(hx + 9, hy - 17); c.lineTo(hx + 8, hy - 9.5); c.closePath(); c.fill();
+        c.shadowBlur = 0; c.fillStyle = '#00e5ff'; c.beginPath(); c.arc(hx, hy - 12.5, 1.5, 0, Math.PI * 2); c.fill(); c.restore();
+      } else if (wear === 'santa') {
+        c.save(); c.fillStyle = '#e63946'; c.beginPath(); c.moveTo(hx - 10, hy - 9); c.quadraticCurveTo(hx - 2, hy - 22, hx + 11, hy - 17); c.lineTo(hx + 8, hy - 9); c.closePath(); c.fill();
+        c.fillStyle = '#fff'; c.beginPath(); c.roundRect(hx - 11, hy - 11.5, 21, 3.6, 1.8); c.fill(); c.beginPath(); c.arc(hx + 11.5, hy - 17, 2.5, 0, Math.PI * 2); c.fill(); c.restore();
+      } else if (wear === 'witch') {
+        c.save(); c.fillStyle = '#2b1d3a'; c.beginPath(); c.ellipse(hx, hy - 10, 14, 2.5, 0, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.moveTo(hx - 7, hy - 10.5); c.lineTo(hx + 7, hy - 10.5); c.lineTo(hx + 4, hy - 20); c.lineTo(hx + 8, hy - 24); c.lineTo(hx, hy - 20); c.closePath(); c.fill();
+        c.fillStyle = '#ff9a1f'; c.fillRect(hx - 6.5, hy - 12.5, 13, 2.2); c.restore();
+      } else if (wear === 'headphones' && icon !== 'music') {
+        c.save(); c.strokeStyle = '#1e293b'; c.lineWidth = 2.4; c.lineCap = 'round';
+        c.beginPath(); c.arc(hx, hy, 15.2, Math.PI * 1.1, Math.PI * 1.9); c.stroke();
+        c.strokeStyle = '#38f8b2'; c.lineWidth = 1; c.beginPath(); c.arc(hx, hy, 15.2, Math.PI * 1.2, Math.PI * 1.8); c.stroke();
+        for (const s of [-1, 1]) { c.fillStyle = '#0f172a'; c.strokeStyle = '#38f8b2'; c.lineWidth = 1; c.beginPath(); c.roundRect(hx + s * 15 - 2.3, hy - 3.5, 4.6, 8, 2); c.fill(); c.stroke(); }
+        c.restore();
       }
     };
     if (h > 0.02) { c.save(); c.fillStyle = 'rgba(0,0,0,' + (0.22 * h) + ')'; c.beginPath(); c.ellipse(24, 43, 13 + 3 * h, 2.5, 0, 0, Math.PI * 2); c.fill(); c.restore(); }
@@ -1178,10 +1238,11 @@
       c.save(); c.translate(24, 38); c.rotate(-0.08); c.fillStyle = '#fffdf2'; c.beginPath(); c.roundRect(-10, -7, 20, 13, 1.5); c.fill(); c.fillStyle = '#e6c25a'; for (let i = 0; i < 3; i++) c.fillRect(-7, -4 + i * 3, 13 - (i === 2 ? 5 : 0), 1); c.restore();
       c.save(); c.translate(36, 33); c.rotate(0.7); c.fillStyle = '#ff6b6b'; c.fillRect(-1.6, -9, 3.2, 3); c.fillStyle = '#ffcc33'; c.fillRect(-1.6, -6, 3.2, 10); c.fillStyle = '#f2d7b0'; c.beginPath(); c.moveTo(-1.6, 4); c.lineTo(1.6, 4); c.lineTo(0, 7.5); c.closePath(); c.fill(); c.restore();
     }
-    if (icon === 'gear') { // a gear turning on his head
-      c.save(); c.translate(hx, hy - 16); c.rotate(now / 1400); c.fillStyle = '#ffffff'; c.beginPath();
-      for (let i = 0; i < 16; i++) { const ang = i / 16 * Math.PI * 2, r = i % 2 ? 5 : 7; c.lineTo(Math.cos(ang) * r, Math.sin(ang) * r); } c.closePath(); c.fill();
-      c.fillStyle = '#8b6cf0'; c.beginPath(); c.arc(0, 0, 2.2, 0, Math.PI * 2); c.fill(); c.restore();
+    if (icon === 'gear') { // a turning gear corner badge so Robo's customized look/outfit stays intact
+      c.save(); c.translate(35.5, 36); c.rotate(now / 1400);
+      c.shadowColor = 'rgba(0,0,0,.35)'; c.shadowBlur = 4; c.fillStyle = '#ffffff'; c.beginPath();
+      for (let i = 0; i < 16; i++) { const ang = i / 16 * Math.PI * 2, r = i % 2 ? 5.2 : 7.4; c.lineTo(Math.cos(ang) * r, Math.sin(ang) * r); } c.closePath(); c.fill();
+      c.shadowBlur = 0; c.fillStyle = '#8b6cf0'; c.beginPath(); c.arc(0, 0, 2.4, 0, Math.PI * 2); c.fill(); c.restore();
     }
     if (icon === 'clock') { // alarm clock with the real time
       const cx2 = 35.5, cy2 = 36, d = new Date(); c.fillStyle = '#ff6b6b'; c.beginPath(); c.arc(cx2 - 5, cy2 - 7, 2.5, 0, Math.PI * 2); c.arc(cx2 + 5, cy2 - 7, 2.5, 0, Math.PI * 2); c.fill();

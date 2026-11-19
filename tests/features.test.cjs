@@ -150,3 +150,71 @@ test('inline scripts in mascot.html and settings-app.html parse with zero syntax
     });
   }
 });
+
+test('spotify helpers normalize Turkish/remastered metadata, parse extended LRC tags, and classify 401 vs 403', () => {
+  const {
+    DEFAULT_SPOTIFY_CLIENT_ID,
+    isValidSpotifyClientId,
+    hasSpotifyPlaylistScope,
+    normalizeTrackMeta,
+    buildLyricsQueries,
+    parseLrcLines,
+    classifySpotifyPlaylistsError,
+    renderSpotifyCallbackHtml
+  } = require(path.join(ROOT, 'src', 'main', 'spotify-helpers.cjs'));
+
+  assert.equal(isValidSpotifyClientId(DEFAULT_SPOTIFY_CLIENT_ID), true);
+  assert.equal(isValidSpotifyClientId('bad-id'), false);
+
+  assert.equal(hasSpotifyPlaylistScope({ scope: 'user-read-playback-state playlist-read-private' }), true);
+  assert.equal(hasSpotifyPlaylistScope({ scope: 'user-read-playback-state' }), false);
+
+  const meta = normalizeTrackMeta('Şebnem Ferah - Yağmurlar (Official Video) - YouTube Music', 'Chrome');
+  assert.equal(meta.artist, 'Şebnem Ferah');
+  assert.equal(meta.title, 'Yağmurlar');
+
+  const queries = buildLyricsQueries('Dönence - Remastered 2021 (Live)', 'Barış Manço');
+  assert.ok(queries.some(q => q.title === 'Dönence' && q.artist === 'Barış Manço'));
+
+  const lrc = parseLrcLines([
+    '[0:05.5]İlk satır',
+    '[00:12.34][01:02]Nakarat ğüşiöç',
+    '[00:25.125]Üçüncü satır'
+  ].join('\r\n'));
+  assert.equal(lrc.length, 4);
+  assert.deepEqual(lrc.map(l => l.timeMs), [5500, 12340, 25125, 62000]);
+  assert.equal(lrc[1].text, 'Nakarat ğüşiöç');
+  assert.equal(lrc[3].text, 'Nakarat ğüşiöç');
+
+  const err401 = classifySpotifyPlaylistsError({ status: 401, message: 'Unauthorized' });
+  assert.equal(err401.needsReauth, true);
+
+  const errScope = classifySpotifyPlaylistsError({ status: 403, message: 'Insufficient client scope' });
+  assert.equal(errScope.needsReauth, true);
+
+  const errDev403 = classifySpotifyPlaylistsError({ status: 403, message: 'User not registered in the Developer Dashboard' });
+  assert.equal(errDev403.needsReauth, false);
+  assert.equal(errDev403.devModeError, true);
+
+  const html = renderSpotifyCallbackHtml(true);
+  assert.match(html, /<meta charset="utf-8">/i);
+  assert.match(html, /Spotify bağlandı/);
+});
+
+test('Windows media watcher preserves Turkish UTF-8 characters without mojibake', () => {
+  if (process.platform !== 'win32') return;
+  const { StringDecoder } = require('node:string_decoder');
+  const scriptPath = path.join(ROOT, 'src', 'native', 'media-watch.ps1');
+  const src = fs.readFileSync(scriptPath, 'utf8');
+  assert.match(src, /OutputEncoding\s*=\s*New-Object\s+System\.Text\.UTF8Encoding\(\$false\)/);
+  // Test PowerShell UTF-8 pipe output with Turkish characters across multi-byte chunk splits
+  const psCmd = `[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false); Write-Output (@{title='Öğle Güneşi';artist='Şebnem Ferah'} | ConvertTo-Json -Compress)`;
+  const buf = execFileSync(POWERSHELL, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', psCmd]);
+  const dec = new StringDecoder('utf8');
+  let out = '';
+  for (let i = 0; i < buf.length; i += 3) out += dec.write(buf.subarray(i, i + 3));
+  out += dec.end();
+  const parsed = JSON.parse(out.trim());
+  assert.equal(parsed.title, 'Öğle Güneşi');
+  assert.equal(parsed.artist, 'Şebnem Ferah');
+});

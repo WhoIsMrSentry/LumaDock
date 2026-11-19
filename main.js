@@ -17,6 +17,17 @@ const http = require('http');
 const crypto = require('crypto');
 const os = require('os');
 const { spawn, exec } = require('child_process');
+const { StringDecoder } = require('string_decoder');
+const {
+  DEFAULT_SPOTIFY_CLIENT_ID,
+  isValidSpotifyClientId,
+  hasSpotifyPlaylistScope,
+  normalizeTrackMeta,
+  buildLyricsQueries,
+  parseLrcLines,
+  classifySpotifyPlaylistsError,
+  renderSpotifyCallbackHtml
+} = require('./src/main/spotify-helpers.cjs');
 
 require('./src/main/project-mode-main');
 require('./src/main/ai-monitor-main.cjs');
@@ -2424,10 +2435,6 @@ function clampNumber(
 // SPOTIFY
 // ============================================================
 
-const SPOTIFY_CLIENT_ID =
-  '4cd26d1c69a14dffa0649606f75a4418';
-
-
 const SPOTIFY_REDIRECT_URI =
   'http://127.0.0.1:8888/callback';
 
@@ -2447,6 +2454,41 @@ const SPOTIFY_TOKEN_FILE = () =>
     app.getPath('userData'),
     'spotify-tokens.json'
   );
+
+const SPOTIFY_CONFIG_FILE = () =>
+  path.join(
+    app.getPath('userData'),
+    'spotify-config.json'
+  );
+
+function getSpotifyClientId() {
+  const envId = String(process.env.LUMADOCK_SPOTIFY_CLIENT_ID || '').trim();
+  if (isValidSpotifyClientId(envId)) return envId;
+  const saved = readJson(SPOTIFY_CONFIG_FILE());
+  const custom = String(saved?.clientId || '').trim();
+  return isValidSpotifyClientId(custom) ? custom : DEFAULT_SPOTIFY_CLIENT_ID;
+}
+
+function isCustomSpotifyClientId() {
+  return getSpotifyClientId() !== DEFAULT_SPOTIFY_CLIENT_ID;
+}
+
+function setSpotifyClientId(clientId) {
+  const trimmed = String(clientId || '').trim();
+  if (!trimmed) {
+    try { fs.unlinkSync(SPOTIFY_CONFIG_FILE()); } catch {}
+    clearSpotifyTokens();
+    playlistsCache = null;
+    return { ok: true, clientId: getSpotifyClientId(), isCustom: false };
+  }
+  if (!isValidSpotifyClientId(trimmed)) {
+    return { ok: false, error: 'Geçersiz Client ID formatı (32 karakterlik hexadecimal kod olmalı).' };
+  }
+  writeJson(SPOTIFY_CONFIG_FILE(), { clientId: trimmed });
+  clearSpotifyTokens();
+  playlistsCache = null;
+  return { ok: true, clientId: trimmed, isCustom: trimmed !== DEFAULT_SPOTIFY_CLIENT_ID };
+}
 
 
 let spotifyAuthPromise = null;
@@ -2470,24 +2512,6 @@ function sendMediaCommand(cmd) {
       mediaWatchChild.stdin.write(cmd + '\n');
     } catch {}
   }
-}
-
-function normalizeTrackMeta(rawTitle, rawArtist) {
-  let title = String(rawTitle || '')
-    .replace(/\s*[-|•]\s*(YouTube Music|YouTube|Spotify|SoundCloud|Apple Music)\s*$/i, '')
-    .trim();
-  let artist = String(rawArtist || '').trim();
-  if ((!artist || /^(youtube|chrome|msedge|brave|firefox|opera|music)$/i.test(artist)) && title.includes(' - ')) {
-    const idx = title.indexOf(' - ');
-    artist = title.slice(0, idx).trim();
-    title = title.slice(idx + 3).trim();
-  }
-  const cleanTitle = title
-    .replace(/\s*[\(\[]\s*(?:official|lyric|lyrics|audio|video|hd|4k|visualizer|remaster(?:ed)?|live|feat\.?|ft\.?)[^\)\]]*[\)\]]/gi, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim() || title;
-  const cleanArtist = artist.replace(/\s*[-–]\s*Topic$/i, '').trim();
-  return { title: cleanTitle, artist: cleanArtist };
 }
 
 async function fetchTrackArtwork(title, artist) {
@@ -2574,19 +2598,24 @@ function startWindowsMediaWatcher() {
     );
 
     let buffer = '';
+    const stdoutDecoder = new StringDecoder('utf8');
     mediaWatchChild.stdout.on('data', chunk => {
-      buffer += chunk.toString();
+      buffer += stdoutDecoder.write(chunk);
       let end;
       while ((end = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, end).trim();
         buffer = buffer.slice(end + 1);
         if (line && line.startsWith('{')) {
           try {
-            latestWindowsMedia = JSON.parse(line);
-            if (latestWindowsMedia.title) {
-              const cover = getArtworkOrFetchBackground(latestWindowsMedia.title, latestWindowsMedia.artist);
-              latestWindowsMedia.image_url = cover || '';
+            const parsed = JSON.parse(line);
+            if (parsed.title) {
+              const clean = normalizeTrackMeta(parsed.title, parsed.artist);
+              parsed.cleanTitle = clean.title || parsed.title;
+              parsed.cleanArtist = clean.artist || parsed.artist || '';
+              const cover = getArtworkOrFetchBackground(parsed.title, parsed.artist);
+              parsed.image_url = cover || '';
             }
+            latestWindowsMedia = parsed;
             if (mascotWindow && !mascotWindow.isDestroyed()) {
               mascotWindow.webContents.send('media:state-changed', latestWindowsMedia);
             }
@@ -3203,7 +3232,7 @@ async function exchangeSpotifyCode(
         body:
           new URLSearchParams({
             client_id:
-              SPOTIFY_CLIENT_ID,
+              getSpotifyClientId(),
 
             grant_type:
               'authorization_code',
@@ -3244,6 +3273,9 @@ async function exchangeSpotifyCode(
     refresh_token:
       data.refresh_token,
 
+    scope:
+      String(data.scope || SPOTIFY_SCOPES),
+
     expires_at:
       Date.now() +
       Number(
@@ -3257,7 +3289,13 @@ async function exchangeSpotifyCode(
   saveSpotifyTokens(
     tokens
   );
+  playlistsCache = null;
 
+  if (mascotWindow && !mascotWindow.isDestroyed()) {
+    try {
+      mascotWindow.webContents.send('spotify:auth-updated', { connected: true, scope: tokens.scope });
+    } catch {}
+  }
 
   return tokens;
 }
@@ -3293,7 +3331,7 @@ async function refreshSpotifyToken(
         body:
           new URLSearchParams({
             client_id:
-              SPOTIFY_CLIENT_ID,
+              getSpotifyClientId(),
 
             grant_type:
               'refresh_token',
@@ -3339,6 +3377,11 @@ async function refreshSpotifyToken(
     refresh_token:
       data.refresh_token ||
       current.refresh_token,
+
+    scope:
+      data.scope ||
+      current.scope ||
+      SPOTIFY_SCOPES,
 
     expires_at:
       Date.now() +
@@ -3415,15 +3458,16 @@ async function spotifyToken(
 // ============================================================
 
 async function spotifyConnect(options = {}) {
-  const force = Boolean(options?.force);
+  const existing = loadSpotifyTokens();
+  const force = Boolean(options?.force) || (Boolean(existing?.refresh_token) && !hasSpotifyPlaylistScope(existing));
   if (
     !force &&
-    loadSpotifyTokens()
-      ?.refresh_token
+    existing?.refresh_token
   ) {
     return {
       ok: true,
-      connected: true
+      connected: true,
+      scope: existing.scope || ''
     };
   }
 
@@ -3519,9 +3563,15 @@ async function spotifyConnect(options = {}) {
                   );
 
 
+                if (url.pathname === '/favicon.ico') {
+                  res.writeHead(204);
+                  res.end();
+                  return;
+                }
+
                 if (
-                  url.pathname !==
-                  '/callback'
+                  url.pathname !== '/callback' &&
+                  url.pathname !== '/callback/'
                 ) {
                   res.writeHead(
                     404
@@ -3588,21 +3638,7 @@ async function spotifyConnect(options = {}) {
                 );
 
 
-                res.end(`
-                  <!doctype html>
-                  <html lang="tr">
-                  <body style="
-                    font-family:system-ui;
-                    background:#0b0e0b;
-                    color:white;
-                    padding:50px;
-                    text-align:center;
-                  ">
-                    <h2>Spotify bağlandı ✓</h2>
-                    <p>Bu sekmeyi kapatabilirsiniz.</p>
-                  </body>
-                  </html>
-                `);
+                res.end(renderSpotifyCallbackHtml(true));
 
 
                 finish(
@@ -3619,14 +3655,12 @@ async function spotifyConnect(options = {}) {
                     400,
                     {
                       'Content-Type':
-                        'text/plain; charset=utf-8'
+                        'text/html; charset=utf-8'
                     }
                   );
 
 
-                  res.end(
-                    'Spotify bağlantısı başarısız.'
-                  );
+                  res.end(renderSpotifyCallbackHtml(false, error?.message));
 
                 } catch {}
 
@@ -3682,7 +3716,7 @@ async function spotifyConnect(options = {}) {
             url.search =
               new URLSearchParams({
                 client_id:
-                  SPOTIFY_CLIENT_ID,
+                  getSpotifyClientId(),
 
                 response_type:
                   'code',
@@ -4125,6 +4159,9 @@ async function spotifyPlaylists(force = false) {
   if (!tokens?.access_token && !tokens?.refresh_token) {
     return { ok: false, needsAuth: true, playlists: [] };
   }
+  if (!hasSpotifyPlaylistScope(tokens)) {
+    return { ok: false, needsReauth: true, playlists: [], error: 'Çalma listesi okuma izni eksik; yeniden yetkilendirin.' };
+  }
   if (!force && playlistsCache && Date.now() - playlistsCache.at < 60000) {
     return { ok: true, playlists: playlistsCache.items };
   }
@@ -4143,11 +4180,7 @@ async function spotifyPlaylists(force = false) {
     playlistsCache = { at: Date.now(), items };
     return { ok: true, playlists: items };
   } catch (error) {
-    const status = error?.status || (/403/.test(error?.message) ? 403 : /401/.test(error?.message) ? 401 : 0);
-    if (status === 401 || status === 403 || /scope|insufficient/i.test(error?.message || '')) {
-      return { ok: false, needsReauth: true, playlists: [], error: error.message };
-    }
-    return { ok: false, playlists: playlistsCache?.items || [], error: error?.message || 'Playlistler alınamadı.' };
+    return classifySpotifyPlaylistsError(error, playlistsCache?.items || []);
   }
 }
 
@@ -4185,6 +4218,8 @@ async function spotifyPlayPlaylist(payload) {
 
 const LYRICS_CACHE_FILE = () => path.join(app.getPath('userData'), 'lyrics-cache.json');
 const lyricsCache = new Map();
+const lyricsMissCache = new Map();
+const lyricsInFlight = new Map();
 let lyricsDiskLoaded = false;
 
 function loadLyricsDiskCache() {
@@ -4205,85 +4240,85 @@ function saveLyricsDiskCache() {
   } catch {}
 }
 
-async function fetchLyrics(title, artist, durationMs) {
-  if (!title) return { ok: false, error: 'No track title' };
-  loadLyricsDiskCache();
-  const norm = normalizeTrackMeta(title, artist);
-  const cleanTitle = norm.title.replace(/\s*[\(\[].*$/, '').trim() || norm.title;
-  const cacheKey = `${cleanTitle}:::${norm.artist || ''}`.toLowerCase();
-  if (lyricsCache.has(cacheKey)) {
-    return lyricsCache.get(cacheKey);
-  }
-
-  let lrcData = null;
-  // 1. Direct get from LRCLIB
-  try {
-    const params = new URLSearchParams({
-      track_name: cleanTitle,
-      artist_name: norm.artist || ''
-    });
-    if (durationMs) params.append('duration', String(Math.round(durationMs / 1000)));
-    const res = await fetch(`https://lrclib.net/api/get?${params}`, {
-      headers: { 'User-Agent': 'LumaDock/1.2.0 (https://github.com/WhoIsMrSentry/LumaDock)' },
-      signal: AbortSignal.timeout(3500)
-    });
-    if (res.ok) lrcData = await res.json();
-  } catch {}
-
-  // 2. Search fallback
-  if (!lrcData || (!lrcData.syncedLyrics && !lrcData.plainLyrics)) {
+async function queryLrcLib(queries, durationMs) {
+  let fallbackPlain = null;
+  const durSec = durationMs ? Math.round(durationMs / 1000) : 0;
+  for (let i = 0; i < queries.length; i++) {
+    const q = queries[i];
     try {
-      const q = encodeURIComponent(`${cleanTitle} ${norm.artist || ''}`.trim());
-      const res = await fetch(`https://lrclib.net/api/search?q=${q}`, {
-        headers: { 'User-Agent': 'LumaDock/1.2.0' },
-        signal: AbortSignal.timeout(3500)
+      const params = new URLSearchParams({ track_name: q.title, artist_name: q.artist || '' });
+      if (durSec && i === 0) params.append('duration', String(durSec));
+      const res = await fetch(`https://lrclib.net/api/get?${params}`, {
+        headers: { 'User-Agent': 'LumaDock/1.2.0 (https://github.com/WhoIsMrSentry/LumaDock)' },
+        signal: AbortSignal.timeout(5500)
+      });
+      if (res.ok) {
+        const direct = await res.json();
+        if (direct?.syncedLyrics) return direct;
+        if (direct?.plainLyrics && !fallbackPlain) fallbackPlain = direct;
+      }
+    } catch {}
+
+    try {
+      const qStr = encodeURIComponent(`${q.title} ${q.artist || ''}`.trim());
+      const res = await fetch(`https://lrclib.net/api/search?q=${qStr}`, {
+        headers: { 'User-Agent': 'LumaDock/1.2.0 (https://github.com/WhoIsMrSentry/LumaDock)' },
+        signal: AbortSignal.timeout(5500)
       });
       if (res.ok) {
         const list = await res.json();
         if (Array.isArray(list) && list.length) {
-          lrcData = list.find(x => x.syncedLyrics) || list[0];
+          const synced = list.find(x => x?.syncedLyrics);
+          if (synced) return synced;
+          if (!fallbackPlain) fallbackPlain = list.find(x => x?.plainLyrics) || null;
         }
       }
     } catch {}
   }
+  return fallbackPlain;
+}
 
-  if (!lrcData || (!lrcData.syncedLyrics && !lrcData.plainLyrics)) {
-    const empty = { ok: false, error: 'Lyrics not found' };
-    lyricsCache.set(cacheKey, empty);
-    return empty;
+async function fetchLyrics(title, artist, durationMs) {
+  if (!title) return { ok: false, error: 'No track title' };
+  loadLyricsDiskCache();
+  const queries = buildLyricsQueries(title, artist);
+  if (!queries.length) return { ok: false, error: 'No track title' };
+  const cacheKey = `${queries[0].title}:::${queries[0].artist}`.toLowerCase();
+
+  const hit = lyricsCache.get(cacheKey);
+  if (hit?.ok) return hit;
+
+  const missAt = lyricsMissCache.get(cacheKey);
+  if (missAt && Date.now() - missAt < 15000) {
+    return { ok: false, error: 'Lyrics not found' };
+  }
+  if (lyricsInFlight.has(cacheKey)) {
+    return lyricsInFlight.get(cacheKey);
   }
 
-  const lines = [];
-  if (lrcData.syncedLyrics) {
-    for (const rawLine of lrcData.syncedLyrics.split('\n')) {
-      const match = rawLine.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)$/);
-      if (match) {
-        const min = parseInt(match[1], 10);
-        const sec = parseInt(match[2], 10);
-        const ms = parseInt(match[3].padEnd(3, '0').slice(0, 3), 10);
-        const timeMs = min * 60000 + sec * 1000 + ms;
-        const text = match[4].trim();
-        if (text) {
-          lines.push({
-            timeMs,
-            displayTime: `${min}:${String(sec).padStart(2, '0')}`,
-            text
-          });
-        }
-      }
+  const task = (async () => {
+    const lrcData = await queryLrcLib(queries, durationMs);
+    if (!lrcData || (!lrcData.syncedLyrics && !lrcData.plainLyrics)) {
+      lyricsMissCache.set(cacheKey, Date.now());
+      return { ok: false, error: 'Lyrics not found' };
     }
-  }
+    const lines = parseLrcLines(lrcData.syncedLyrics);
+    const result = {
+      ok: true,
+      synced: lines.length > 0,
+      lines,
+      plain: lrcData.plainLyrics || ''
+    };
+    lyricsMissCache.delete(cacheKey);
+    lyricsCache.set(cacheKey, result);
+    saveLyricsDiskCache();
+    return result;
+  })().finally(() => {
+    lyricsInFlight.delete(cacheKey);
+  });
 
-  const result = {
-    ok: true,
-    synced: lines.length > 0,
-    lines,
-    plain: lrcData.plainLyrics || ''
-  };
-
-  lyricsCache.set(cacheKey, result);
-  saveLyricsDiskCache();
-  return result;
+  lyricsInFlight.set(cacheKey, task);
+  return task;
 }
 
 
@@ -4754,6 +4789,17 @@ ipcMain.handle('spotify:transfer', (_event, id) => spotifyTransfer(id));
 ipcMain.handle('spotify:lyrics', (_event, q) => fetchLyrics(q?.title, q?.artist, q?.duration));
 ipcMain.handle('spotify:playlists', (_event, force) => spotifyPlaylists(Boolean(force)));
 ipcMain.handle('spotify:play-playlist', (_event, payload) => spotifyPlayPlaylist(payload));
+ipcMain.handle('spotify:get-config', () => {
+  const tokens = loadSpotifyTokens();
+  return {
+    clientId: getSpotifyClientId(),
+    isCustom: isCustomSpotifyClientId(),
+    connected: Boolean(tokens?.refresh_token),
+    scope: tokens?.scope || '',
+    hasPlaylistScope: Boolean(tokens?.refresh_token && hasSpotifyPlaylistScope(tokens))
+  };
+});
+ipcMain.handle('spotify:set-client-id', (_event, clientId) => setSpotifyClientId(clientId));
 ipcMain.handle('island:displays', () => {
   const primary = screen.getPrimaryDisplay().id;
   return screen.getAllDisplays().map((d, i) => ({
@@ -4802,7 +4848,7 @@ ipcMain.handle(
 
   async () => {
     clearSpotifyTokens();
-
+    playlistsCache = null;
 
     return {
       ok: true

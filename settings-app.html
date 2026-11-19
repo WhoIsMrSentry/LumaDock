@@ -842,8 +842,11 @@ function drawHome() {
 list.addEventListener('input', e => { if (e.target.id === 'histSearch') drawHome(); });
 
 // ---------- Verbindingen: one switch per AI, LumaDock does the rest ----------
-let cxNote = {};
-async function loadConnect() { cxs = await S.connections(); drawConnect(); }
+let cxNote = {}, spCfg = null, spBusy = false;
+async function loadConnect() {
+  const [c, sp] = await Promise.all([S.connections(), S.spotify?.getConfig().catch(() => null)]);
+  cxs = c; spCfg = sp; drawConnect();
+}
 function drawConnect() {
   if (tab !== 'connect' || !cxs?.list) return;
   const rows = cxs.list.map(c => {
@@ -858,7 +861,22 @@ function drawConnect() {
   const chats = cxs.list.map((c, i) => ['claude', 'chatgpt'].includes(c.id) ? rows[i] : '').join('');
   const [wmName, wmSub] = t().cx.webMonitor;
   const wmRow = `<div class="row"><span class="bot ${cxs.webMonitor ? '' : 'off'}" style="--c:${AI_COLOUR.webMonitor}"></span><div class="text"><b>${esc(wmName)}</b><small>${esc(wmSub)}</small></div><button class="switch ${cxs.webMonitor ? 'on' : ''}" data-cx="webMonitor" aria-label="${esc(wmName)}"></button></div>`;
-  paint(`<p class="lead">${t().cxHow}</p><p class="section">${t().cxAgents}</p><div class="group">${agents}</div><p class="section">${t().cxChats}</p><div class="group">${wmRow}${chats}</div>`, false);
+  const spSub = lang === 'tr'
+    ? 'Çalma listeleri ve cihaz kontrolü için Spotify OAuth bağlantısı. Redirect URI: http://127.0.0.1:8888/callback'
+    : 'Spotify OAuth for playlist covers and remote devices. Redirect URI: http://127.0.0.1:8888/callback';
+  const spCard = spCfg ? `<p class="section">Spotify</p><div class="group">
+    <div class="row"><span class="tile" style="--c:#1ed760">${icon('music')}</span><div class="text"><b>Spotify</b><small>${esc(spSub)}</small></div>
+      ${spCfg.connected ? `<span class="tag good"><i></i>${t().cxOn}</span>` : ''}
+      <button class="btn ${spCfg.connected ? 'ghost' : 'main'}" data-sp="connect" ${spBusy ? 'disabled' : ''}>${spCfg.connected ? (lang === 'tr' ? 'Yeniden Yetkilendir' : 'Reauthorize') : (lang === 'tr' ? 'Bağlan' : 'Connect')}</button>
+      ${spCfg.connected ? `<button class="btn ghost" data-sp="disconnect" ${spBusy ? 'disabled' : ''}>${t().logout}</button>` : ''}
+    </div>
+    <div class="row"><div class="text"><b>${lang === 'tr' ? 'Özel Spotify Client ID (İsteğe Bağlı)' : 'Custom Spotify Client ID (Optional)'}</b>
+      <small>${lang === 'tr' ? 'Yetki ekranı adını veya Geliştirici Modunu özelleştirmek için kendi Client ID\'nizi kullanın.' : 'Set your own Client ID to customize the Spotify consent screen app name.'}</small></div>
+      <div class="tc-step"><input class="field" id="spClientIdIn" value="${spCfg.isCustom ? esc(spCfg.clientId) : ''}" placeholder="4cd26d1c69a14dffa0649606f75a4418" spellcheck="false" autocomplete="off">
+      <button class="btn main" data-sp="save-id" ${spBusy ? 'disabled' : ''}>${t().saveAll}</button>
+      ${spCfg.isCustom ? `<button class="btn ghost" data-sp="reset-id" ${spBusy ? 'disabled' : ''}>${lang === 'tr' ? 'Sıfırla' : 'Reset'}</button>` : ''}</div>
+    </div></div>` : '';
+  paint(`<p class="lead">${t().cxHow}</p><p class="section">${t().cxAgents}</p><div class="group">${agents}</div><p class="section">${t().cxChats}</p><div class="group">${wmRow}${chats}</div>${spCard}`, false);
   $('#connectDot').classList.toggle('on', !cxs.list.some(c => c.on && !c.soon));
 }
 async function toggleConnect(id, on) {
@@ -882,6 +900,24 @@ list.addEventListener('click', e => {
   if (!b || b.disabled) return;
   if (b.dataset.goto) return go(b.dataset.goto);
   if (tab === 'connect' && b.dataset.cx) { b.classList.toggle('on'); toggleConnect(b.dataset.cx, b.classList.contains('on')); return; }
+  if (tab === 'connect' && b.dataset.sp && S.spotify) {
+    const act = b.dataset.sp;
+    spBusy = true; drawConnect();
+    (async () => {
+      if (act === 'connect') await S.spotify.connect({ force: true });
+      if (act === 'disconnect') await S.spotify.disconnect();
+      if (act === 'save-id') {
+        const r = await S.spotify.setClientId($('#spClientIdIn')?.value.trim() || '');
+        if (!r?.ok) throw new Error(r?.error || 'Error');
+      }
+      if (act === 'reset-id') {
+        const r = await S.spotify.setClientId('');
+        if (!r?.ok) throw new Error(r?.error || 'Error');
+      }
+      toast(t().saved);
+    })().catch(err => toast(String(err?.message || err), true)).finally(() => { spBusy = false; loadConnect(); });
+    return;
+  }
   if (tab === 'wardrobe' && b.dataset.i != null) {
     if (b.classList.contains('tc-toggle')) b.classList.toggle('on');
     press({ index: Number(b.dataset.i) }, b);

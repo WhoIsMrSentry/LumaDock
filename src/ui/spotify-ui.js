@@ -16,8 +16,8 @@
   const time = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const position = () => {
     if (seeking) return seekPreviewMs;
-    return Math.min(spotifyState.duration_ms || 0,
-      (spotifyState.progress_ms || 0) + (spotifyState.is_playing ? performance.now() - spotifySyncAt : 0));
+    const raw = (spotifyState.progress_ms || 0) + (spotifyState.is_playing ? performance.now() - spotifySyncAt : 0);
+    return spotifyState.duration_ms > 0 ? Math.min(spotifyState.duration_ms, raw) : raw;
   };
 
   let lrcOffsetMs = 0;
@@ -51,16 +51,23 @@
   }
 
   // ---- Spotify Lyrics (Time-synced lyrics with timestamps) ----
-  let lyrics = null, lyricsLoading = false, lastLyricsKey = '', lyricsOpen = false;
+  let lyrics = null, lyricsLoading = false, lastLyricsKey = '', lastLyricsAt = 0, lyricsOpen = false;
 
   async function loadLyrics(trackName, artistName, dur) {
-    if (!trackName) { lyrics = null; return; }
+    if (!trackName) { lyrics = null; lastLyricsKey = ''; return; }
     const key = `${trackName}:::${artistName || ''}`.toLowerCase();
-    if (key === lastLyricsKey && lyrics) return;
-    lastLyricsKey = key;
+    const now = Date.now();
+    if (key === lastLyricsKey) {
+      if (lyrics || lyricsLoading || (now - lastLyricsAt) < 4500) return;
+    } else {
+      lyrics = null;
+      lastLyricsKey = key;
+    }
+    lastLyricsAt = now;
     lyricsLoading = true;
     try {
       const res = await api.spotifyLyrics?.({ title: trackName, artist: artistName, duration: dur });
+      if (key !== lastLyricsKey) return;
       if (res?.ok && res.lines?.length) {
         lyrics = res;
       } else if (res?.plain) {
@@ -72,7 +79,7 @@
         lyrics = null;
       }
     } catch {
-      lyrics = null;
+      if (key === lastLyricsKey) lyrics = null;
     } finally {
       lyricsLoading = false;
     }
@@ -80,7 +87,7 @@
 
   window.__lumadockLoadLyrics = loadLyrics;
   window.__lumadockGetActiveLyric = () => {
-    if (!spotifyState.is_playing || !lyrics?.lines?.length) return null;
+    if (!spotifyState.is_playing || !lyrics?.synced || !lyrics?.lines?.length) return null;
     const curPos = lrcPosition();
     for (let i = lyrics.lines.length - 1; i >= 0; i--) {
       const line = lyrics.lines[i];
@@ -93,17 +100,16 @@
   window.__lumadockGetLyrics = () => lyrics;
 
   window.lumadock?.onMediaStateChanged?.(data => {
-    if (data?.title && data.active) {
-      loadLyrics(data.title, data.artist, data.duration);
+    const tName = data?.cleanTitle || data?.title;
+    const tArtist = data?.cleanArtist || data?.artist;
+    if (tName && data.active) {
+      loadLyrics(tName, tArtist, data.duration);
     }
   });
 
   setInterval(() => {
     if (spotifyState.track?.name && !lyricsLoading) {
-      const key = `${spotifyState.track.name}:::${spotifyState.track.artist || ''}`.toLowerCase();
-      if (key !== lastLyricsKey) {
-        loadLyrics(spotifyState.track.name, spotifyState.track.artist, spotifyState.duration_ms);
-      }
+      loadLyrics(spotifyState.track.name, spotifyState.track.artist, spotifyState.duration_ms);
     }
   }, 1200);
 
@@ -124,22 +130,32 @@
   }
 
   async function loadPlaylists(force = false) {
-    if (playlistsLoading) return;
+    if (playlistsLoading && !force) return;
     playlistsLoading = true;
-    playlistsNote = '';
+    if (force) playlistsNote = '';
     try {
       const r = await api.spotifyPlaylists?.(force);
       playlists = Array.isArray(r?.playlists) ? r.playlists : [];
       playlistsAuthNeed = Boolean(r?.needsAuth || r?.needsReauth);
-      if (!playlists.length && !playlistsAuthNeed) {
-        playlistsNote = r?.error || L('No playlist covers found.', 'Kapaklı çalma listesi bulunamadı.');
+      if (r?.ok) {
+        playlistsNote = playlists.length ? '' : L('No playlist covers found.', 'Kapaklı çalma listesi bulunamadı.');
+      } else if (r?.error) {
+        playlistsNote = r.error;
+      } else if (!playlists.length && !playlistsAuthNeed) {
+        playlistsNote = L('No playlist covers found.', 'Kapaklı çalma listesi bulunamadı.');
       }
-    } catch {
-      playlistsNote = L('Could not load playlists.', 'Çalma listeleri yüklenemedi.');
+    } catch (err) {
+      playlistsNote = String(err?.message || '') || L('Could not load playlists.', 'Çalma listeleri yüklenemedi.');
     } finally {
       playlistsLoading = false;
     }
   }
+
+  api.onSpotifyAuthUpdated?.(() => {
+    playlistsAuthNeed = false;
+    refreshSpotify();
+    if (playlistsOpen) loadPlaylists(true);
+  });
 
   async function openPlaylist(pl) {
     if (!pl?.uri) return;
@@ -353,12 +369,15 @@
       }
 
       if (playlistsAuthNeed) {
-        text(L('Spotify permission needed for playlists.', 'Çalma listeleri için Spotify izni gerekli.'), px + 16, py + 58, 11.5, 'rgba(255,255,255,.68)', 500, 'left', pw - 32);
-        pill(px + 16, py + 72, 220, '♫', L('Authorize Playlists', 'Spotify Bağla / Yetkilendir'), 'spPlAuth');
+        text(L('Spotify permission needed for playlists.', 'Çalma listeleri için Spotify izni gerekli.'), px + 16, py + 52, 11.5, 'rgba(255,255,255,.78)', 600, 'left', pw - 32);
+        if (playlistsNote) text(playlistsNote, px + 16, py + 68, 10.5, '#ffb35c', 500, 'left', pw - 32);
+        pill(px + 16, py + 82, 230, '♫', L('Authorize Playlists', 'Spotify Bağla / Yetkilendir'), 'spPlAuth');
       } else if (playlistsLoading && !playlists.length) {
         text(L('Loading covers…', 'Kapaklar yükleniyor…'), px + 16, py + 64, 12, 'rgba(255,255,255,.5)', 500);
       } else if (!playlists.length) {
-        text(playlistsNote || L('No playlist covers found.', 'Kapaklı çalma listesi bulunamadı.'), px + 16, py + 64, 11.5, 'rgba(255,255,255,.5)', 500, 'left', pw - 32);
+        const msg = String(playlistsNote || L('No playlist covers found.', 'Kapaklı çalma listesi bulunamadı.'));
+        text(msg.slice(0, 62), px + 16, py + 56, 11, '#ffb35c', 600, 'left', pw - 32);
+        if (msg.length > 62) text(msg.slice(62), px + 16, py + 72, 10.5, 'rgba(255,255,255,.65)', 500, 'left', pw - 32);
       } else {
         // Cover-only 4x2 grid (NO playlist names shown!)
         const cols = 4, padX = 16, gapX = 12, gapY = 8;
@@ -553,7 +572,16 @@
       spPlPrev: () => { if (plPage > 0) plPage--; },
       spPlNext: () => { plPage++; },
       spPlAuth: async () => {
-        try { await api.spotifyReconnect?.(); } catch {}
+        playlistsNote = L('Waiting for Spotify browser approval…', 'Tarayıcıda Spotify onayı bekleniyor…');
+        try {
+          await api.spotifyReconnect?.();
+          playlistsAuthNeed = false;
+          playlistsNote = '';
+          refreshSpotify();
+        } catch (err) {
+          playlistsNote = String(err?.message || err || L('Authorization failed.', 'Yetkilendirme başarısız.'));
+          return;
+        }
         await loadPlaylists(true);
       },
       ...Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7].map(i => ['spPlTile' + i, () => hit['spPlTile' + i]?.playlist && openPlaylist(hit['spPlTile' + i].playlist)])),

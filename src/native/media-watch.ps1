@@ -4,6 +4,9 @@
 param([int]$Parent = 0)
 
 $ErrorActionPreference = 'SilentlyContinue'
+[Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+$OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
@@ -169,7 +172,7 @@ while ($true) {
     $hadCmd = $false
     if (Test-Path $cmdFile) {
         try {
-            $raw = Get-Content $cmdFile -Raw
+            $raw = Get-Content $cmdFile -Raw -Encoding UTF8
             Remove-Item $cmdFile -Force -ErrorAction SilentlyContinue
             if ($raw) {
                 foreach ($cmd in ($raw -split "[\r\n]+")) {
