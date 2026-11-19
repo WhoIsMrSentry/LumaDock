@@ -13,7 +13,7 @@ const { execFile, spawn } = require('node:child_process');
 const chatgpt = require('./chatgpt-provider');
 let ai = null; // { resolveAIConfig, openAIRequest, extractResponseText } from project-mode-main.js
 
-let layer = null, layerDisplay = null, follow = null, lang = 'nl';
+let layer = null, layerDisplay = null, follow = null, lang = 'en';
 let state = 'home';                 // home | carry | looking | parked | flying
 let lookId = 0;                     // a newer drop wins over an older look that is still busy
 let target = null;                  // { process, title, app, word, shot, point }
@@ -122,7 +122,7 @@ function create() {
   startEyes(); // ready before the first drag (it takes a second to start)
   layer.on('closed', () => { layer = null; layerDisplay = null; stopFollow(); if (state !== 'home') { state = 'home'; toIsland('buddy:home'); } });
 }
-app.whenReady().then(() => setTimeout(create, 3000)); // ready before you grab him
+if (process.env.BUDDY_DEBUG) app.whenReady().then(() => setTimeout(create, 1000)); // lazy-created on grab() in normal use to save memory & DWM layers
 
 // The layer covers the screen Robo is on (and follows him to another screen).
 function cover(point) {
@@ -537,6 +537,18 @@ ipcMain.handle('buddy:use-ai', (e, id) => fromIsland(e) ? useAgent(String(id || 
 ipcMain.handle('buddy:login', e => fromIsland(e) ? chatgpt.login().then(() => ({ ok: true }), error => ({ ok: false, error: error.message })) : null);
 ipcMain.on('buddy:forget', e => { if (fromIsland(e)) { chatTarget = null; fixes = null; } }); // the ✕ on the pill in the chat
 ipcMain.on('buddy:copy', (e, text) => { if (fromLayer(e)) clipboard.writeText(String(text || '').slice(0, 100000)); });
+ipcMain.handle('buddy:pick-color', async e => {
+  if (!fromIsland(e)) return { ok: false };
+  try {
+    const physical = screen.dipToScreenPoint(screen.getCursorScreenPoint());
+    const res = await see(`pixel ${physical.x} ${physical.y}`);
+    if (!res?.hex) return { ok: false, error: isTr() ? 'Renk okunamadı.' : 'Could not sample pixel.' };
+    clipboard.writeText(res.hex);
+    return { ok: true, hex: res.hex, r: res.r, g: res.g, b: res.b };
+  } catch (err) {
+    return { ok: false, error: err?.message || 'Error' };
+  }
+});
 
 module.exports = Object.assign(deps => { ai = deps; }, {
   askAI: (...args) => askAI(...args),

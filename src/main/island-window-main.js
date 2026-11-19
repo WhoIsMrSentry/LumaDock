@@ -15,17 +15,17 @@
     .replace(/https?:\/\/\S+/gi, '[URL]')
     .replace(
       /\b(?:sk-[A-Za-z0-9_-]+|eyJ[A-Za-z0-9_.-]+)/g,
-      '[verborgen]'
+      '[hidden]'
     )
-    .replace(/\bBearer\s+\S+/gi, 'Bearer [verborgen]')
+    .replace(/\bBearer\s+\S+/gi, 'Bearer [hidden]')
     .replace(
       /((?:access_token|refresh_token|api_key|authorization|code|state)\s*[=:]\s*)[^\s,;]+/gi,
-      '$1[verborgen]'
+      '$1[hidden]'
     );
 
   const log = (name, details = {}) =>
     console.log(
-      '[LumaDock venster]',
+      '[LumaDock window]',
       name,
       safe(JSON.stringify(details))
     );
@@ -40,7 +40,7 @@
         new Promise((_resolve, reject) => {
           timer = setTimeout(
             () => reject(
-              new Error('De tekenlaag reageert niet.')
+              new Error('The rendering layer is not responding.')
             ),
             1500
           );
@@ -85,7 +85,7 @@
 
       log('ui-status', state);
     } catch (error) {
-      log('ui-status-fout', {
+      log('ui-status-error', {
         message: error.message
       });
     }
@@ -195,14 +195,14 @@
           .find(item => !item.isDestroyed());
 
         if (!win) {
-          log('geen-venster');
+          log('no-window');
           return;
         }
 
         recovering = true;
 
         try {
-          log('voor-herstel', nativeState(win));
+          log('before-restore', nativeState(win));
 
           if (win.isMinimized()) {
             win.restore();
@@ -213,7 +213,7 @@
           win.moveTop();
 
           if (crashed.has(win.webContents.id)) {
-            log('renderer-opnieuw-laden');
+            log('renderer-reload');
 
             setTimeout(() => {
               if (!win.isDestroyed()) {
@@ -230,7 +230,7 @@
             await snapshot(win);
           }
         } catch (error) {
-          log('herstel-fout', {
+          log('restore-error', {
             message: error.message
           });
         } finally {

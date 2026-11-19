@@ -545,30 +545,34 @@
 
     if (provider === 'openai') {
       const model = settings.openai?.model || '';
+      const presetModels = settings.openai?.models || ['gpt-4.1', 'gpt-4o', 'gpt-4o-mini', 'o3-mini'];
+      const customModel = model && !presetModels.includes(model) ? model : '';
+      const baseUrl = settings.openai?.baseUrl || 'https://api.openai.com/v1';
 
       return `
-        <strong>Eigen OpenAI</strong>
+        <strong>OpenAI / ${isTr() ? 'Özel API (Ollama / Gemini)' : 'Custom OpenAI API'}</strong>
 
         <p>
           ${
             settings.openai?.hasKey
-              ? 'Je key is veilig opgeslagen.'
-              : 'Gebruik je eigen key. Verbruik loopt via je API-account.'
+              ? (isTr() ? 'API anahtarınız güvenle kaydedildi.' : 'Your API key is safely encrypted.')
+              : (isTr() ? 'OpenAI, Ollama, OpenRouter veya OpenAI uyumlu URL girin.' : 'Enter your OpenAI key or custom OpenAI-compatible Base URL (Ollama, OpenRouter).')
           }
         </p>
 
         ${keyFields('openai')}
 
         <label class="tc-ai-field">
+          Base URL
+          <input id="tc-ai-baseurl" type="text" value="${baseUrl.replace(/"/g, '&quot;')}" placeholder="https://api.openai.com/v1">
+        </label>
+
+        <label class="tc-ai-field">
           Model
 
           <select id="tc-ai-model">
             ${
-              [
-                'gpt-6-luna',
-                'gpt-6.1-sol',
-                'gpt-6-astra'
-              ].map(value => `
+              (customModel ? [customModel, ...presetModels] : presetModels).map(value => `
                 <option value="${value}"
                         ${value === model ? 'selected' : ''}>
                   ${value}
@@ -576,11 +580,12 @@
               `).join('')
             }
           </select>
+          <input id="tc-ai-custom-model" type="text" value="${customModel.replace(/"/g, '&quot;')}" placeholder="${isTr() ? 'Veya özel model (ör. llama3.2)' : 'Or custom model (e.g. llama3.2)'}">
         </label>
 
         <div class="tc-ai-actions">
-          ${button('Model opslaan', 'model')}
-          ${button('Verbinding testen', 'test')}
+          ${button(isTr() ? 'Ayarları Kaydet' : 'Save Model & URL', 'model')}
+          ${button(isTr() ? 'Bağlantıyı Test Et' : 'Test Connection', 'test')}
         </div>
       `;
     }
@@ -831,11 +836,19 @@
         'Key verwijderd.'
       );
     } else if (name === 'model') {
-      const model = root.querySelector('#tc-ai-model')?.value;
+      const customM = (root.querySelector('#tc-ai-custom-model')?.value || '').trim();
+      const model = customM || root.querySelector('#tc-ai-model')?.value;
+      const baseUrl = root.querySelector('#tc-ai-baseurl')?.value;
 
       action(
-        () => api.aiSettingsSetModel(model),
-        'Model opgeslagen.'
+        async () => {
+          if (baseUrl !== undefined && api.aiSettingsSetBaseUrl) {
+            const b = await api.aiSettingsSetBaseUrl(baseUrl);
+            if (!b?.ok) return b;
+          }
+          return api.aiSettingsSetModel(model);
+        },
+        isTr() ? 'Model ve URL kaydedildi.' : 'Model & URL saved.'
       );
     }
   });

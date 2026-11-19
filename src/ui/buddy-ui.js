@@ -49,7 +49,7 @@
   function sendFace(now) {
     requestAnimationFrame(sendFace);
     const forApp = window.__lumadockFaceForSettings;
-    if (!(out || forApp) || now - lastFrame < (dragging ? 33 : 50)) return;
+    if (!(out || forApp) || now - lastFrame < (dragging ? 33 : 66)) return;
     lastFrame = now;
     if (out) window.lumadock.buddyFrame(drawFace(false));
     if (forApp) window.lumadock.settingsFrame?.(drawFace(true));

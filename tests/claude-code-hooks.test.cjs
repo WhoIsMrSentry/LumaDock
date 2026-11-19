@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+process.env.LUMADOCK_HOOK_PORT ||= '47899';
 const { createHub, EVENTS, PORT } = require('../src/main/claude-code-hooks.cjs');
 
 function temp() {

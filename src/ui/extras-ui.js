@@ -228,8 +228,49 @@
     if (firstVolume) { firstVolume = false; return; } // the first report is just the starting value
     if (prefs().volumeHud === false) return;
     const blocks = Math.round(level / 10);
-    flash(muted ? '🔇 Geluid uit' : `${level > 60 ? '🔊' : level > 20 ? '🔉' : '🔈'} ${'▮'.repeat(blocks)}${'▯'.repeat(10 - blocks)} ${level}%`, 1400);
+    const l = prefs().lang;
+    const muteTxt = l === 'tr' ? '🔇 Ses kapalı' : l === 'en' ? '🔇 Muted' : '🔇 Geluid uit';
+    flash(muted ? muteTxt : `${level > 60 ? '🔊' : level > 20 ? '🔉' : '🔈'} ${'▮'.repeat(blocks)}${'▯'.repeat(10 - blocks)} ${level}%`, 1400);
   });
+
+  // Sync language to extras main process (weather localization etc.)
+  const syncLang = () => api.extrasConfig?.({ lang: prefs().lang || 'en' });
+  syncLang();
+  window.addEventListener('lumadock:prefs', syncLang);
+
+  // Mic / Cam privacy dots
+  let privacy = { mic: false, cam: false };
+  api.onPrivacy?.(p => { if (p) privacy = { mic: Boolean(p.mic), cam: Boolean(p.cam) }; });
+  window.__lumadockPrivacy = () => privacy;
+
+  // Downloads watcher
+  let dlState = { active: [], completed: null }, lastDlAt = 0;
+  api.onDownloads?.(d => {
+    dlState = d || { active: [], completed: null };
+    if (dlState.completed && dlState.completed.at && dlState.completed.at !== lastDlAt) {
+      lastDlAt = dlState.completed.at;
+      const l = prefs().lang;
+      flash(`${l === 'tr' ? '⬇ İndirildi' : l === 'en' ? '⬇ Downloaded' : '⬇ Gedownload'}: ${dlState.completed.name}`, 4500);
+      window.__lumadockChime?.('pop');
+    }
+  });
+  window.__lumadockDownloads = () => dlState;
+
+  // System stats (CPU & RAM), polled gently when expanded or widget is visible
+  let sysStats = { cpuPct: 0, memPct: 0, memUsedGb: 0, memTotalGb: 0, history: [] };
+  async function pollStats() {
+    try {
+      const r = await api.systemStats?.();
+      if (r?.ok) {
+        const hist = [...(sysStats.history || []), r.cpuPct].slice(-18);
+        sysStats = { ...r, history: hist };
+      }
+    } catch {}
+  }
+  pollStats();
+  setInterval(() => { if (mode === 'expanded') pollStats(); }, 2500);
+  setInterval(() => { if (mode !== 'expanded') pollStats(); }, 8000);
+  window.__lumadockStats = () => sysStats;
 
   // Battery of this laptop
   const warned = new Set();
@@ -266,17 +307,32 @@
     try { const w = await api.weatherNow(); weather = w.ok ? w.weather : null; } catch {}
     try { const c = await api.calendarNext(); nextEvent = c.ok ? c.next : null; } catch {}
   }
-  refreshInfo(); setInterval(refreshInfo, 10 * 60000);
+  refreshInfo(); setInterval(refreshInfo, 2 * 60000);
   window.__lumadockRefreshInfo = refreshInfo;
+  window.__lumadockNextMeeting = () => {
+    if (!nextEvent || !nextEvent.url) return null;
+    const mins = Math.round((nextEvent.start - Date.now()) / 60000);
+    return mins >= -5 && mins <= 15 ? { ...nextEvent, mins } : null;
+  };
   window.__lumadockHomeInfo = () => {
     const parts = [];
+    const l = prefs().lang || 'en';
     if (weather) parts.push(`${weather.code === 0 && !weather.day ? '🌙' : ICONS(weather.code)} ${weather.temp}° ${weather.place}`);
     if (nextEvent) {
       const start = new Date(nextEvent.start), mins = Math.round((nextEvent.start - Date.now()) / 60000);
-      const locale = window.__lumadockPrefs?.().lang === 'tr' ? 'tr-TR' : 'en-GB';
-      const when = nextEvent.allDay ? 'vandaag' : mins <= 0 ? 'nu' : mins < 60 ? `over ${mins} min` : start.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-      parts.push(`📅 ${when}: ${nextEvent.title || 'Afspraak'}`);
-      if (mins === 10 && !warned.has('cal' + nextEvent.start)) { warned.add('cal' + nextEvent.start); flash(`📅 Over 10 min: ${nextEvent.title}`, 5000); say('Over 10 minuten', nextEvent.title); }
+      const locale = l === 'tr' ? 'tr-TR' : l === 'nl' ? 'nl-NL' : 'en-GB';
+      const todayW = l === 'tr' ? 'bugün' : l === 'en' ? 'today' : 'vandaag';
+      const nowW = l === 'tr' ? 'şimdi' : l === 'en' ? 'now' : 'nu';
+      const inMins = l === 'tr' ? `${mins} dk sonra` : l === 'en' ? `in ${mins} min` : `over ${mins} min`;
+      const defTitle = l === 'tr' ? 'Toplantı' : l === 'en' ? 'Meeting' : 'Afspraak';
+      const when = nextEvent.allDay ? todayW : mins <= 0 ? nowW : mins < 60 ? inMins : start.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+      parts.push(`📅 ${when}: ${nextEvent.title || defTitle}`);
+      if (mins === 10 && !warned.has('cal' + nextEvent.start)) {
+        warned.add('cal' + nextEvent.start);
+        const soonMsg = l === 'tr' ? `10 dk sonra: ${nextEvent.title}` : l === 'en' ? `In 10 min: ${nextEvent.title}` : `Over 10 min: ${nextEvent.title}`;
+        flash(`📅 ${soonMsg}`, 5000);
+        say(l === 'tr' ? '10 dakika sonra' : l === 'en' ? 'In 10 minutes' : 'Over 10 minuten', nextEvent.title);
+      }
     }
     return parts.join('  ·  ');
   };

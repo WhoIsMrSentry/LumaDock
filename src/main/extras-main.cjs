@@ -1,8 +1,9 @@
 'use strict';
-// Extras for the island (main process): file tray, calendar (ICS link), weather (Open-Meteo),
-// volume changes and Bluetooth battery levels. Only the LumaDock window may use these channels.
+// Extras for the island (main process): file tray, calendar (ICS + meeting URL), weather (Open-Meteo),
+// volume monitoring/control, mic/cam privacy indicator, fullscreen detection, downloads watcher & CPU/RAM telemetry.
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { fileURLToPath } = require('node:url');
 
@@ -14,12 +15,18 @@ function setup(electron) {
   const file = name => path.join(app.getPath('userData'), name);
   const readJson = (name, fallback) => { try { return JSON.parse(fs.readFileSync(file(name), 'utf8')); } catch { return fallback; } };
   const writeJson = (name, value) => { try { fs.writeFileSync(file(name), JSON.stringify(value)); } catch {} };
+  const langOf = () => {
+    const cfg = readJson('extras.json', {});
+    if (cfg.lang === 'tr' || cfg.lang === 'en') return cfg.lang;
+    return app.getLocale?.()?.startsWith('tr') ? 'tr' : 'en';
+  };
+  const msg = (en, tr) => (langOf() === 'tr' ? tr : en);
   const trusted = event => {
     try { return path.resolve(fileURLToPath(event.sender.getURL())).toLowerCase() === path.join(__dirname, '..', '..', 'mascot.html').toLowerCase(); }
     catch { return false; }
   };
   const handle = (channel, fn) => ipcMain.handle(channel, async (event, payload) => {
-    if (!trusted(event)) return { ok: false, error: 'Geen toegang.' };
+    if (!trusted(event)) return { ok: false, error: msg('Access denied.', 'Erişim reddedildi.') };
     try { return { ok: true, ...(await fn(payload, event)) }; } catch (error) { return { ok: false, error: error.message }; }
   });
   const send = (channel, data) => { for (const win of BrowserWindow.getAllWindows()) if (!win.isDestroyed() && trusted({ sender: win.webContents })) win.webContents.send(channel, data); };
@@ -42,7 +49,7 @@ function setup(electron) {
   });
   handle('extras:tray-remove', async payload => { tray = tray.filter(p => p !== payload?.path); writeJson('tray.json', tray); return trayView(); });
   handle('extras:tray-open', async payload => {
-    if (!tray.includes(payload?.path)) throw new Error('Dit bestand staat niet in de lade.');
+    if (!tray.includes(payload?.path)) throw new Error(msg('This file is not in your tray.', 'Bu dosya çekmecede değil.'));
     const problem = await shell.openPath(payload.path); if (problem) throw new Error(problem); return {};
   });
   ipcMain.on('extras:tray-drag', (event, p) => {
@@ -50,64 +57,100 @@ function setup(electron) {
     event.sender.startDrag({ file: p, icon: icons.get(p) || nativeImage.createFromDataURL(BLANK_PNG) });
   });
 
-  // ---------- settings for calendar and weather ----------
-  let config = readJson('extras.json', { calendarUrl: '', city: '' });
+  // ---------- settings for calendar, weather and language ----------
+  let config = readJson('extras.json', { calendarUrl: '', city: '', lang: 'en' });
   handle('extras:config', async payload => {
     if (payload && typeof payload === 'object') {
       if (typeof payload.calendarUrl === 'string') {
         const url = payload.calendarUrl.trim().replace(/^webcal:/i, 'https:');
-        if (url && !/^https:\/\//i.test(url)) throw new Error('Plak een https- of webcal-link van je agenda.');
+        if (url && !/^https:\/\//i.test(url)) throw new Error(msg('Paste an https or webcal calendar URL.', 'Lütfen https veya webcal takvim bağlantısı yapıştırın.'));
         config.calendarUrl = url; calendarCache = null;
       }
       if (typeof payload.city === 'string') { config.city = payload.city.trim().slice(0, 80); weatherCache = null; }
+      if (payload.lang === 'tr' || payload.lang === 'en') { config.lang = payload.lang; weatherCache = null; }
       writeJson('extras.json', config);
     }
     return { config };
   });
 
-  // ---------- calendar: next event from an ICS link (Google: "Geheim adres in iCal-indeling") ----------
+  // ---------- calendar: next event from an ICS link (with meeting URL detection) ----------
   let calendarCache = null;
   handle('extras:calendar', async () => {
     if (!config.calendarUrl) return { next: null };
     if (!calendarCache || Date.now() - calendarCache.at > 10 * 60000) {
       const res = await fetch(config.calendarUrl, { signal: AbortSignal.timeout(10000) });
-      if (!res.ok) throw new Error('Agenda niet bereikbaar (' + res.status + ').');
+      if (!res.ok) throw new Error(msg(`Calendar unreachable (${res.status}).`, `Takvime ulaşılamadı (${res.status}).`));
       calendarCache = { at: Date.now(), events: parseIcs(await res.text()) };
     }
     const now = Date.now();
     const next = calendarCache.events.map(e => ({ ...e, start: nextStart(e, now) })).filter(e => e.start && e.start + (e.duration || 0) > now)
       .sort((a, b) => a.start - b.start)[0] || null;
-    return { next: next && { title: next.title, start: next.start, allDay: next.allDay } };
+    return { next: next && { title: next.title, start: next.start, duration: next.duration || 0, allDay: next.allDay, url: next.url || '' } };
   });
 
   // ---------- weather (Open-Meteo, no account needed) ----------
   let weatherCache = null;
   handle('extras:weather', async () => {
     if (!config.city) return { weather: null };
-    if (!weatherCache || Date.now() - weatherCache.at > 15 * 60000) {
-      const geo = await (await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=nl&name=' + encodeURIComponent(config.city), { signal: AbortSignal.timeout(8000) })).json();
-      const place = geo?.results?.[0]; if (!place) throw new Error('Stad niet gevonden.');
+    const lang = config.lang === 'tr' ? 'tr' : 'en';
+    if (!weatherCache || Date.now() - weatherCache.at > 15 * 60000 || weatherCache.lang !== lang) {
+      const geo = await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&language=${lang}&name=` + encodeURIComponent(config.city), { signal: AbortSignal.timeout(8000) })).json();
+      const place = geo?.results?.[0]; if (!place) throw new Error(msg('City not found.', 'Şehir bulunamadı.'));
       const data = await (await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,weather_code,is_day`, { signal: AbortSignal.timeout(8000) })).json();
-      weatherCache = { at: Date.now(), weather: { place: place.name, temp: Math.round(data.current.temperature_2m), code: data.current.weather_code, day: data.current.is_day === 1 } };
+      weatherCache = { at: Date.now(), lang, weather: { place: place.name, temp: Math.round(data.current.temperature_2m), code: data.current.weather_code, day: data.current.is_day === 1 } };
     }
     return { weather: weatherCache.weather };
   });
 
-  // ---------- volume: a small PowerShell helper reports every change of the master volume ----------
-  let volumeChild = null;
+  // ---------- volume + privacy (mic/cam) + fullscreen watcher ----------
+  let volumeChild = null, stopping = false;
+  const volCmdFile = path.join(os.tmpdir(), 'lumadock-vol-cmd.txt');
+  function writeVolCmd(cmd) {
+    try { fs.appendFileSync(volCmdFile, cmd + '\n', 'utf8'); } catch {}
+  }
+  handle('extras:volume-set', async payload => {
+    const lvl = Math.max(0, Math.min(100, Math.round(Number(payload) || 0)));
+    writeVolCmd(`set ${lvl}`);
+    return { level: lvl };
+  });
+  handle('extras:volume-step', async payload => {
+    const delta = Math.max(-50, Math.min(50, Math.round(Number(payload) || 0)));
+    if (delta) writeVolCmd(`step ${delta}`);
+    return { delta };
+  });
+  handle('extras:volume-mute', async () => { writeVolCmd('mute'); return {}; });
+
   function startVolume() {
-    if (process.platform !== 'win32' || volumeChild) return;
+    if (process.platform !== 'win32' || volumeChild || stopping) return;
     volumeChild = spawn(POWERSHELL, ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, '..', 'native', 'volume-watch.ps1'), '-Parent', String(process.pid)],
       { windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'ignore'] });
     let buffer = '';
     volumeChild.stdout.on('data', chunk => {
       buffer += chunk.toString();
-      let end; while ((end = buffer.indexOf('\n')) >= 0) {
-        const [level, muted] = buffer.slice(0, end).trim().split(' '); buffer = buffer.slice(end + 1);
-        if (level !== undefined && level !== '') send('extras:volume', { level: Number(level), muted: muted === '1' });
+      let end;
+      while ((end = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, end).trim();
+        buffer = buffer.slice(end + 1);
+        if (!line) continue;
+        if (line.startsWith('P ')) {
+          const [, m, c] = line.split(' ');
+          send('extras:privacy', { mic: m === '1', cam: c === '1' });
+        } else if (line.startsWith('F ')) {
+          const fsActive = line.split(' ')[1] === '1';
+          app.emit('lumadock-fullscreen', fsActive);
+          send('extras:fullscreen', { fullscreen: fsActive });
+        } else {
+          const [level, muted] = line.split(' ');
+          if (level !== undefined && level !== '' && /^\d+$/.test(level)) {
+            send('extras:volume', { level: Number(level), muted: muted === '1' });
+          }
+        }
       }
     });
-    volumeChild.on('exit', () => { volumeChild = null; });
+    volumeChild.on('exit', () => {
+      volumeChild = null;
+      if (!stopping && !app.isQuitting) setTimeout(startVolume, 3000);
+    });
   }
 
   // ---------- Bluetooth battery levels (headphones, mouse, ...) every 5 minutes ----------
@@ -126,11 +169,92 @@ Get-PnpDevice -Class Bluetooth -Status OK -ErrorAction SilentlyContinue | ForEac
     child.on('error', () => {});
   }
 
-  // ---------- clipboard history: your last 8 copied texts (only in memory, never saved to disk) ----------
+  // ---------- System telemetry (CPU% + RAM%) ----------
+  let lastCpu = os.cpus().map(c => ({ ...c.times }));
+  handle('extras:system-stats', async () => {
+    const cur = os.cpus();
+    let idle = 0, total = 0;
+    for (let i = 0; i < cur.length; i++) {
+      const prev = lastCpu[i] || cur[i].times;
+      const now = cur[i].times;
+      const dIdle = Math.max(0, now.idle - prev.idle);
+      const dTotal = Math.max(0, (now.user - prev.user) + (now.nice - prev.nice) + (now.sys - prev.sys) + (now.irq - prev.irq) + dIdle);
+      idle += dIdle; total += dTotal;
+    }
+    lastCpu = cur.map(c => ({ ...c.times }));
+    const cpuPct = total > 0 ? Math.min(100, Math.max(0, Math.round((1 - idle / total) * 100))) : 0;
+    const totalMem = os.totalmem(), freeMem = os.freemem(), usedMem = totalMem - freeMem;
+    const memPct = totalMem > 0 ? Math.round((usedMem / totalMem) * 100) : 0;
+    return {
+      cpuPct,
+      memPct,
+      memUsedGb: Number((usedMem / 1073741824).toFixed(1)),
+      memTotalGb: Number((totalMem / 1073741824).toFixed(1))
+    };
+  });
+
+  // ---------- Downloads watcher ----------
+  let dlWatcher = null, dlTimer = null, lastActiveTemps = new Set(), seenCompleted = new Set();
+  function scanDownloads() {
+    try {
+      const dir = app.getPath('downloads');
+      if (!dir || !fs.existsSync(dir)) return;
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      const active = [];
+      const currentTemps = new Set();
+      let completed = null;
+      const now = Date.now();
+      for (const e of entries) {
+        if (!e.isFile()) continue;
+        const full = path.join(dir, e.name);
+        if (/\.(crdownload|part|opdownload|tmp)$/i.test(e.name)) {
+          let size = 0;
+          try { size = fs.statSync(full).size; } catch {}
+          const clean = e.name.replace(/\.(crdownload|part|opdownload|tmp)$/i, '');
+          currentTemps.add(clean);
+          active.push({ name: clean || e.name, path: full, size });
+        } else if (lastActiveTemps.has(e.name) && !seenCompleted.has(full)) {
+          let st = null;
+          try { st = fs.statSync(full); } catch {}
+          if (st && now - st.mtimeMs < 30000) {
+            seenCompleted.add(full);
+            completed = { name: e.name, path: full, size: st.size, at: now };
+          }
+        }
+      }
+      if (active.length || lastActiveTemps.size || completed) {
+        send('extras:downloads', { active: active.slice(0, 4), completed });
+      }
+      lastActiveTemps = currentTemps;
+    } catch {}
+  }
+  function startDownloadsWatcher() {
+    try {
+      const dir = app.getPath('downloads');
+      if (!dir || !fs.existsSync(dir) || dlWatcher) return;
+      dlWatcher = fs.watch(dir, { persistent: false }, () => {
+        clearTimeout(dlTimer);
+        dlTimer = setTimeout(scanDownloads, 350);
+      });
+      dlWatcher.on('error', () => { try { dlWatcher?.close(); } catch {} dlWatcher = null; });
+    } catch {}
+  }
+  handle('extras:download-open', async payload => {
+    const dir = fs.realpathSync(app.getPath('downloads'));
+    const target = fs.realpathSync(String(payload?.path || ''));
+    const rel = path.relative(dir, target);
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
+      throw new Error(msg('File is outside Downloads.', 'Dosya İndirilenler klasörü dışında.'));
+    }
+    const err = await shell.openPath(target);
+    if (err) throw new Error(err);
+    return {};
+  });
+
+  // ---------- clipboard history: last 8 copied texts (memory only) ----------
   let clips = [], lastClip = '';
   const clipsView = () => ({ clips: clips.map(text => ({ text: text.slice(0, 400), long: text.length > 400 })) });
   async function readClipboard() {
-    // readText can give a string or a promise (newer Electron); anything else is ignored.
     let text = ''; try { const r = electron.clipboard.readText(); text = typeof r === 'string' ? r : r && typeof r.then === 'function' ? await r : ''; } catch {}
     if (typeof text !== 'string' || !text || text === lastClip) return; lastClip = text;
     if (!text.trim() || text.length > 20000) return;
@@ -139,36 +263,41 @@ Get-PnpDevice -Class Bluetooth -Status OK -ErrorAction SilentlyContinue | ForEac
   }
   handle('extras:clips-get', async () => clipsView());
   handle('extras:clips-copy', async payload => {
-    const text = clips[Number(payload?.index)]; if (typeof text !== 'string') throw new Error('Niet gevonden.');
+    const text = clips[Number(payload?.index)]; if (typeof text !== 'string') throw new Error(msg('Not found.', 'Bulunamadı.'));
     electron.clipboard.writeText(text); lastClip = text; clips = [text, ...clips.filter(c => c !== text)]; return clipsView();
   });
   handle('extras:clips-clear', async () => { clips = []; return clipsView(); });
 
-  // ---------- quick note: one note, saved on your PC ----------
+  // ---------- quick note: one note saved on this PC ----------
   handle('extras:note-get', async () => ({ text: readJson('note.json', { text: '' }).text || '' }));
   handle('extras:note-set', async payload => { writeJson('note.json', { text: String(payload?.text || '').slice(0, 20000) }); return {}; });
 
-  // ---------- keyboard shortcuts: Ctrl+Alt+1..6 jump straight to a screen ----------
+  // ---------- keyboard shortcuts: Ctrl+Alt+1..6 ----------
   const SHORTCUTS = { 1: 'home', 2: 'spotify', 3: 'claude', 4: 'focus', 5: 'clips', 6: 'note' };
   app.on('will-quit', () => { try { for (const n of Object.keys(SHORTCUTS)) electron.globalShortcut.unregister('CommandOrControl+Alt+' + n); } catch {} });
 
   app.whenReady().then(() => {
     const poll = setInterval(() => { readClipboard().catch(() => {}); }, 1000); poll.unref?.();
+    const dlPoll = setInterval(() => { if (lastActiveTemps.size) scanDownloads(); }, 1800); dlPoll.unref?.();
     for (const [n, view] of Object.entries(SHORTCUTS)) { try { electron.globalShortcut.register('CommandOrControl+Alt+' + n, () => send('extras:shortcut', view)); } catch {} }
-    // Real sound wave: the island may listen to what the PC plays (Windows "loopback" audio).
-    // Only volume levels are measured in the island itself; nothing is recorded or sent anywhere.
     const { session, desktopCapturer } = electron;
     session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
-      if (!trusted({ sender: { getURL: () => request.frame?.url || '' } })) return callback({}); // only the LumaDock island
+      if (!trusted({ sender: { getURL: () => request.frame?.url || '' } })) return callback({});
       desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } }).then(sources => callback({ video: sources[0], audio: 'loopback' })).catch(() => callback({}));
     });
     startVolume();
+    startDownloadsWatcher();
     setTimeout(readBluetooth, 15000); const bt = setInterval(readBluetooth, 5 * 60000); bt.unref?.();
   });
-  app.on('before-quit', () => { try { volumeChild?.kill(); } catch {} });
+  app.on('before-quit', () => {
+    stopping = true;
+    try { volumeChild?.kill(); } catch {}
+    try { dlWatcher?.close(); } catch {}
+  });
 }
 
-// ---------- tiny ICS reader: SUMMARY, DTSTART, DTEND and simple DAILY / WEEKLY repeats ----------
+// ---------- ICS reader: SUMMARY, DTSTART, DTEND, LOCATION/DESCRIPTION/URL meeting links & DAILY/WEEKLY repeats ----------
+const MEETING_RE = /https:\/\/(?:meet\.google\.com|[\w.-]*zoom\.us|teams\.microsoft\.com|teams\.live\.com|discord\.gg|whereby\.com|[\w.-]*webex\.com)\/[^\s<>"')\\]+/i;
 function parseIcs(text) {
   const lines = text.replace(/\r?\n[ \t]/g, '').split(/\r?\n/), events = [];
   let event = null;
@@ -182,6 +311,11 @@ function parseIcs(text) {
       if (name === 'DTSTART') { event.start = icsDate(value); event.allDay = /VALUE=DATE(?!-)/.test(head) || /^\d{8}$/.test(value); }
       if (name === 'DTEND') event.end = icsDate(value);
       if (name === 'RRULE') event.rrule = value;
+      if (!event.url && ['LOCATION', 'DESCRIPTION', 'URL', 'X-GOOGLE-CONFERENCE', 'CONFERENCE'].includes(name)) {
+        const cleanVal = value.replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1');
+        const m = MEETING_RE.exec(cleanVal);
+        if (m) event.url = m[0].slice(0, 400);
+      }
     }
   }
   for (const e of events) e.duration = e.end ? Math.max(0, e.end - e.start) : 0;

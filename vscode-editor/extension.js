@@ -39,7 +39,7 @@
           bytes += part.length;
 
           if (bytes > 1024 * 1024) {
-            req.destroy(new Error('De opdracht is te groot.'));
+            req.destroy(new Error('Request payload is too large.'));
           } else {
             chunks.push(part);
           }
@@ -53,7 +53,7 @@
 
             if (!result.ok) {
               reject(new Error(
-                result.error || 'LumaDock is niet meer verbonden.'
+                result.error || 'LumaDock is disconnected.'
               ));
             } else {
               resolve(result);
@@ -69,7 +69,7 @@
       req.on('error', reject);
 
       req.setTimeout(10000, () => {
-        req.destroy(new Error('LumaDock reageert niet.'));
+        req.destroy(new Error('LumaDock is not responding.'));
       });
 
       req.end(body);
@@ -81,7 +81,7 @@
       !path.isAbsolute(job.root) ||
       !path.isAbsolute(job.file)
     ) {
-      throw new Error('Ongeldige projectlocatie.');
+      throw new Error('Invalid project path.');
     }
 
     const root = fs.realpathSync(job.root);
@@ -96,7 +96,7 @@
       path.isAbsolute(relative)
     ) {
       throw new Error(
-        'Het bestand ligt buiten het gekozen project.'
+        'File is outside the selected project.'
       );
     }
 
@@ -106,7 +106,7 @@
       item = path.join(item, part);
 
       if (fs.lstatSync(item).isSymbolicLink()) {
-        throw new Error('Koppelingen worden niet bewerkt.');
+        throw new Error('Symbolic links cannot be edited.');
       }
     }
 

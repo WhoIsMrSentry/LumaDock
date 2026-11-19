@@ -17,17 +17,36 @@ const chatgpt = require('./chatgpt-provider');
 
 const DEFAULT_LUMADOCK_MODEL =
   process.env.LUMADOCK_AI_MODEL ||
-  'gpt-6-luna';
+  'gpt-4.1';
 
 const DEFAULT_OPENAI_MODEL =
-  'gpt-6-luna';
+  'gpt-4.1';
+
+const DEFAULT_OPENAI_BASE_URL =
+  'https://api.openai.com/v1';
 
 const ALLOWED_OPENAI_MODELS =
   new Set([
-    'gpt-6-luna',
-    'gpt-6.1-sol',
-    'gpt-6-astra'
+    'gpt-4.1',
+    'gpt-4o',
+    'gpt-4o-mini',
+    'o3-mini'
   ]);
+
+function isAllowedModelId(model) {
+  return typeof model === 'string' && /^[a-zA-Z0-9._:/-]{2,80}$/.test(model.trim());
+}
+
+function isLocalBaseUrl(url) {
+  return /^http:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?(?:\/|$)/i.test(String(url || '').trim());
+}
+
+function normalizeOpenAIBaseUrl(raw) {
+  const s = String(raw || '').trim().replace(/\/+$/, '');
+  if (!s) return DEFAULT_OPENAI_BASE_URL;
+  if (!/^https:\/\//i.test(s) && !isLocalBaseUrl(s)) return null;
+  return s;
+}
 
 const MAX_FILE_BYTES =
   300 * 1024;
@@ -286,13 +305,15 @@ function loadAISettingsRaw() {
       '',
 
     openaiModel:
-      ALLOWED_OPENAI_MODELS.has(
-        saved.openaiModel
-      )
+      isAllowedModelId(saved.openaiModel)
         ?
-          saved.openaiModel
+          saved.openaiModel.trim()
         :
-          DEFAULT_OPENAI_MODEL
+          DEFAULT_OPENAI_MODEL,
+
+    openaiBaseUrl:
+      normalizeOpenAIBaseUrl(saved.openaiBaseUrl) ||
+      DEFAULT_OPENAI_BASE_URL
   };
 }
 
@@ -421,20 +442,24 @@ async function resolveAIConfig({ peek = false } = {}) {
       decrypt(
         settings.openaiKey
       );
+    const baseUrl =
+      settings.openaiBaseUrl ||
+      DEFAULT_OPENAI_BASE_URL;
+    const localEndpoint = isLocalBaseUrl(baseUrl);
 
     return {
       provider:
         'openai',
 
       name:
-        'Eigen OpenAI',
+        localEndpoint ? 'Local / Custom AI' : 'Custom OpenAI-Compatible',
 
       ready:
-        Boolean(
-          key
-        ),
+        Boolean(key) || localEndpoint,
 
       key,
+
+      baseUrl,
 
       model:
         settings.openaiModel ||
@@ -444,8 +469,11 @@ async function resolveAIConfig({ peek = false } = {}) {
         key
           ?
             'saved-key'
-          :
-            'none',
+          : localEndpoint
+            ?
+              'local-endpoint'
+            :
+              'none',
 
       fingerprint:
         keyFingerprint(
@@ -578,9 +606,7 @@ async function getPublicAISettings({ check = false } = {}) {
 
     openai: {
       ready:
-        Boolean(
-          openaiKey
-        ),
+        Boolean(openaiKey) || isLocalBaseUrl(settings.openaiBaseUrl),
 
       hasKey:
         Boolean(
@@ -588,7 +614,13 @@ async function getPublicAISettings({ check = false } = {}) {
         ),
 
       model:
-        settings.openaiModel
+        settings.openaiModel,
+
+      baseUrl:
+        settings.openaiBaseUrl || DEFAULT_OPENAI_BASE_URL,
+
+      models:
+        [...ALLOWED_OPENAI_MODELS]
     },
 
     chatgpt: {
@@ -636,7 +668,7 @@ function setAIProvider(
         false,
 
       error:
-        'Deze AI-provider is nog niet beschikbaar.'
+        'This AI provider is not available.'
     };
   }
 
@@ -677,7 +709,7 @@ function saveAIKey(
         false,
 
       error:
-        'Deze API-key lijkt niet geldig.'
+        'This API key does not appear valid.'
     };
   }
 
@@ -708,7 +740,7 @@ function saveAIKey(
         false,
 
       error:
-        'Onbekend sleuteltype.'
+        'Unknown key type.'
     };
   }
 
@@ -1571,38 +1603,69 @@ function hashContent(
 // OPENAI REQUEST
 // ============================================================
 
+function toChatCompletionsPayload(body) {
+  const messages = [];
+  if (body?.instructions) messages.push({ role: 'system', content: String(body.instructions) });
+  if (typeof body?.input === 'string') {
+    messages.push({ role: 'user', content: body.input });
+  } else if (Array.isArray(body?.input)) {
+    for (const item of body.input) {
+      if (typeof item === 'string') { messages.push({ role: 'user', content: item }); continue; }
+      const role = item?.role || 'user';
+      if (typeof item?.content === 'string') { messages.push({ role, content: item.content }); continue; }
+      if (Array.isArray(item?.content)) {
+        const parts = item.content.map(part => {
+          if (part?.type === 'input_text' || part?.type === 'text') return { type: 'text', text: String(part.text || '') };
+          if (part?.type === 'input_image' || part?.type === 'image_url') {
+            const url = typeof part.image_url === 'string' ? part.image_url : part.image_url?.url;
+            return url ? { type: 'image_url', image_url: { url } } : null;
+          }
+          return null;
+        }).filter(Boolean);
+        messages.push({ role, content: parts });
+      }
+    }
+  }
+  const out = { model: body?.model, messages };
+  if (Number.isFinite(body?.max_output_tokens)) out.max_tokens = body.max_output_tokens;
+  return out;
+}
+
 async function openAIRequest(
   config,
   endpoint,
   body
 ) {
+  const baseUrl = normalizeOpenAIBaseUrl(config?.baseUrl) || DEFAULT_OPENAI_BASE_URL;
+  const isCustomBase = baseUrl !== DEFAULT_OPENAI_BASE_URL;
   if (
     !config.ready ||
-    !config.key
+    (!config.key && !isLocalBaseUrl(baseUrl))
   ) {
     throw new Error(
-      'AI is nog niet ingesteld. Ga naar Instellingen → AI.'
+      'AI is not configured yet. Go to Settings → AI.'
     );
   }
 
+  if (isCustomBase && endpoint === '/conversations') {
+    return { id: 'local-' + crypto.randomUUID() };
+  }
+
+  const targetEndpoint = isCustomBase && endpoint === '/responses' ? '/chat/completions' : endpoint;
+  const payload = isCustomBase && endpoint === '/responses' ? toChatCompletionsPayload(body) : body;
+  const headers = { 'Content-Type': 'application/json' };
+  if (config.key || isLocalBaseUrl(baseUrl)) headers.Authorization = `Bearer ${config.key || 'local'}`;
+
   const response =
     await fetch(
-      `https://api.openai.com/v1${endpoint}`,
+      `${baseUrl}${targetEndpoint}`,
       {
         method:
           'POST',
-
-        headers: {
-          Authorization:
-            `Bearer ${config.key}`,
-
-          'Content-Type':
-            'application/json'
-        },
-
+        headers,
         body:
           JSON.stringify(
-            body
+            payload
           )
       }
     );
@@ -1628,6 +1691,16 @@ async function openAIRequest(
       data?.error?.message ||
       `AI HTTP ${response.status}`
     );
+  }
+
+  if (isCustomBase && endpoint === '/responses') {
+    const content = data?.choices?.[0]?.message?.content;
+    const replyText = typeof content === 'string' ? content : Array.isArray(content) ? content.map(c => c?.text || '').join('') : '';
+    return {
+      id: data?.id || 'chatcmpl-' + crypto.randomUUID(),
+      output_text: replyText,
+      output: [{ type: 'message', content: [{ type: 'output_text', text: replyText }] }]
+    };
   }
 
   return data;
@@ -1678,7 +1751,7 @@ async function createConversation(
     !result?.id
   ) {
     throw new Error(
-      'AI-gesprek kon niet worden gestart.'
+      'Could not start AI conversation.'
     );
   }
 
@@ -1803,7 +1876,7 @@ async function getProjectChat(
       'utf8'
     );
 
-  if (content.includes('\0')) return { ok: false, error: 'Binaire bestanden mogen niet worden gelezen.' };
+  if (content.includes('\0')) return { ok: false, error: 'Binary files cannot be read.' };
   const fileHash =
     hashContent(
       content
@@ -1923,7 +1996,7 @@ async function sendProjectChat(
       'utf8'
     );
 
-  if (content.includes('\0')) return { ok: false, error: 'Binaire bestanden mogen niet worden gelezen.' };
+  if (content.includes('\0')) return { ok: false, error: 'Binary files cannot be read.' };
   const fileHash =
     hashContent(
       content
@@ -2506,6 +2579,11 @@ ipcMain.handle(
     setOpenAIModel(
       model
     )
+);
+
+ipcMain.handle(
+  'ai-settings:set-base-url',
+  async (_event, baseUrl) => setOpenAIBaseUrl(baseUrl)
 );
 
 

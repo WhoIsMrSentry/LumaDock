@@ -49,6 +49,14 @@ public static class RoboEyes {
     }
     return "{\"ok\":true}";
   }
+  public static string Pixel(int x, int y) {
+    using (var bmp = new Bitmap(1, 1, PixelFormat.Format24bppRgb)) {
+      using (var g = Graphics.FromImage(bmp)) g.CopyFromScreen(x, y, 0, 0, new Size(1, 1), CopyPixelOperation.SourceCopy);
+      Color c = bmp.GetPixel(0, 0);
+      string hex = string.Format("#{0:X2}{1:X2}{2:X2}", c.R, c.G, c.B);
+      return "{\"hex\":\"" + hex + "\",\"r\":" + c.R + ",\"g\":" + c.G + ",\"b\":" + c.B + "}";
+    }
+  }
   static string Json(string s) {
     var b = new StringBuilder("\"");
     foreach (char c in s) { if (c == '"' || c == '\\') b.Append('\\').Append(c); else if (c < ' ') b.Append(' '); else b.Append(c); }
@@ -62,8 +70,9 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
   $p = $line.Split(' ', 7); $id = $p[0]; $p = $p[1..($p.Count - 1)]
   try {
     switch ($p[0]) {
-      'at'   { $out = [RoboEyes]::At([int]$p[1], [int]$p[2], [uint32]$Skip) }
-      'shot' { $out = [RoboEyes]::Shot([int]$p[1], [int]$p[2], [int]$p[3], [int]$p[4], $p[5]) }
+      'at'    { $out = [RoboEyes]::At([int]$p[1], [int]$p[2], [uint32]$Skip) }
+      'shot'  { $out = [RoboEyes]::Shot([int]$p[1], [int]$p[2], [int]$p[3], [int]$p[4], $p[5]) }
+      'pixel' { $out = [RoboEyes]::Pixel([int]$p[1], [int]$p[2]) }
       default { $out = '{"error":"unknown"}' }
     }
   } catch { $out = '{"error":"' + ($_.Exception.Message -replace '[\\"]', ' ') + '"}' }

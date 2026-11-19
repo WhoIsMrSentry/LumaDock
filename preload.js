@@ -20,12 +20,15 @@
     getConnection: () => ipcRenderer.invoke('lumadock:get-connection'),
     getState: () => ipcRenderer.invoke('lumadock:get-state'),
 
-    spotifyConnect: () => ipcRenderer.invoke('spotify:connect'),
+    spotifyConnect: options => ipcRenderer.invoke('spotify:connect', options),
+    spotifyReconnect: () => ipcRenderer.invoke('spotify:connect', { force: true }),
     spotifyGetState: () => ipcRenderer.invoke('spotify:get-state'),
     spotifyControl: action =>
       ipcRenderer.invoke('spotify:control', action),
     spotifyDevices: () => ipcRenderer.invoke('spotify:devices'),
     spotifyTransfer: id => ipcRenderer.invoke('spotify:transfer', id),
+    spotifyPlaylists: force => ipcRenderer.invoke('spotify:playlists', force),
+    spotifyPlayPlaylist: (uri, url) => ipcRenderer.invoke('spotify:play-playlist', { uri, url }),
     spotifyLyrics: query => ipcRenderer.invoke('spotify:lyrics', query),
     spotifySeek: positionMs =>
       ipcRenderer.invoke('spotify:seek', positionMs),
@@ -73,6 +76,8 @@
       ipcRenderer.invoke('ai-settings:clear-key', type),
     aiSettingsSetModel: model =>
       ipcRenderer.invoke('ai-settings:set-model', model),
+    aiSettingsSetBaseUrl: baseUrl =>
+      ipcRenderer.invoke('ai-settings:set-base-url', baseUrl),
     aiSettingsTest: () =>
       ipcRenderer.invoke('ai-settings:test'),
     aiSettingsChatGPTLogin: () =>
@@ -100,6 +105,18 @@
     calendarNext: () => ipcRenderer.invoke('extras:calendar'),
     weatherNow: () => ipcRenderer.invoke('extras:weather'),
     onVolume: callback => subscribe('extras:volume', callback),
+    volumeSet: level => ipcRenderer.invoke('extras:volume-set', level),
+    volumeStep: delta => ipcRenderer.invoke('extras:volume-step', delta),
+    volumeMute: () => ipcRenderer.invoke('extras:volume-mute'),
+    onPrivacy: callback => subscribe('extras:privacy', callback),
+    onFullscreen: callback => subscribe('extras:fullscreen', callback),
+    onDownloads: callback => subscribe('extras:downloads', callback),
+    downloadOpen: filePath => ipcRenderer.invoke('extras:download-open', { path: filePath }),
+    systemStats: () => ipcRenderer.invoke('extras:system-stats'),
+    windowDisplays: () => ipcRenderer.invoke('island:displays'),
+    setWindowPrefs: prefs => ipcRenderer.send('island:window-prefs', prefs),
+    openExternalUrl: url => ipcRenderer.invoke('lumadock:open-external', url),
+    buddyPickColor: () => ipcRenderer.invoke('buddy:pick-color'),
     clipsGet: () => ipcRenderer.invoke('extras:clips-get'),
     clipsCopy: index => ipcRenderer.invoke('extras:clips-copy', { index }),
     clipsClear: () => ipcRenderer.invoke('extras:clips-clear'),

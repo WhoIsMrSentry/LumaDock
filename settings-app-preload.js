@@ -25,11 +25,13 @@ contextBridge.exposeInMainWorld('settingsApp', {
     setKey: (type, key) => ipcRenderer.invoke('ai-settings:set-key', { type, key }),
     clearKey: type => ipcRenderer.invoke('ai-settings:clear-key', type),
     setModel: model => ipcRenderer.invoke('ai-settings:set-model', model),
+    setBaseUrl: baseUrl => ipcRenderer.invoke('ai-settings:set-base-url', baseUrl),
     test: () => ipcRenderer.invoke('ai-settings:test'),
     chatgptLogin: () => ipcRenderer.invoke('ai-settings:chatgpt-login'),
     chatgptCancel: () => ipcRenderer.invoke('ai-settings:chatgpt-cancel'),
     chatgptLogout: () => ipcRenderer.invoke('ai-settings:chatgpt-logout')
   },
+  displays: () => ipcRenderer.invoke('island:displays'),
   onGoto: callback => { const fn = (_e, tab) => callback(tab); ipcRenderer.on('settings-app:goto', fn); return () => ipcRenderer.removeListener('settings-app:goto', fn); },
   onFace: callback => { const fn = (_e, url) => callback(url); ipcRenderer.on('settings-app:face', fn); return () => ipcRenderer.removeListener('settings-app:face', fn); }
 });

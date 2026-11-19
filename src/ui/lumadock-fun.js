@@ -11,7 +11,7 @@
   // ---------- preferences (Settings → General) ----------
   const DEFAULTS = { lang: 'en', speed: 'snel', focusMin: 25, focusSec: 1500, eye: 'mint', body: 'wolk', palette: 'klassiek', faces: true, blink: true,
     dance: true, confetti: true, chimes: true, notify: true, startup: true, outfit: 'auto', sleepMin: 10, warnAt: 80,
-    pack: 'klassiek', seasonal: true, hunger: true, volumeHud: true, batteryWarn: true, appAnim: true,
+    pack: 'klassiek', seasonal: true, hunger: true, volumeHud: true, batteryWarn: true, appAnim: true, fullscreenHide: false, displayIndex: -1,
     testMode: false, name: 'LumaDock', lightBusy: '#ff9a1f', lightDone: '#22e05a', lightError: '#ff3b3b' };
   const savedPrefs = store.get('lumadock:prefs', {});
   if (!savedPrefs.newLook) { savedPrefs.body = 'wolk'; savedPrefs.newLook = true; store.set('lumadock:prefs', savedPrefs); }
@@ -92,6 +92,11 @@
     const s = SPEEDS[prefs.speed];
     UI.NORMAL_PEEK_DELAY = s.peek; UI.HOME_LEAVE_DELAY = s.home; UI.VIEW_LEAVE_DELAY = s.view; UI.MONITOR_LEAVE_DELAY = s.mon;
     window.lumadock?.aiMonitorSetNotify?.(prefs.notify).catch?.(() => {});
+    window.lumadock?.setWindowPrefs?.({
+      fullscreenHide: Boolean(prefs.fullscreenHide),
+      displayIndex: Number.isInteger(prefs.displayIndex) ? prefs.displayIndex : -1
+    });
+    window.dispatchEvent(new Event('lumadock:prefs'));
   }
   apply();
 
@@ -820,6 +825,9 @@
     extrasError ? `<p class="tc-ai-error" role="alert">${esc(extrasError)}</p>` : '',
     row(L('Volume HUD', 'Ses Çubuğu'), L('Display the volume bar inside the island when adjusting audio', 'Sesi değiştirdiğinizde adada ses seviyesini göster'), toggle('volumeHud')),
     row(L('Battery Warning', 'Pil Uyarısı'), L('Warn when laptop or Bluetooth device battery is low', 'Bilgisayar veya Bluetooth cihazlarının pili azaldığında uyar'), toggle('batteryWarn')),
+    row(L('Auto-hide in Fullscreen', 'Tam Ekranda Gizle'), L('Automatically hide the island during fullscreen games or videos', 'Tam ekran oyun veya videolarda adayı otomatik gizle'), toggle('fullscreenHide')),
+    row(L('Display Monitor', 'Ekran Monitörü'), L('Choose which screen shows the Dynamic Island', 'Dinamik Ada\'nın hangi ekranda görüneceğini seçin'),
+      chips('displayIndex', [[-1, L('Primary', 'Birincil')], ...displaysList.map((d, i) => [d.index, `${i + 1}: ${d.width}×${d.height}`])])),
     `<div class="tc-setting-row"><div><strong>${L('Reset Defaults', 'Varsayılanlara Sıfırla')}</strong><small>${L('Restore all preferences to their original settings', 'Tüm tercihleri varsayılan değerlerine döndür')}</small></div><button type="button" class="tc-toggle" data-pref="reset">${L('Reset', 'Sıfırla')}</button></div>`,
     `<div class="tc-group" data-icon="⏻" style="--g:#ff8a8a">LumaDock</div>`,
     row(L('Start with Windows', 'Windows ile Başlat'), L('Launch LumaDock automatically when you sign in to Windows', 'Bilgisayarınızı açtığınızda LumaDock otomatik başlasın'), `<button type="button" class="tc-toggle ${loginOn ? 'on' : ''}" data-login="1" aria-pressed="${loginOn}">${loginOn ? L('On', 'Açık') : L('Off', 'Kapalı')}</button>`),
@@ -878,9 +886,10 @@
   }
   window.__lumadockTest = runTest;
 
-  let extrasCfg = {}, extrasError = '';
+  let extrasCfg = {}, extrasError = '', displaysList = [];
   const rerender = () => window.dispatchEvent(new Event('lumadock:open-ai-settings'));
   window.lumadock?.extrasConfig?.().then(r => { if (r.ok) extrasCfg = r.config; }).catch(() => {});
+  window.lumadock?.windowDisplays?.().then(d => { if (Array.isArray(d)) displaysList = d; }).catch(() => {});
   let loginOn = false;
   window.lumadock?.loginGet?.().then(r => { if (r?.ok) loginOn = r.on; }).catch(() => {});
   window.__lumadockSettingsAction = target => {

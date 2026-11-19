@@ -29,7 +29,12 @@
     clock(c) { c.beginPath(); c.arc(12, 12, 8.5, 0, Math.PI * 2); c.fill(); c.stroke(); c.beginPath(); c.moveTo(12, 7.5); c.lineTo(12, 12); c.lineTo(15, 14); c.stroke(); },
     collapse(c) { c.beginPath(); c.arc(12, 12, 8.5, 0, Math.PI * 2); c.fill(); c.stroke(); c.beginPath(); c.moveTo(8, 13.5); c.lineTo(12, 9.5); c.lineTo(16, 13.5); c.stroke(); },
     tray(c) { c.beginPath(); c.moveTo(4, 13); c.lineTo(7, 5); c.lineTo(17, 5); c.lineTo(20, 13); c.lineTo(20, 19); c.lineTo(4, 19); c.closePath(); c.fill(); c.stroke();
-      c.beginPath(); c.moveTo(4, 13); c.lineTo(9, 13); c.lineTo(10, 15); c.lineTo(14, 15); c.lineTo(15, 13); c.lineTo(20, 13); c.stroke(); }
+      c.beginPath(); c.moveTo(4, 13); c.lineTo(9, 13); c.lineTo(10, 15); c.lineTo(14, 15); c.lineTo(15, 13); c.lineTo(20, 13); c.stroke(); },
+    cpu(c) { c.beginPath(); c.roundRect(7, 7, 10, 10, 2); c.fill(); c.stroke();
+      c.beginPath(); c.roundRect(10, 10, 4, 4, 0.8); c.stroke();
+      for (const d of [9.5, 14.5]) { c.beginPath(); c.moveTo(d, 4); c.lineTo(d, 7); c.moveTo(d, 17); c.lineTo(d, 20); c.moveTo(4, d); c.lineTo(7, d); c.moveTo(17, d); c.lineTo(20, d); c.stroke(); } },
+    picker(c) { c.beginPath(); c.moveTo(14, 5); c.lineTo(19, 10); c.lineTo(16.5, 12.5); c.lineTo(11.5, 7.5); c.closePath(); c.fill(); c.stroke();
+      c.beginPath(); c.moveTo(12.5, 8.5); c.lineTo(6, 15); c.lineTo(5, 19); c.lineTo(9, 18); c.lineTo(15.5, 11.5); c.stroke(); }
   };
   // Old glyphs used by pill(...) calls → icon names.
   const GLYPHS = { '♫': 'music', '›_': 'terminal', '◔': 'timer', '📥': 'tray', '⚙': 'gear', '⌂': 'home', '+': 'plus' };

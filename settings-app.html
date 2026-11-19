@@ -370,6 +370,8 @@
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m22 4-10 10.01-3-3"/></symbol>
   <symbol id="i-today" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></symbol>
   <symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="10" y="10" width="4" height="4"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+  <symbol id="i-picker" viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></symbol>
   <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
   <symbol id="i-gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
 </svg>
@@ -394,7 +396,9 @@ const T = {
     quick: 'Snel naar', qWardrobe: 'Kledingkast', qConnect: 'Verbindingen', qGeneral: 'Algemeen',
     agentState: { running: 'bezig', sending: 'bezig', question: 'wacht op jou', done: 'klaar', error: 'fout', ready: 'rustig', off: 'rustig' },
     cx: { claudecode: ['Claude Code', 'Volgt je Claude Code-sessies in de terminal of VS Code.'], codex: ['Codex', 'Volgt Codex van OpenAI terwijl hij voor je programmeert.'],
-      claude: ['Claude', 'De Claude-app of claude.ai: Robo meldt het als je antwoord klaar is.'], chatgpt: ['ChatGPT', 'De ChatGPT-app of chatgpt.com: Robo meldt het als je antwoord klaar is.'] },
+      gemini: ['Gemini CLI', 'Volgt Gemini CLI terminal-sessies realtime.'], cursor: ['Cursor Agent', 'Volgt agent-activiteit vanuit Cursor hooks.'],
+      claude: ['Claude', 'De Claude-app of claude.ai: Robo meldt het als je antwoord klaar is.'], chatgpt: ['ChatGPT', 'De ChatGPT-app of chatgpt.com: Robo meldt het als je antwoord klaar is.'],
+      webMonitor: ['Experimentele browser-monitor', 'Volg ChatGPT & Claude browser-/desktopvensters via UI Automation.'] },
     cxOn: 'Verbonden', cxOff: 'Uit', cxMissing: 'Niet gevonden op deze pc', cxSoon: 'Binnenkort', cxSoonNote: 'Komt met de LumaDock-extensie voor Chrome.',
     cxAgents: 'Programmeer-AI', cxChats: 'Chat-apps', cxRestart: n => `Gekoppeld. Start ${n} één keer opnieuw.`, cxCodexTrust: 'Codex vraagt één keer of je LumaDock vertrouwt: kies Ja.',
     cxHow: 'Zet aan wat je gebruikt. LumaDock doet de rest: geen vensters kiezen, geen code.',
@@ -427,7 +431,9 @@ const T = {
     quick: 'Jump to', qWardrobe: 'Wardrobe', qConnect: 'Connections', qGeneral: 'General',
     agentState: { running: 'busy', sending: 'busy', question: 'waiting for you', done: 'done', error: 'error', ready: 'idle', off: 'idle' },
     cx: { claudecode: ['Claude Code', 'Follows your Claude Code sessions in the terminal or VS Code.'], codex: ['Codex', 'Follows OpenAI Codex while it codes for you.'],
-      claude: ['Claude', 'The Claude app or claude.ai: Robo tells you when your answer is ready.'], chatgpt: ['ChatGPT', 'The ChatGPT app or chatgpt.com: Robo tells you when your answer is ready.'] },
+      gemini: ['Gemini CLI', 'Follows your Gemini CLI sessions via lightweight hooks.'], cursor: ['Cursor Agent', 'Follows Cursor coding sessions via hooks.'],
+      claude: ['Claude', 'The Claude app or claude.ai: Robo tells you when your answer is ready.'], chatgpt: ['ChatGPT', 'The ChatGPT app or chatgpt.com: Robo tells you when your answer is ready.'],
+      webMonitor: ['Browser AI Monitor (Beta)', 'Unlock desktop & browser tracking for ChatGPT and Claude windows.'] },
     cxOn: 'Connected', cxOff: 'Off', cxMissing: 'Not found on this PC', cxSoon: 'Coming soon', cxSoonNote: 'Comes with the LumaDock extension for Chrome.',
     cxAgents: 'Coding AI', cxChats: 'Chat apps', cxRestart: n => `Connected. Restart ${n} once.`, cxCodexTrust: 'Codex asks once whether you trust LumaDock: choose Yes.',
     cxHow: 'Turn on what you use. LumaDock does the rest: no windows to pick, no code.',
@@ -460,7 +466,9 @@ const T = {
     quick: 'Hızlı Erişim', qWardrobe: 'Gardırop', qConnect: 'Bağlantılar', qGeneral: 'Genel',
     agentState: { running: 'çalışıyor', sending: 'çalışıyor', question: 'sizi bekliyor', done: 'tamamlandı', error: 'hata', ready: 'boşta', off: 'kapalı' },
     cx: { claudecode: ['Claude Code', 'Terminal veya VS Code\'daki Claude Code oturumlarınızı takip eder.'], codex: ['Codex', 'OpenAI Codex kodlama yaparken takip eder.'],
-      claude: ['Claude', 'Claude uygulaması veya claude.ai: Yanıt hazır olduğunda Robo haber verir.'], chatgpt: ['ChatGPT', 'ChatGPT uygulaması veya chatgpt.com: Yanıt hazır olduğunda Robo haber verir.'] },
+      gemini: ['Gemini CLI', 'Terminaldeki Gemini CLI oturumlarını hafif kancalarla takip eder.'], cursor: ['Cursor Agent', 'Cursor kodlama ajanının oturumlarını anlık takip eder.'],
+      claude: ['Claude', 'Claude uygulaması veya claude.ai: Yanıt hazır olduğunda Robo haber verir.'], chatgpt: ['ChatGPT', 'ChatGPT uygulaması veya chatgpt.com: Yanıt hazır olduğunda Robo haber verir.'],
+      webMonitor: ['Tarayıcı YZ İzleyici (Beta)', 'ChatGPT ve Claude web/masaüstü pencerelerini takip etme kilidini açar.'] },
     cxOn: 'Bağlı', cxOff: 'Kapalı', cxMissing: 'Bu bilgisayarda bulunamadı', cxSoon: 'Yakında', cxSoonNote: 'Chrome için LumaDock uzantısıyla gelecek.',
     cxAgents: 'Kodlama Yapay Zekası', cxChats: 'Sohbet Uygulamaları', cxRestart: n => `Bağlandı. ${n} uygulamasını bir kez yeniden başlatın.`, cxCodexTrust: 'Codex bir kez LumaDock\'a güvenip güvenmediğinizi sorar: Evet\'i seçin.',
     cxHow: 'Kullandıklarınızı açın. Gerisini LumaDock halleder: pencere seçmek yok, kod yok.',
@@ -634,16 +642,31 @@ async function loadAi() { ai = await S.ai.get().catch(() => null); cxs = await S
 function drawAi() {
   if (tab !== 'ai') return;
   if (!ai?.ok || !cxs?.list) { paint(`<p class="empty">${t().loading}</p>`); return; }
-  const on = id => !!cxs.list.find(c => c.id === id)?.on, g = ai.chatgpt || {};
-  const row = (id, name, sub, right, good) => `<div class="row"><span class="bot ${good ? '' : 'off'}" style="--c:${AI_COLOUR[id]}"></span><div class="text"><b>${name}</b><small>${sub}</small></div>${right}</div>`;
+  const on = id => !!cxs.list.find(c => c.id === id)?.on, g = ai.chatgpt || {}, o = ai.openai || {};
+  const row = (id, name, sub, right, good) => `<div class="row"><span class="bot ${good ? '' : 'off'}" style="--c:${AI_COLOUR[id] || '#7fd8ff'}"></span><div class="text"><b>${name}</b><small>${sub}</small></div>${right}</div>`;
   const connect = `<button class="btn" data-ai="connect">${t().aiConnect}</button>`, ok = `<span class="tag good"><i></i>${t().tagOn}</span>`;
   const claude = on('claudecode') ? row('claudecode', 'Claude', esc(t().aiClaude), ok, true) : row('claudecode', 'Claude', esc(t().aiOff), connect, false);
   const codex = !on('codex') ? row('codex', 'Codex', esc(t().aiOff), connect, false)
     : g.unknown ? row('codex', 'Codex', esc(t().loading), '', false)
     : g.ready ? row('codex', 'Codex', esc(t().gptIn(g.email, g.plan)), `<button class="btn ghost" data-ai="logout">${t().logout}</button>${ok}`, true)
     : row('codex', 'Codex', esc(loggingIn ? t().loggingIn : t().aiCodexOut), loggingIn ? `<button class="btn ghost" data-ai="cancel">${t().cancel}</button>` : `<button class="btn main" data-ai="login">${t().login}</button>`, false);
+  const models = o.models || ['gpt-4.1', 'gpt-4o', 'gpt-4o-mini', 'o3-mini'];
+  const curModel = o.model || 'gpt-4.1';
+  const curBase = o.baseUrl || 'https://api.openai.com/v1';
+  const isCustomSel = ai.selectedProvider === 'openai';
+  const customCard = `<div class="card" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px"><div><b>${lang === 'tr' ? 'OpenAI / Özel API (Ollama · OpenRouter · Gemini)' : 'OpenAI / Custom API (Ollama · OpenRouter · Gemini)'}</b><small class="muted" style="display:block">${o.ready ? esc(`${curModel} · ${curBase}`) : (lang === 'tr' ? 'API anahtarı veya yerel Ollama URL girin' : 'Enter API key or local Ollama URL')}</small></div>${isCustomSel ? ok : `<button class="btn main" data-ai="use-openai">${lang === 'tr' ? 'Aktif Yap' : 'Use for Buddy & Project'}</button>`}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div><small class="muted" style="display:block;margin-bottom:4px">Base URL</small><input class="field" id="aiBaseUrl" style="width:100%" value="${esc(curBase)}" placeholder="http://127.0.0.1:11434/v1"></div>
+      <div><small class="muted" style="display:block;margin-bottom:4px">Model</small><input class="field" id="aiModelIn" list="aiModelPresets" style="width:100%" value="${esc(curModel)}" placeholder="gpt-4.1 / llama3.2"><datalist id="aiModelPresets">${models.map(m => `<option value="${esc(m)}">`).join('')}</datalist></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input class="field" id="aiApiKey" type="password" style="flex:1;min-width:180px" placeholder="${o.hasKey ? '•••••••• (saved)' : 'sk-...'}">
+      <button class="btn main" data-ai="save-openai">${lang === 'tr' ? 'Kaydet' : 'Save'}</button>
+      ${o.hasKey ? `<button class="btn ghost" data-ai="clear-openai">${lang === 'tr' ? 'Anahtarı Sil' : 'Clear Key'}</button>` : ''}
+      <button class="btn ghost" data-ai="test-openai">${lang === 'tr' ? 'Test Et' : 'Test'}</button>
+    </div></div>`;
   if (on('codex') && g.unknown && !aiChecking) checkAi(); // never checked yet: ask Codex once, only on this tab
-  paint(`<p class="lead">${esc(t().aiHow)}</p><div class="group">${claude}${codex}</div>` + (g.error && on('codex') && !g.ready ? `<div class="tc-ai-error">${esc(g.error)}</div>` : ''), false);
+  paint(`<p class="lead">${esc(t().aiHow)}</p><div class="group">${claude}${codex}</div>` + (g.error && on('codex') && !g.ready ? `<div class="tc-ai-error">${esc(g.error)}</div>` : '') + customCard, false);
 }
 // Starting Codex can take a few seconds, so it only happens here, when you look at AI & Chat.
 let aiChecking = false;
@@ -667,6 +690,8 @@ const APPS = [
   { id: 'tray', pack: 'focus', icon: 'inbox', tint: '#7ab8ff', nl: ['Lade', 'Sleep bestanden in het eiland en pak ze later weer terug.'], en: ['Tray', 'Drop files into the island and grab them again later.'], tr: ['Çekmece', 'Dosyaları adaya bırakın ve daha sonra kolayca alın.'] },
   { id: 'clips', pack: 'focus', icon: 'clipboard', tint: '#5ad1c4', nl: ['Klembord', 'Je laatste kopieën. Klik er een om hem opnieuw te kopiëren.'], en: ['Clipboard', 'Your last copies. Click one to copy it again.'], tr: ['Pano', 'Son kopyalananlar. Yeniden kopyalamak için tıklayın.'] },
   { id: 'note', pack: 'focus', icon: 'note', tint: '#ffd166', nl: ['Notitie', 'Eén snelle notitie, altijd bij de hand.'], en: ['Note', 'One quick note, always at hand.'], tr: ['Not', 'Her an elinizin altında hızlı bir not defteri.'] },
+  { id: 'cpu', icon: 'cpu', tint: '#7fd8ff', nl: ['Systeemmonitor', 'Live CPU- en geheugengebruik op je homescherm.'], en: ['System Monitor', 'Live CPU and RAM usage gauge on your home dashboard.'], tr: ['Sistem Monitörü', 'Ana ekranda canlı CPU ve RAM kullanım göstergesi.'] },
+  { id: 'picker', icon: 'picker', tint: '#ff85b3', nl: ['Kleurkiezer', 'Pak de HEX-kleurcode van elke pixel op je scherm.'], en: ['Color Picker', 'Pick the HEX color of any pixel on screen in one click.'], tr: ['Renk Seçici', 'Ekrandaki herhangi bir pikselin HEX renk kodunu tek tıkla kopyalar.'] },
   { id: 'clock', icon: 'clock', tint: '#a99bff', nl: ['Klok', 'De tijd op je homescherm.'], en: ['Clock', 'The time on your home screen.'], tr: ['Saat', 'Ana ekranda saat görünümü.'] },
   { id: 'settings', icon: 'gear', tint: '#b8b9c0', core: true, nl: ['Instellingen', 'Deze app. Altijd bij de hand via het tandwiel.'], en: ['Settings', 'This app. Always there via the gear.'], tr: ['Ayarlar', 'Bu uygulama. Çark simgesiyle her zaman elinizin altında.'] }
 ];
@@ -754,9 +779,9 @@ function drawNews() {
 }
 
 // ---------- Home ----------
-const AI_COLOUR = { claudecode: '#d97757', codex: '#3b82f6', claude: '#e8a87c', chatgpt: '#10a37f' };
+const AI_COLOUR = { claudecode: '#d97757', codex: '#3b82f6', gemini: '#4285f4', cursor: '#a855f7', claude: '#e8a87c', chatgpt: '#10a37f', webMonitor: '#7ab8ff' };
 const LAMP = { running: '#ffb35c', sending: '#ffb35c', question: '#ffb35c', done: '#8fd65a', error: '#ff6b6b', ready: '#8fd65a', off: '#8fd65a' };
-const AGENT_OF = { 'Claude Code': 'claudecode', Codex: 'codex', Claude: 'claude', ChatGPT: 'chatgpt' };
+const AGENT_OF = { 'Claude Code': 'claudecode', Codex: 'codex', 'Gemini CLI': 'gemini', 'Cursor Agent': 'cursor', Claude: 'claude', ChatGPT: 'chatgpt' };
 let home = null, cxs = null;
 async function loadHome() {
   const [h, c] = await Promise.all([S.home(), S.connections()]);
@@ -822,22 +847,25 @@ async function loadConnect() { cxs = await S.connections(); drawConnect(); }
 function drawConnect() {
   if (tab !== 'connect' || !cxs?.list) return;
   const rows = cxs.list.map(c => {
-    const [name, about] = t().cx[c.id];
-    if (c.soon) return `<div class="row soon"><span class="bot off" style="--c:${AI_COLOUR[c.id]}"></span><div class="text"><b>${esc(name)}</b><small>${esc(about)} ${esc(t().cxSoonNote)}</small></div><span class="tag">${esc(t().cxSoon)}</span></div>`;
+    const [name, about] = t().cx[c.id] || [c.id, ''];
+    if (c.soon) return `<div class="row soon"><span class="bot off" style="--c:${AI_COLOUR[c.id]}"></span><div class="text"><b>${esc(name)}</b><small>${esc(about)}</small></div><span class="tag">${esc(t().cxOff)}</span></div>`;
     const busy = ['running', 'sending'].includes(c.state);
     const status = !c.available ? `<span class="tag warn">${t().cxMissing}</span>` : c.on ? `<span class="tag good"><i></i>${t().cxOn}</span>` : '';
     return `<div class="row"><span class="bot ${c.on ? '' : 'off'} ${busy ? 'busy' : ''}" style="--c:${AI_COLOUR[c.id]}"></span><div class="text"><b>${esc(name)}</b><small>${esc(about)}</small>${cxNote[c.id] ? `<span class="note">${esc(cxNote[c.id])}</span>` : ''}</div>
       ${status}<button class="switch ${c.on ? 'on' : ''}" data-cx="${c.id}" ${c.available ? '' : 'disabled'} aria-label="${esc(name)}"></button></div>`;
   });
-  const agents = cxs.list.map((c, i) => c.soon ? '' : rows[i]).join(''), chats = cxs.list.map((c, i) => c.soon ? rows[i] : '').join('');
-  paint(`<p class="lead">${t().cxHow}</p><p class="section">${t().cxAgents}</p><div class="group">${agents}</div>${chats ? `<p class="section">${t().cxChats}</p><div class="group">${chats}</div>` : ''}`, false);
+  const agents = cxs.list.map((c, i) => !['claude', 'chatgpt'].includes(c.id) ? rows[i] : '').join('');
+  const chats = cxs.list.map((c, i) => ['claude', 'chatgpt'].includes(c.id) ? rows[i] : '').join('');
+  const [wmName, wmSub] = t().cx.webMonitor;
+  const wmRow = `<div class="row"><span class="bot ${cxs.webMonitor ? '' : 'off'}" style="--c:${AI_COLOUR.webMonitor}"></span><div class="text"><b>${esc(wmName)}</b><small>${esc(wmSub)}</small></div><button class="switch ${cxs.webMonitor ? 'on' : ''}" data-cx="webMonitor" aria-label="${esc(wmName)}"></button></div>`;
+  paint(`<p class="lead">${t().cxHow}</p><p class="section">${t().cxAgents}</p><div class="group">${agents}</div><p class="section">${t().cxChats}</p><div class="group">${wmRow}${chats}</div>`, false);
   $('#connectDot').classList.toggle('on', !cxs.list.some(c => c.on && !c.soon));
 }
 async function toggleConnect(id, on) {
-  const name = t().cx[id][0];
+  const name = (t().cx[id] || [id])[0];
   const r = await S.connect(id, on);
   if (r?.ok === false) { toast(r.error || '?', true); return loadConnect(); }
-  cxNote[id] = on && (id === 'claudecode' || id === 'codex') ? t().cxRestart(name) + (id === 'codex' ? ' ' + t().cxCodexTrust : '') : '';
+  cxNote[id] = on && ['claudecode', 'codex', 'gemini', 'cursor'].includes(id) ? t().cxRestart(name) + (id === 'codex' ? ' ' + t().cxCodexTrust : '') : '';
   cxs = r; drawConnect();
 }
 
@@ -864,6 +892,18 @@ list.addEventListener('click', e => {
     if (act === 'cancel') { S.ai.chatgptCancel(); loggingIn = false; drawAi(); }
     if (act === 'logout') aiAction(() => S.ai.chatgptLogout());
     if (act === 'connect') go('connect');
+    if (act === 'use-openai') aiAction(() => S.ai.setProvider('openai'), '✓');
+    if (act === 'clear-openai') aiAction(() => S.ai.clearKey('openai'), t().saved);
+    if (act === 'test-openai') aiAction(() => S.ai.test(), 'Connection ✓');
+    if (act === 'save-openai') aiAction(async () => {
+      const base = $('#aiBaseUrl')?.value.trim();
+      const mod = $('#aiModelIn')?.value.trim();
+      const key = $('#aiApiKey')?.value.trim();
+      if (base) { const r = await S.ai.setBaseUrl(base); if (!r?.ok) return r; }
+      if (mod) { const r = await S.ai.setModel(mod); if (!r?.ok) return r; }
+      if (key) { const r = await S.ai.setKey('openai', key); if (!r?.ok) return r; }
+      return S.ai.setProvider('openai');
+    }, t().saved);
   }
   if (tab === 'apps' && b.dataset.app) {
     const a = APPS.find(x => x.id === b.dataset.app), on = b.dataset.on === '1', appLabel = (a[lang] || a.en)[0];

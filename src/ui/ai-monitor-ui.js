@@ -693,25 +693,29 @@
     musicTucked = on; try { localStorage.setItem('lumadock:music-tucked', on ? '1' : '0'); } catch {}
     window.__lumadockChime?.('pop'); oldSetMode(on ? 'rest' : 'compact', false); if (on) holdClosed = true;
   }
-  const medium = () => (music() && !musicTucked) || Boolean(window.__lumadockFocus?.active()) || Boolean(window.__lumadockCompactMessage?.()) || needsAnswer();
+  const medium = () => (music() && !musicTucked) || Boolean(window.__lumadockFocus?.active()) || Boolean(window.__lumadockCompactMessage?.()) || Boolean(window.__lumadockNextMeeting?.()) || needsAnswer();
   window.__lumadockStatus = () => top();
   let holdClosed = false;
   window.__lumadockHoldClosed = () => { holdClosed = true; };
   // While Claude waits for an answer the small island pops open and gets wider (room for the buttons).
-  let wideFor = '', lastRenderedLyric = '', lyricStartedAt = 0;
+  let wideFor = '', lastRenderedLyric = '', prevRenderedLyric = '', lyricStartedAt = 0, lyricSwitchedAt = 0;
+  let compactControlsAnim = 0, compactAnimAt = 0, lastPickedColour = null;
   function askSize() {
     const want = needsAnswer();
     const hasMusic = music() && !musicTucked;
+    const hasMeet = Boolean(window.__lumadockNextMeeting?.() && !hasMusic);
     const lrc = window.__lumadockGetActiveLyric?.();
     let targetW = 300;
     if (want) {
       targetW = 440;
     } else if (hasMusic) {
-      // Widen horizontally so song & lyrics fit comfortably without looking like a dönerci sign
-      targetW = (lrc && lrc.text) ? 560 : 500;
+      // Widen horizontally so song, lyrics, and hover mini-controls fit comfortably
+      targetW = (lrc && lrc.text) ? 580 : 510;
+    } else if (hasMeet) {
+      targetW = 420;
     }
 
-    const key = `${want}:${hasMusic}:${Boolean(lrc?.text)}:${targetW}`;
+    const key = `${want}:${hasMusic}:${hasMeet}:${Boolean(lrc?.text)}:${targetW}`;
     if (key === wideFor && UI.COMPACT_W === targetW) return;
     wideFor = key;
     UI.COMPACT_W = targetW;
@@ -734,7 +738,7 @@
       if (typeof refreshSpotify === 'function') await refreshSpotify();
       settleSize();
     } catch {}
-  }, 2500);
+  }, 5000);
   drawExpanded = function (alpha) {
     if (currentView === 'shortcuts') { drawHeader(alpha); drawShortcuts(contentRect()); return; }
     if (!['monitor', 'assistant'].includes(currentView)) return oldDrawExpanded(alpha);
@@ -784,22 +788,57 @@
   window.__lumadockBars = bars; // also used by the big Spotify player
   // Medium island (36 px high): [album cover] [real sound wave] [LumaDock], like the iPhone's Dynamic Island.
   // While Spotify plays (here or on your phone): a thin line along the bottom of the small island shows how far the song is.
+  function drawPrivacyDots(rx, cy) {
+    const priv = window.__lumadockPrivacy?.();
+    if (!priv || (!priv.mic && !priv.cam)) return 0;
+    let x = rx, count = 0;
+    ctx.save();
+    for (const [on, col] of [[priv.cam, '#22e05a'], [priv.mic, '#ff9a1f']]) {
+      if (!on) continue;
+      count++;
+      ctx.beginPath(); ctx.arc(x, cy, 3.2, 0, Math.PI * 2);
+      ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 7; ctx.fill();
+      x -= 10;
+    }
+    ctx.restore();
+    return count * 10;
+  }
   function songLine() {
     if (!music() || !spotifyState.duration_ms) return;
     const pos = Math.min(spotifyState.duration_ms, (spotifyState.progress_ms || 0) + (spotifyState.is_playing ? performance.now() - spotifySyncAt : 0));
-    const ib = islandBounds, inset = Math.min(14, ib.width * 0.18), x0 = ib.x + inset, w = ib.width - inset * 2, y = ib.height - 3;
+    const ib = islandBounds, inset = Math.min(16, ib.width * 0.16), x0 = ib.x + inset, w = ib.width - inset * 2, y = ib.height - 3.5;
+    const part = Math.max(0, Math.min(1, pos / spotifyState.duration_ms));
+    const col = window.__lumadockAlbumColour || '#1ed760';
     ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.beginPath(); ctx.roundRect(x0, y, w, 2, 1); ctx.fill();
-    ctx.fillStyle = window.__lumadockAlbumColour || '#1ed760'; ctx.beginPath(); ctx.roundRect(x0, y, Math.max(2, w * pos / spotifyState.duration_ms), 2, 1); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.beginPath(); ctx.roundRect(x0, y, w, 2.2, 1.1); ctx.fill();
+    ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 4;
+    ctx.beginPath(); ctx.roundRect(x0, y, Math.max(3, w * part), 2.2, 1.1); ctx.fill();
     ctx.restore();
   }
-  // the music button on the medium island: caught on pointerdown (window, capture), before the island reacts to the press
-  let swallowTuckClick = false, tuckBox = null; // where the button is (kept between frames)
+  // Compact interactive buttons (tuck music, mini playback, download open, meeting join) caught in capture phase
+  let swallowTuckClick = false, tuckBox = null;
   window.addEventListener('pointerdown', e => {
-    if (mode !== 'compact' || !music() || !inside(e.clientX, e.clientY, tuckBox)) return;
-    e.preventDefault(); e.stopImmediatePropagation(); swallowTuckClick = true; tuckMusic(!musicTucked);
+    if (mode !== 'compact') return;
+    const at = b => b && inside(e.clientX, e.clientY, b);
+    const stop = () => { e.preventDefault(); e.stopImmediatePropagation(); swallowTuckClick = true; };
+    if (music() && at(tuckBox)) { stop(); tuckMusic(!musicTucked); return; }
+    if (music() && at(hit.cPrev)) { stop(); window.__lumadockSpotifyControl?.('previous'); sound('click'); return; }
+    if (music() && at(hit.cPlay)) { stop(); window.__lumadockSpotifyControl?.('toggle'); sound('click'); return; }
+    if (music() && at(hit.cNext)) { stop(); window.__lumadockSpotifyControl?.('next'); sound('click'); return; }
+    if (at(hit.cDl) && hit.cDl.path) { stop(); api.downloadOpen?.(hit.cDl.path); sound('click'); return; }
+    if (at(hit.cJoin) && hit.cJoin.url) { stop(); api.openExternalUrl?.(hit.cJoin.url); sound('click'); return; }
   }, true);
   for (const type of ['pointerup', 'mousedown', 'mouseup', 'click']) window.addEventListener(type, e => { if (!swallowTuckClick) return; e.preventDefault(); e.stopImmediatePropagation(); if (type === 'click') swallowTuckClick = false; }, true);
+  let lastWheelAt = 0;
+  window.addEventListener('wheel', e => {
+    if (!['compact', 'rest'].includes(mode) || !inside(e.clientX, e.clientY, islandBounds)) return;
+    if (Math.abs(e.deltaY) < 2) return;
+    e.preventDefault();
+    const t = performance.now();
+    if (t - lastWheelAt < 45) return;
+    lastWheelAt = t;
+    api.volumeStep?.(e.deltaY < 0 ? 4 : -4);
+  }, { passive: false });
   function smallStatus(p) {
     if (!EN() && !TR()) return p.detail || labels[p.state];
     const step = (p.steps || []).filter(x => x.state === 'running').pop();
@@ -823,13 +862,24 @@
   }
   drawSmall = function () {
     askSize();
-    hit.musicTuck = null; if (mode !== 'compact') tuckBox = null;
-    if (mode !== 'compact') { oldDrawSmall(); songLine(); return; }
+    hit.musicTuck = hit.cPrev = hit.cPlay = hit.cNext = hit.cDl = hit.cJoin = null;
+    if (mode !== 'compact') tuckBox = null;
+    const now = performance.now();
+    const dt = Math.min(0.05, Math.max(0.001, (now - (compactAnimAt || now)) / 1000));
+    compactAnimAt = now;
+    if (mode !== 'compact') {
+      compactControlsAnim += (0 - compactControlsAnim) * Math.min(1, dt * 12);
+      oldDrawSmall(); songLine();
+      drawPrivacyDots(islandBounds.x + islandBounds.width - 14, islandBounds.height / 2);
+      return;
+    }
     songLine();
     const H = islandBounds.height, cy = H / 2, right = islandBounds.x + islandBounds.width, left = islandBounds.x + 12;
     const cover = Math.max(16, H - 12), mid0 = left + cover + 12;
-    const p = top(), focus = window.__lumadockFocus, now = performance.now();
+    const p = top(), focus = window.__lumadockFocus;
     const message = window.__lumadockCompactMessage?.(), needsYou = p && (p.state === 'question' || p.permission);
+    const overCompact = pointer.known && inside(pointer.x, pointer.y, islandBounds);
+    compactControlsAnim += (((overCompact && music()) ? 1 : 0) - compactControlsAnim) * Math.min(1, dt * 14);
     // While music plays the island belongs to the music: no LumaDock, Claude's traffic light becomes a small dot.
     const musicOnly = music() && !message && !(p && (needsYou || now < attentionUntil));
     const mid1 = musicOnly ? right - (p ? 34 : 16) : right - 52;
@@ -840,8 +890,18 @@
     const line = (s, colour = '#f2f5ed', x = mid0) => text(s, x, cy + 4, 11.5, colour, 700, 'left', mid1 - x);
 
     if (message) {
-      const volume = /^(\S+) [▮▯]{10} (\d+)%$/u.exec(message); // the volume (extras-ui.js): a real bar instead of block characters
+      const volume = /^(\S+) [▮▯]{10} (\d+)%$/u.exec(message);
       if (volume) { drawVolume(volume[1], Number(volume[2]), left, cy, mid1); return; }
+      const dl = window.__lumadockDownloads?.();
+      if (dl?.completed && message.startsWith('⬇') && Date.now() - dl.completed.at < 7000) {
+        const bw = 54, bh = 22, bx = mid1 - bw, by = cy - bh / 2;
+        const overDl = inside(pointer.x, pointer.y, { x: bx, y: by, width: bw, height: bh });
+        text(message, left + 4, cy + 4, 11.5, '#f2f5ed', 700, 'left', bx - left - 12);
+        ctx.save(); ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, bh / 2); ctx.fillStyle = overDl ? '#d9f7b3' : '#c6e994'; ctx.fill(); ctx.restore();
+        text(T('Openen', 'Open', 'Aç'), bx + bw / 2, cy + 4, 10.5, '#10180c', 700, 'center');
+        hit.cDl = { x: bx, y: by, width: bw, height: bh, path: dl.completed.path };
+        return;
+      }
       text(message, left + 4, cy + 4, 11.5, '#f2f5ed', 700, 'left', mid1 - left); return;
     }
     if (p && (needsYou || now < attentionUntil)) {
@@ -850,80 +910,106 @@
       // Claude asks permission: answer right here, without opening the island.
       if (p.permission && !p.ask && !p.plan && p.permission.kind === 'tool') {
         const yesW = 70, noW = 74, bh = 24, by = cy - bh / 2, noX = mid1 - noW, yesX = noX - yesW - 6;
-        line(`${T('Mag ik', 'Allow')}: ${p.permission.what ? p.permission.what.split(/[\\/]/).pop() : p.permission.tool}?`, '#f2f5ed', mid0); // the real command / file, so you know what you allow
+        line(`${T('Mag ik', 'Allow', 'İzin')}: ${p.permission.what ? p.permission.what.split(/[\\/]/).pop() : p.permission.tool}?`, '#f2f5ed', mid0);
         const btn = (x, w, label, key, primary) => { const over = inside(pointer.x, pointer.y, { x, y: by, width: w, height: bh });
           ctx.save(); ctx.beginPath(); ctx.roundRect(x, by, w, bh, bh / 2); ctx.fillStyle = primary ? (over ? '#d9f7b3' : '#c6e994') : (over ? '#3a2b29' : '#2a2321'); ctx.fill(); ctx.restore();
           text(label, x + w / 2, by + 16, 11, primary ? '#10180c' : '#ffb3a8', 700, 'center'); hit[key] = { x, y: by, width: w, height: bh }; };
-        // keep the question text clear of the buttons
         ctx.save(); ctx.fillStyle = '#000'; ctx.fillRect(yesX - 30, 2, mid1 - yesX + 30, H - 4); ctx.restore();
-        btn(yesX, yesW, T('Toestaan', 'Allow'), 'cAllow', true); btn(noX, noW, T('Weigeren', 'Deny'), 'cDeny', false);
+        btn(yesX, yesW, T('Toestaan', 'Allow', 'İzin Ver'), 'cAllow', true); btn(noX, noW, T('Weigeren', 'Deny', 'Reddet'), 'cDeny', false);
         return;
       }
-      if (p.state === 'question' && !p.permission && !p.ask && !p.plan) return line(T('Claude heeft een vraag voor je', 'Claude has a question for you')); // hover or click opens it
+      if (p.state === 'question' && !p.permission && !p.ask && !p.plan) return line(T('Claude heeft een vraag voor je', 'Claude has a question for you', 'Claude\'un bir sorusu var'));
       if (p.ask || p.plan) {
-        line(p.ask ? T('Claude vraagt iets', 'Claude asks something') : T('Plan klaar: goedkeuren?', 'Plan ready: approve?'), '#f2f5ed', mid0);
+        line(p.ask ? T('Claude vraagt iets', 'Claude asks something', 'Claude bir şey soruyor') : T('Plan klaar: goedkeuren?', 'Plan ready: approve?', 'Plan hazır: onaylıyor musun?'), '#f2f5ed', mid0);
         const w = 64, bh = 24, x = mid1 - w, over = inside(pointer.x, pointer.y, { x, y: cy - bh / 2, width: w, height: bh });
         ctx.save(); ctx.beginPath(); ctx.roundRect(x, cy - bh / 2, w, bh, bh / 2); ctx.fillStyle = over ? '#d9f7b3' : '#c6e994'; ctx.fill(); ctx.restore();
-        text('Bekijk', x + w / 2, cy + 4, 11, '#10180c', 700, 'center'); hit.cOpen = { x, y: cy - bh / 2, width: w, height: bh };
+        text(T('Bekijk', 'View', 'Gör'), x + w / 2, cy + 4, 11, '#10180c', 700, 'center'); hit.cOpen = { x, y: cy - bh / 2, width: w, height: bh };
         return;
       }
-      return line(`Claude · ${smallStatus(p)}`);
+      return line(`${p.name || 'Claude'} · ${smallStatus(p)}`);
     }
     if (music()) {
       if (albumImage?.complete && albumImage.naturalWidth) {
         ctx.save(); ctx.beginPath(); ctx.roundRect(left, cy - cover / 2, cover, cover, 7); ctx.clip(); ctx.drawImage(albumImage, left, cy - cover / 2, cover, cover); ctx.restore();
       } else { box(left, cy - cover / 2, cover, cover, 7, '#1b211a'); icon('music'); }
-      // the song, not a fake sound wave (the wave could never follow the real beat)
       const tr = spotifyState.track || {}, timer = (focus?.active() ? 60 : 0) + 26;
+      const priv = window.__lumadockPrivacy?.();
+      const privW = (priv?.mic ? 10 : 0) + (priv?.cam ? 10 : 0);
+      const ctrlW = Math.round(compactControlsAnim * 76);
+      const tx = right - (p ? 40 : 18);
+      if (privW) drawPrivacyDots(tx - 16 - (p ? 18 : 0), cy);
+      // Smooth hover mini playback controls (previous, play/pause, next)
+      if (compactControlsAnim > 0.03) {
+        const rightEdge = tx - 16 - (p ? 18 : 0) - privW - (privW ? 4 : 0);
+        const slideOffset = (1 - compactControlsAnim) * 14;
+        const buttons = [
+          ['previous', 'cPrev', rightEdge - 60 + slideOffset],
+          [spotifyState.is_playing ? 'pause' : 'play', 'cPlay', rightEdge - 36 + slideOffset],
+          ['next', 'cNext', rightEdge - 12 + slideOffset]
+        ];
+        ctx.save();
+        ctx.globalAlpha *= compactControlsAnim;
+        for (const [kind, key, bx] of buttons) {
+          const rad = key === 'cPlay' ? 11 : 9;
+          const bb = { x: bx - rad, y: cy - rad, width: rad * 2, height: rad * 2 };
+          const overBtn = inside(pointer.x, pointer.y, bb);
+          ctx.beginPath(); ctx.arc(bx, cy, rad, 0, Math.PI * 2);
+          ctx.fillStyle = key === 'cPlay' ? (overBtn ? '#ffffff' : 'rgba(255,255,255,.92)') : (overBtn ? 'rgba(255,255,255,.22)' : 'rgba(255,255,255,.09)');
+          ctx.fill();
+          window.__lumadockMediaIcon?.(kind, bx, cy, key === 'cPlay' ? 9.5 : 8, key === 'cPlay' ? '#0b0c0d' : '#f2f5ed');
+          if (compactControlsAnim > 0.35) hit[key] = bb;
+        }
+        ctx.restore();
+      }
       const activeLyric = window.__lumadockGetActiveLyric?.();
+      const availW = Math.max(50, mid1 - mid0 - timer - privW - ctrlW - 14);
       if (activeLyric && activeLyric.text && spotifyState.is_playing) {
-        const availW = Math.max(60, mid1 - mid0 - timer - 14);
         ctx.save();
         ctx.beginPath();
-        ctx.rect(mid0, cy - 11, availW, 22);
+        ctx.rect(mid0, cy - 12, availW, 24);
         ctx.clip();
+        if (activeLyric.text !== lastRenderedLyric) {
+          prevRenderedLyric = lastRenderedLyric;
+          lastRenderedLyric = activeLyric.text;
+          lyricStartedAt = now;
+          lyricSwitchedAt = now;
+        }
+        const swapP = Math.min(1, (now - lyricSwitchedAt) / 260);
+        const easeP = 1 - Math.pow(1 - swapP, 3);
+        const lrcColour = window.__lumadockAlbumColour || '#1ed760';
+        if (prevRenderedLyric && swapP < 1) {
+          ctx.save(); ctx.globalAlpha *= (1 - easeP) * 0.85;
+          text('♪ ' + prevRenderedLyric, mid0, cy + 4 - easeP * 8, 11.5, lrcColour, 600, 'left', availW);
+          ctx.restore();
+        }
         const lrcText = '♪ ' + activeLyric.text;
         ctx.font = '600 11.5px "Segoe UI"';
         const tw = ctx.measureText ? ctx.measureText(lrcText).width : 100;
         let ox = 0;
         if (tw > availW) {
-          if (activeLyric.text !== lastRenderedLyric) {
-            lastRenderedLyric = activeLyric.text;
-            lyricStartedAt = now;
-          }
           const elapsed = (now - lyricStartedAt) / 1000;
           const maxShift = tw - availW;
-          if (elapsed < 2.2) {
-            ox = 0;
-          } else {
-            const cycle = (elapsed - 2.2) % 9.0;
-            if (cycle < 4.0) {
-              const p = 0.5 - 0.5 * Math.cos((cycle / 4.0) * Math.PI);
-              ox = -p * maxShift;
-            } else if (cycle < 6.0) {
-              ox = -maxShift;
-            } else {
-              const p = 0.5 + 0.5 * Math.cos(((cycle - 6.0) / 3.0) * Math.PI);
-              ox = -p * maxShift;
-            }
+          if (elapsed >= 2.0) {
+            const cycle = (elapsed - 2.0) % 9.0;
+            if (cycle < 4.0) ox = -(0.5 - 0.5 * Math.cos((cycle / 4.0) * Math.PI)) * maxShift;
+            else if (cycle < 6.0) ox = -maxShift;
+            else ox = -(0.5 + 0.5 * Math.cos(((cycle - 6.0) / 3.0) * Math.PI)) * maxShift;
           }
-        } else {
-          lastRenderedLyric = activeLyric.text;
-          lyricStartedAt = now;
-          ox = 0;
         }
-        text(lrcText, mid0 + ox, cy + 4, 11.5, window.__lumadockAlbumColour || '#1ed760', 600, 'left');
+        ctx.globalAlpha *= easeP;
+        text(lrcText, mid0 + ox, cy + 4 + (1 - easeP) * 7, 11.5, lrcColour, 600, 'left');
         ctx.restore();
       } else {
-        lastRenderedLyric = '';
-        text(tr.name || 'Spotify', mid0, cy + 4, 11.5, '#f2f5ed', 700, 'left', Math.max(40, (mid1 - mid0 - timer) * 0.55));
-        const nameW = Math.min((mid1 - mid0 - timer) * 0.55, (ctx.measureText ? (ctx.font = '700 11.5px "Segoe UI"', ctx.measureText(tr.name || 'Spotify').width) : 80));
-        if (tr.artist) text(tr.artist, mid0 + nameW + 10, cy + 4, 11, 'rgba(235,240,230,.55)', 600, 'left', Math.max(0, mid1 - timer - mid0 - nameW - 10));
+        lastRenderedLyric = ''; prevRenderedLyric = '';
+        const titleAvail = Math.max(40, (mid1 - mid0 - timer - privW - ctrlW) * 0.55);
+        text(tr.name || 'Spotify', mid0, cy + 4, 11.5, '#f2f5ed', 700, 'left', titleAvail);
+        const nameW = Math.min(titleAvail, (ctx.measureText ? (ctx.font = '700 11.5px "Segoe UI"', ctx.measureText(tr.name || 'Spotify').width) : 80));
+        if (tr.artist) text(tr.artist, mid0 + nameW + 10, cy + 4, 11, 'rgba(235,240,230,.55)', 600, 'left', Math.max(0, mid1 - timer - privW - ctrlW - mid0 - nameW - 10));
       }
-      if (focus?.active()) text(focus.label(), mid1 - 26, cy + 4, 11.5, '#ffd28a', 700, 'right');
+      if (focus?.active()) text(focus.label(), mid1 - 26 - privW - ctrlW, cy + 4, 11.5, '#ffd28a', 700, 'right');
       if (p) drawLamp(p, right - 20, cy);
       // a small chevron: up = make it small, down = keep showing the music
-      const tx = right - (p ? 40 : 18), over = inside(pointer.x, pointer.y, { x: tx - 11, y: cy - 11, width: 22, height: 22 });
+      const over = inside(pointer.x, pointer.y, { x: tx - 11, y: cy - 11, width: 22, height: 22 });
       ctx.save(); if (over) { ctx.beginPath(); ctx.arc(tx, cy, 10, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fill(); }
       ctx.strokeStyle = over ? '#fff' : 'rgba(235,240,230,.55)'; ctx.lineWidth = 1.8; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
       const d = musicTucked ? 1 : -1; ctx.moveTo(tx - 4, cy - d * 2); ctx.lineTo(tx, cy + d * 2); ctx.lineTo(tx + 4, cy - d * 2); ctx.stroke(); ctx.restore();
@@ -937,7 +1023,19 @@
       ctx.beginPath(); ctx.arc(left + cover / 2, cy, r, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.stroke();
       ctx.beginPath(); ctx.arc(left + cover / 2, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * done); ctx.strokeStyle = '#ffb35c'; ctx.stroke(); ctx.restore();
       line(focus.label(), '#ffd28a');
-      if (p?.state === 'running') text(T('Claude bezig', 'Claude working'), mid1, cy + 4, 10, '#8f998d', 600, 'right');
+      if (p?.state === 'running') text(T('Claude bezig', 'Claude working', 'Claude çalışıyor'), mid1, cy + 4, 10, '#8f998d', 600, 'right');
+      return;
+    }
+    const meet = window.__lumadockNextMeeting?.();
+    if (meet && meet.url) {
+      icon('clock');
+      const bw = 64, bh = 22, bx = mid1 - bw, by = cy - bh / 2;
+      const overJoin = inside(pointer.x, pointer.y, { x: bx, y: by, width: bw, height: bh });
+      const whenLbl = meet.mins <= 0 ? T('Nu', 'Now', 'Şimdi') : `${meet.mins}m`;
+      text(`📅 ${whenLbl} · ${meet.title}`, mid0, cy + 4, 11.5, '#f2f5ed', 700, 'left', bx - mid0 - 8);
+      ctx.save(); ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, bh / 2); ctx.fillStyle = overJoin ? '#d9f7b3' : '#22e05a'; ctx.fill(); ctx.restore();
+      text(T('Deelnemen', 'Join', 'Katıl'), bx + bw / 2, cy + 4, 10.5, '#09150c', 700, 'center');
+      hit.cJoin = { x: bx, y: by, width: bw, height: bh, url: meet.url };
       return;
     }
     if (p) { icon('terminal'); line(smallStatus(p)); }
@@ -954,9 +1052,8 @@
     }
     // Folded in with the collapse button: stay closed until the mouse has left the island once.
     if (holdClosed) { if (pointer.known && inside(pointer.x, pointer.y, islandBounds)) { hoverStartedAt = null; return; } holdClosed = false; }
-    // Claude waits for an answer: the small island stays small under your mouse, so you can click Toestaan / Weigeren.
-    // On the music button the island stays as it is, so you can press it (it would open on hover otherwise)
-    if (mode === 'compact' && pointer.known && inside(pointer.x, pointer.y, tuckBox)) { hoverStartedAt = null; return; }
+    // On compact interactive controls (tuck, mini playback, download open, meeting join) keep compact so user can click cleanly
+    if (mode === 'compact' && pointer.known && [tuckBox, hit.cPrev, hit.cPlay, hit.cNext, hit.cDl, hit.cJoin].some(b => b && inside(pointer.x, pointer.y, b))) { hoverStartedAt = null; return; }
     const pa = top(); // (only when there are buttons to press; a plain question just opens on hover)
     if (mode === 'compact' && pa && (pa.permission || pa.ask || pa.plan) && pointer.known && inside(pointer.x, pointer.y, islandBounds)) { hoverStartedAt = null; return; }
     return oldHover(now);
@@ -1000,7 +1097,8 @@
   // Live bits: music notes dance while a song plays, his eyes turn orange while Claude works, the gear turns,
   // the alarm clock shows the real time.
   const ICON_BG = { music: ['#5be38c', '#1fae55'], terminal: ['#ffb38a', '#e8744a'], timer: ['#ffd27a', '#ff9a3d'], tray: ['#8fb8ff', '#4c7ff0'], copy: ['#7fe6d8', '#22b3a3'],
-    note: ['#ffe58a', '#f5b92e'], gear: ['#c9b3ff', '#8b6cf0'], clock: ['#9fc2ff', '#6c7ff0'], home: ['#d8f5a8', '#9fd45a'], pen: ['#ffb3d6', '#f0609e'] };
+    note: ['#ffe58a', '#f5b92e'], gear: ['#c9b3ff', '#8b6cf0'], clock: ['#9fc2ff', '#6c7ff0'], home: ['#d8f5a8', '#9fd45a'], pen: ['#ffb3d6', '#f0609e'],
+    cpu: ['#8ae8ff', '#2b95d6'], picker: ['#ffb3d6', '#e2498a'] };
   // Hover: Robo climbs a bit out of his tile, grows and looks ready (happy eyes, glowing light).
   // Click: he squashes and bounces back with a few sparkles.
   const iconAnim = new Map();
@@ -1093,6 +1191,16 @@
     }
     if (icon === 'home') { // a little roof as a hat
       c.fillStyle = '#e4572e'; c.beginPath(); c.moveTo(hx - 13, hy - 9); c.lineTo(hx, hy - 20); c.lineTo(hx + 13, hy - 9); c.closePath(); c.fill(); c.fillStyle = '#b8401f'; c.fillRect(hx + 5, hy - 19, 3, 6);
+    }
+    if (icon === 'cpu') { // mini microchip badge + CPU bar
+      const st = window.__lumadockStats?.();
+      const load = Math.min(1, Math.max(0.1, (st?.cpuPct || 15) / 100));
+      c.fillStyle = '#142636'; c.beginPath(); c.roundRect(14, 32, 20, 11, 2.5); c.fill();
+      c.fillStyle = load > 0.8 ? '#ff7b72' : '#7fd8ff'; c.beginPath(); c.roundRect(16, 34, Math.max(3, 16 * load), 7, 1.5); c.fill();
+    }
+    if (icon === 'picker') { // color swatch in front of Robo
+      c.fillStyle = lastPickedColour || '#ff85b3'; c.strokeStyle = '#fff'; c.lineWidth = 1.6;
+      c.beginPath(); c.arc(36, 36, 6.5, 0, Math.PI * 2); c.fill(); c.stroke();
     }
     c.restore(); // end of Robo
     if (since < 380) { // sparkles
@@ -1229,8 +1337,8 @@
     else { ctx.save(); ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.strokeStyle = dot; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore(); }
   }
   // Each AI has its own colour (the same as in LumaDock → Verbindingen).
-  const AI_COLOUR = { claudecode: '#d97757', codex: '#3b82f6', claude: '#e8a87c', chatgpt: '#10a37f' };
-  // All chats going on at once, across AIs: every Claude Code / Codex session, plus the ChatGPT and Claude chats.
+  const AI_COLOUR = { claudecode: '#d97757', codex: '#3b82f6', gemini: '#4285f4', cursor: '#a855f7', claude: '#e8a87c', chatgpt: '#10a37f' };
+  // All chats going on at once, across AIs: every Claude Code / Codex / Gemini session, plus the ChatGPT and Claude chats.
   function activeChats() {
     const out = [];
     for (const q of providers().filter(shown)) {
@@ -1250,7 +1358,14 @@
     ctx.beginPath(); ctx.arc(x + w - 1, y + h - 1, 3.2, 0, Math.PI * 2); ctx.fillStyle = lamp; ctx.shadowColor = lamp; ctx.shadowBlur = 5; ctx.fill();
     ctx.restore();
   }
-  const CHAT_WORDS = { running: 'Bezig', sending: 'Bezig', question: 'Wacht op jou', done: 'Klaar', error: 'Fout', ready: 'Rustig' };
+  const chatWord = s => ({
+    running: T('Bezig', 'Busy', 'Çalışıyor'),
+    sending: T('Bezig', 'Sending', 'Gönderiyor'),
+    question: T('Wacht op jou', 'Waiting', 'Bekliyor'),
+    done: T('Klaar', 'Done', 'Bitti'),
+    error: T('Fout', 'Error', 'Hata'),
+    ready: T('Rustig', 'Idle', 'Boşta')
+  }[s] || '');
   // Nothing going on: which AIs Robo is watching (or where to connect one).
   function drawIdleAi(tx, y, tw, h, live) {
     const watching = providers().filter(q => q.connected || q.hooksInstalled), last = state.history?.[0];
@@ -1292,8 +1407,8 @@
   // Several chats at once (two Claude Code sessions, Codex and ChatGPT…): a short summary and one row each.
   function drawChatList(chats, tx, y, tw, h, live) {
     const count = s => chats.filter(c => (s === 'busy' ? busy(c) : c.state === s)).length;
-    const parts = [[count('busy'), 'bezig'], [count('question'), 'wachten op jou'], [count('done'), 'klaar']].filter(([n]) => n).map(([n, w]) => `${n} ${w}`);
-    text(`${chats.length} chats`, tx, y + 29, 14, '#f2f5ef', 700, 'left', tw * 0.4);
+    const parts = [[count('busy'), T('bezig', 'busy', 'aktif')], [count('question'), T('wachten op jou', 'waiting', 'bekliyor')], [count('done'), T('klaar', 'done', 'bitti')]].filter(([n]) => n).map(([n, w]) => `${n} ${w}`);
+    text(`${chats.length} ${T('chats', 'chats', 'sohbet')}`, tx, y + 29, 14, '#f2f5ef', 700, 'left', tw * 0.4);
     text(parts.join(' · '), tx + tw, y + 29, 11, '#8a918c', 600, 'right', tw * 0.6);
     const top = y + 42, rowH = Math.max(22, Math.min(28, (h - 54) / Math.min(chats.length, 4))), rows = Math.max(1, Math.floor((h - 50) / rowH));
     chats.slice(0, rows).forEach((c, i) => {
@@ -1302,10 +1417,10 @@
       miniBot(tx, ry + rowH / 2 - 8, 20, AI_COLOUR[c.provider] || '#aaa', colourOf(c.state), busy(c), false);
       text(c.project && c.project !== c.name ? c.project : c.name, tx + 30, ry + rowH / 2 + 4, 11.5, '#e8ece6', 650, 'left', tw * 0.45);
       if (c.project && c.project !== c.name) text(c.name, tx + 30 + Math.min(tw * 0.45, c.project.length * 6.6) + 6, ry + rowH / 2 + 4, 10, '#7d847f', 600, 'left', tw * 0.2);
-      text(CHAT_WORDS[c.state] || '', tx + tw, ry + rowH / 2 + 4, 10.5, colourOf(c.state), 700, 'right');
+      text(chatWord(c.state), tx + tw, ry + rowH / 2 + 4, 10.5, colourOf(c.state), 700, 'right');
       if (live) hit['aichip_' + i] = { x: tx - 6, y: ry, width: tw + 6, height: rowH, provider: c.provider };
     });
-    if (chats.length > rows) text(`+ nog ${chats.length - rows}`, tx + tw, y + h - 8, 10, '#6b726e', 600, 'right');
+    if (chats.length > rows) text(`+${chats.length - rows} ${T('meer', 'more', 'diğer')}`, tx + tw, y + h - 8, 10, '#6b726e', 600, 'right');
   }
   function drawClaudeCard(lx, y, leftW, h, live) {
     const { p, st, project, statusText, dot } = claudeInfo(), agentName = p?.name || 'AI';
@@ -1333,7 +1448,7 @@
     const lim = usage().fiveHour;
     if (lim && lim.used >= 50) {
       const c = ringColour(lim.used), bw = 74, bx = tx + tw - bw, pulse = lim.used >= 90 ? 0.65 + 0.35 * Math.cos(performance.now() / 260) : 1;
-      ctx.save(); ctx.globalAlpha = pulse; text(`Limiet ${lim.used}%`, tx + tw, sy - 2, 10.5, c, 800, 'right');
+      ctx.save(); ctx.globalAlpha = pulse; text(`${T('Limiet', 'Limit', 'Limit')} ${lim.used}%`, tx + tw, sy - 2, 10.5, c, 800, 'right');
       ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.beginPath(); ctx.roundRect(bx, sy + 3, bw, 3, 1.5); ctx.fill();
       ctx.fillStyle = c; ctx.beginPath(); ctx.roundRect(bx, sy + 3, bw * Math.min(1, lim.used / 100), 3, 1.5); ctx.fill(); ctx.restore();
     }
@@ -1502,7 +1617,36 @@
       text(status, r.x + 18, r.y + r.height - 18, 11.5, '#8f998d', 500, 'left', r.width - 36);
     }
   }
-  const RENDER = { claude: claudeWidget, spotify: spotifyWidget, focus: focusWidget, note: noteWidget, clips: clipsWidget, clock: clockWidget };
+  function cpuWidget(w, r) {
+    const st = window.__lumadockStats?.() || { cpuPct: 0, memPct: 0, memUsedGb: 0, memTotalGb: 0, history: [] };
+    if (w.size === 'S') return genericWidget(w, r);
+    const barRow = (lbl, valTxt, part, y, col) => {
+      text(lbl, r.x + 16, y, 11, '#9aa596', 600, 'left', 44);
+      text(valTxt, r.x + r.width - 16, y, 11, '#f2f5ef', 700, 'right', r.width - 80);
+      ctx.save(); ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.beginPath(); ctx.roundRect(r.x + 16, y + 6, r.width - 32, 4, 2); ctx.fill();
+      ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect(r.x + 16, y + 6, Math.max(4, (r.width - 32) * Math.min(1, part)), 4, 2); ctx.fill(); ctx.restore();
+    };
+    window.__lumadockIcon?.('cpu', r.x + 22, r.y + 19, 15, '#7fd8ff');
+    text(T('Systeem', 'System', 'Sistem'), r.x + 36, r.y + 23, 12, '#f2f5ef', 700);
+    if (w.size === 'W') {
+      barRow('CPU', `${st.cpuPct}%`, st.cpuPct / 100, r.y + 42, st.cpuPct > 80 ? '#ff7b72' : '#7fd8ff');
+      barRow('RAM', `${st.memPct}% · ${st.memUsedGb}G`, st.memPct / 100, r.y + 62, '#c6e994');
+      return;
+    }
+    barRow('CPU', `${st.cpuPct}%`, st.cpuPct / 100, r.y + 46, st.cpuPct > 80 ? '#ff7b72' : '#7fd8ff');
+    barRow('RAM', `${st.memUsedGb}/${st.memTotalGb} GB (${st.memPct}%)`, st.memPct / 100, r.y + 74, '#c6e994');
+    const hist = st.history || [];
+    if (hist.length > 1) {
+      const sx = r.x + 16, sy = r.y + r.height - 16, sw = r.width - 32, sh = 24;
+      ctx.save(); ctx.strokeStyle = 'rgba(127,216,255,.7)'; ctx.lineWidth = 1.6; ctx.beginPath();
+      hist.forEach((v, i) => {
+        const px = sx + (i / (hist.length - 1)) * sw, py = sy - (Math.min(100, v) / 100) * sh;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.stroke(); ctx.restore();
+    }
+  }
+  const RENDER = { claude: claudeWidget, spotify: spotifyWidget, focus: focusWidget, note: noteWidget, clips: clipsWidget, clock: clockWidget, cpu: cpuWidget };
   function drawWidget(w, r, live) {
     if (w.id === 'claude' && w.size === 'L') return drawClaudeCard(r.x, r.y, r.width, r.height, live);
     widgetBg(r, live ? APPS[w.id].key : null);
@@ -1716,23 +1860,27 @@
     const PAGE = window.__lumadockPage, focus = window.__lumadockFocus, p = top();
     PAGE.title(area, 'Apps', T('Alles wat LumaDock voor je kan doen · Ctrl+Alt+1–6 = sneltoets', 'Everything LumaDock can do for you · Ctrl+Alt+1–6 = shortcut', 'LumaDock ile yapabileceğiniz her şey · Ctrl+Alt+1–6 = kısayol'));
     const cols = 4, x = area.x + PAGE.contentX, gap = 10, w = Math.floor((area.width - PAGE.contentX * 2 - gap * (cols - 1)) / cols);
-    const y = area.y + PAGE.bodyY, h = Math.min(84, Math.floor((area.height - PAGE.bodyY - gap - 4) / 2));
     const tray = window.__lumadockTrayCount?.() || 0;
+    const st = window.__lumadockStats?.();
     const tiles = [
       ['music', 'Spotify', spotifyState.track ? short(spotifyState.track.name, 22) : (spotifyConnected ? T('Niks aan het spelen', 'No music playing', 'Müzik çalmıyor') : T('Nog niet gekoppeld', 'Not connected', 'Bağlı değil')), 'spotifyApp', window.__lumadockAlbumColour || TILE_TINT.music],
       ['terminal', 'AI', p ? p.name + ' · ' + (p.detail || labels[p.state]) : 'Claude, ChatGPT, Codex', 'monitor_claudecode', p ? colourOf(p.state) : TILE_TINT.terminal],
-      ['timer', 'Focus', focus?.active() ? `Nog ${focus.label()}` : `${focus?.minutes?.() || 25} min`, 'focusApp', TILE_TINT.timer],
+      ['timer', 'Focus', focus?.active() ? `${focus.label()}` : `${focus?.minutes?.() || 25} min`, 'focusApp', TILE_TINT.timer],
       ['tray', T('Lade', 'Tray', 'Çekmece'), tray ? `${tray} ` + T('bestand', 'file', 'dosya') : T('Leeg', 'Empty', 'Boş'), 'trayApp', TILE_TINT.tray],
       ['copy', T('Klembord', 'Clipboard', 'Pano'), T('Je laatste kopieën', 'Recent clippings', 'Son kopyalananlar'), 'clipsApp', '#5ad1c4'],
       ['note', T('Notitie', 'Notes', 'Notlar'), T('Snel iets opschrijven', 'Quick note', 'Hızlı not al'), 'noteApp', '#ffd166'],
+      ['cpu', T('Systeem', 'System', 'Sistem'), st ? `CPU ${st.cpuPct}% · RAM ${st.memPct}%` : 'CPU & RAM', 'cpuApp', '#7fd8ff'],
+      ['picker', T('Kleur', 'Color Picker', 'Renk Seç'), lastPickedColour || T('Kopieer pixelkleur', 'Pick screen color', 'Ekrandan renk al'), 'pickerApp', lastPickedColour || '#ff85b3'],
       ['gear', T('Instellingen', 'Settings', 'Ayarlar'), T('Kleuren, geluid en meer', 'Colors, sound and more', 'Renkler, ses ve fazlası'), 'settingsApp', TILE_TINT.gear]
     ];
     // apps you removed in LumaDock Instellingen → Apps are not here (Instellingen itself always is)
     const off = window.__lumadockAppsOff?.() || new Set(), shown = tiles.filter(t => !off.has(APP_OF_KEY[t[3]]));
+    const rows = Math.max(2, Math.ceil((shown.length + 1) / cols));
+    const y = area.y + PAGE.bodyY, h = Math.min(84, Math.floor((area.height - PAGE.bodyY - gap * (rows - 1) - 4) / rows));
     for (const t of tiles) if (!shown.includes(t)) delete hit[t[3]];
     shown.forEach(([icon, name, status, key, tint], i) => tile(x + (i % cols) * (w + gap), y + Math.floor(i / cols) * (h + gap), w, h, icon, name, status, key, tint));
     // next free spot: the Robo tip
-    const tipAt = Math.min(shown.length, cols * 2 - 1), tx = x + (tipAt % cols) * (w + gap), ty = y + Math.floor(tipAt / cols) * (h + gap);
+    const tipAt = Math.min(shown.length, cols * rows - 1), tx = x + (tipAt % cols) * (w + gap), ty = y + Math.floor(tipAt / cols) * (h + gap);
     ctx.save(); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.roundRect(tx + 0.5, ty + 0.5, w - 1, h - 1, 15.5); ctx.strokeStyle = 'rgba(255,255,255,.1)'; ctx.stroke(); ctx.restore();
     text('TIP', tx + 16, ty + h / 2 - 16, 9.5, '#c6e994', 700);
     text('Ctrl + Alt + T', tx + 16, ty + h / 2 + 2, 13, '#fff', 700, 'left', w - 32);
@@ -1747,6 +1895,8 @@
     tray: { icon: 'tray', label: T('Lade', 'Tray', 'Çekmece'), key: 'trayApp', tint: () => '#7ab8ff' },
     clips: { icon: 'copy', label: T('Klembord', 'Clipboard', 'Pano'), key: 'clipsApp', tint: () => '#5ad1c4' },
     note: { icon: 'note', label: T('Notitie', 'Notes', 'Notlar'), key: 'noteApp', tint: () => '#ffd166' },
+    cpu: { icon: 'cpu', label: T('Systeem', 'System', 'Sistem'), key: 'cpuApp', tint: () => '#7fd8ff' },
+    picker: { icon: 'picker', label: T('Kleur', 'Color', 'Renk Seç'), key: 'pickerApp', tint: () => lastPickedColour || '#ff85b3' },
     settings: { icon: 'gear', label: T('Instellingen', 'Settings', 'Ayarlar'), key: 'settingsApp', tint: () => '#b98cff' },
     clock: { icon: 'clock', label: T('Klok', 'Clock', 'Saat'), key: 'clockApp', tint: () => '#8ab4ff' }
   };
@@ -1758,13 +1908,15 @@
   window.__lumadockShortcuts = shortcuts;
   let editShortcuts = false;
   function appStatus(id) {
-    const focus = window.__lumadockFocus, p = top(), tray = window.__lumadockTrayCount?.() || 0;
+    const focus = window.__lumadockFocus, p = top(), tray = window.__lumadockTrayCount?.() || 0, st = window.__lumadockStats?.();
     if (id === 'spotify') return spotifyState.track ? short(spotifyState.track.name, 20) : T('Muziek', 'Music', 'Müzik');
     if (id === 'claude') return p ? p.detail || labels[p.state] : T('Rustig', 'Idle', 'Boşta');
-    if (id === 'focus') return focus?.active() ? `Nog ${focus.label()}` : `${focus?.minutes?.() || 25} min`;
+    if (id === 'focus') return focus?.active() ? focus.label() : `${focus?.minutes?.() || 25} min`;
     if (id === 'tray') return tray ? `${tray} ` + T('bestand', 'file', 'dosya') : T('Leeg', 'Empty', 'Boş');
     if (id === 'clips') return T('Laatste kopieën', 'Recent clips', 'Son kopyalar');
     if (id === 'note') return T('Opschrijven', 'Write note', 'Not yaz');
+    if (id === 'cpu') return st ? `CPU ${st.cpuPct}% · RAM ${st.memPct}%` : 'CPU & RAM';
+    if (id === 'picker') return lastPickedColour || T('Kleur kiezen', 'Pick color', 'Renk seç');
     if (id === 'clock') return new Date().toLocaleTimeString(LOCALE(), { hour: '2-digit', minute: '2-digit' });
     return T('Kleuren, geluid', 'Colors, sound', 'Renkler, ses');
   }
@@ -1836,6 +1988,23 @@
   canvas.addEventListener('click', event => {
     // A tap on Robo himself is for Robo (he hops, gets angry, gets dizzy), not for the card he stands on.
     if (mode === 'expanded' && inside(event.clientX, event.clientY, hit.ghost)) return;
+    if (mode === 'expanded' && inside(event.clientX, event.clientY, hit.pickerApp)) {
+      event.preventDefault(); event.stopImmediatePropagation(); sound('click');
+      api.buddyPickColor?.().then(res => {
+        if (res?.ok && res.hex) {
+          lastPickedColour = res.hex;
+          window.__lumadockFlash?.(`🎨 ${res.hex} ${T('gekopieerd', 'copied', 'kopyalandı')}`, 2500);
+          window.__lumadockChime?.('pop');
+        }
+      }).catch(() => {});
+      return;
+    }
+    if (mode === 'expanded' && inside(event.clientX, event.clientY, hit.cpuApp)) {
+      event.preventDefault(); event.stopImmediatePropagation(); sound('click');
+      const st = window.__lumadockStats?.();
+      if (st) window.__lumadockFlash?.(`💻 CPU ${st.cpuPct}% · RAM ${st.memUsedGb}/${st.memTotalGb} GB (${st.memPct}%)`, 2800);
+      return;
+    }
     // one of the little bots on the AI card: open that chat
     for (const [key, box] of Object.entries(hit)) {
       if (key.startsWith('aichip_') && inside(event.clientX, event.clientY, box)) { event.preventDefault(); event.stopImmediatePropagation(); open(box.provider, true); return; }

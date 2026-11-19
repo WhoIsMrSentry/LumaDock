@@ -14,7 +14,8 @@ process.stdin.on('end', () => {
   if (!sessionId) process.exit(0);
   // ppid = the process that started this hook (part of Claude Code), used for "jump to terminal".
   const body = JSON.stringify({ session_id: sessionId, pid: process.ppid });
-  const req = http.request({ host: '127.0.0.1', port: 47823, path: '/lumadock-wait', method: 'POST',
+  const port = Number(process.env.LUMADOCK_HOOK_PORT) || 47823;
+  const req = http.request({ host: '127.0.0.1', port, path: '/lumadock-wait', method: 'POST',
     headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body), 'x-lumadock-token': process.argv[2] || '' } }, res => {
     let answer = '';
     res.setEncoding('utf8');

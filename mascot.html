@@ -1007,6 +1007,19 @@ function modeTarget(
 }
 
 
+const visualVel = { width: 0, height: 0, radius: 0 };
+
+function stepSpring(val, vel, target, stiffness, damping, dt) {
+  const steps = Math.max(1, Math.ceil(dt / 0.006));
+  const h = dt / steps;
+  for (let i = 0; i < steps; i++) {
+    const force = (target - val) * stiffness;
+    vel += (force - vel * damping) * h;
+    val += vel * h;
+  }
+  return [val, vel];
+}
+
 function setMode(
   next,
   playSound = true
@@ -1058,9 +1071,8 @@ function setMode(
     started:
       performance.now(),
 
-    // Opening and closing use the same speed and the same motion.
     duration:
-      380,
+      340,
 
     growing
   };
@@ -1085,76 +1097,54 @@ function setMode(
 
 
 function updateTransition(
-  now
+  now,
+  dt = 0.016
 ) {
-  if (
-    !transition
-  ) {
+  const target = modeTarget(mode);
+  const needSpring =
+    Boolean(transition) ||
+    Math.abs(target.width - visual.width) > 0.6 ||
+    Math.abs(target.height - visual.height) > 0.6 ||
+    Math.abs(target.radius - visual.radius) > 0.4;
+
+  if (!needSpring) {
+    visualVel.width = 0;
+    visualVel.height = 0;
+    visualVel.radius = 0;
+    transition = null;
     return;
   }
 
+  // Smooth continuous damped spring (preserves velocity across interrupts & lyric/playlist resizes)
+  const stepDt = Math.min(0.035, Math.max(0.001, dt || 0.016));
+  const k = transition?.bounce ? 240 : 285;
+  const d = transition?.bounce ? 20 : 26;
 
-  const raw =
-    clamp(
-      (
-        now -
-        transition.started
-      ) /
-      transition.duration
-    );
+  [visual.width, visualVel.width] = stepSpring(visual.width, visualVel.width, target.width, k, d, stepDt);
+  [visual.height, visualVel.height] = stepSpring(visual.height, visualVel.height, target.height, k, d, stepDt);
+  [visual.radius, visualVel.radius] = stepSpring(visual.radius, visualVel.radius, target.radius, 320, 32, stepDt);
 
+  visual.width = Math.max(40, visual.width);
+  visual.height = Math.max(16, visual.height);
+  visual.radius = Math.max(6, visual.radius);
 
-  const amount =
-    1 -
-    Math.pow(
-      1 -
-      raw,
-      3
-    );
+  const settled =
+    Math.abs(target.width - visual.width) < 0.45 &&
+    Math.abs(target.height - visual.height) < 0.45 &&
+    Math.abs(target.radius - visual.radius) < 0.35 &&
+    Math.abs(visualVel.width) < 6 &&
+    Math.abs(visualVel.height) < 6;
 
-
-  // The shape moves like a spring (Apple's Dynamic Island): it overshoots a few percent and settles.
-  // The corners just ease, so the shape never looks bent.
-  const springy = transition.ease === 'in' ? raw * raw * raw // the blob squish: slow start, quick end
-    : transition.bounce ? 1 - Math.exp(-4.6 * raw) * Math.cos(12.5 * raw) // the blob opening: a real bounce
-    : 1 - Math.exp(-7 * raw) * Math.cos(7.2 * raw);
-
-
-  visual.width =
-    lerp(
-      transition.from.width,
-      transition.to.width,
-      springy
-    );
-
-
-  visual.height =
-    lerp(
-      transition.from.height,
-      transition.to.height,
-      springy
-    );
-
-
-  visual.radius =
-    lerp(
-      transition.from.radius,
-      transition.to.radius,
-      amount
-    );
-
-
-  if (
-    raw >=
-    1
-  ) {
-    visual = {
-      ...transition.to
-    };
-
-
-    transition =
-      null;
+  if (settled) {
+    visual = { ...target };
+    visualVel.width = 0;
+    visualVel.height = 0;
+    visualVel.radius = 0;
+    transition = null;
+  } else if (!transition) {
+    transition = { from: { ...visual }, to: target, started: now, duration: 260, growing: target.width * target.height > visual.width * visual.height };
+  } else {
+    transition.to = target;
   }
 }
 
@@ -5092,7 +5082,8 @@ function drawIslandFrame(
 
 
   updateTransition(
-    now
+    now,
+    dt
   );
 
 
@@ -5202,11 +5193,10 @@ let lumadockLastDraw = -Infinity;
 
 function render(now) {
   try {
-    // Cap at ~60 FPS max (16ms) to avoid saturating high-refresh 120Hz/144Hz/240Hz displays
-    if (now - lumadockLastDraw < 16) return;
-    // Resting and the mouse is elsewhere: 30 frames a second is plenty for the small pill
-    // and halves the work the PC does all day long.
-    if (mode === 'rest' && !pointer.known && now - lumadockLastDraw < 33) return;
+    // Allow full 60Hz+ VSync pacing without skipping frames due to 15.8ms timer jitter; cap ultra-high >120Hz displays at ~120fps
+    if (now - lumadockLastDraw < 7) return;
+    // Resting and the mouse is elsewhere: ~30 frames a second is plenty for the small pill
+    if (mode === 'rest' && !pointer.known && now - lumadockLastDraw < 31) return;
     lumadockLastDraw = now;
     drawIslandFrame(now);
   } catch (error) {
@@ -5583,21 +5573,15 @@ addEventListener(
 
 
 // ============================================================
-// SPOTIFY POLL
+// WINDOW PREFS SYNC
 // ============================================================
-
-setInterval(
-  () => {
-    if (
-      currentView ===
-      'spotify'
-    ) {
-      refreshSpotify();
-    }
-  },
-
-  2200
-);
+try {
+  const p = JSON.parse(localStorage.getItem('lumadock:prefs') || '{}');
+  window.lumadock?.setWindowPrefs?.({
+    fullscreenHide: Boolean(p.fullscreenHide),
+    displayIndex: Number.isInteger(p.displayIndex) ? p.displayIndex : -1
+  });
+} catch {}
 
 </script>
 <script src="./src/ui/i18n-ui.js"></script>

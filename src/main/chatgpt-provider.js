@@ -108,27 +108,27 @@ function nativeRuntime() {
   }
 
   throw new Error(
-    'Het Codex-programma ontbreekt. Voer uit: npm.cmd install @openai/codex --save --include=optional'
+    'Codex binary missing. Run: npm.cmd install @openai/codex --save --include=optional'
   );
 }
 
 function safeMessage(value) {
   return String(
-    value || 'De ChatGPT-verbinding is mislukt.'
+    value || 'ChatGPT connection failed.'
   )
     .replace(/https?:\/\/\S+/gi, '[URL]')
-    .replace(/\bBearer\s+\S+/gi, 'Bearer [verborgen]')
+    .replace(/\bBearer\s+\S+/gi, 'Bearer [redacted]')
     .replace(
       /\b(?:sk-[A-Za-z0-9_-]+|eyJ[A-Za-z0-9_.-]+)/g,
-      '[verborgen]'
+      '[redacted]'
     )
     .replace(
       /((?:access_token|refresh_token|id_token|api_key|authorization|user_code|device_code|code|state)\s*[=:]\s*)[^\s,;]+/gi,
-      '$1[verborgen]'
+      '$1[redacted]'
     )
     .replace(
       /[A-Za-z0-9_+./=-]{70,}/g,
-      '[verborgen]'
+      '[redacted]'
     )
     .slice(0, 900);
 }
@@ -162,7 +162,7 @@ function notify(method, params) {
 }
 
 function stop(
-  error = new Error('De ChatGPT-verbinding is gesloten.')
+  error = new Error('ChatGPT connection closed.')
 ) {
   const running = child;
 
@@ -215,15 +215,14 @@ function receive(line) {
     return;
   }
 
-  // Project Mode maakt in deze fase alleen voorstellen.
-  if (message.id != null && message.method) {
+  if (message.id != null && !message.method) {
     child?.stdin.write(
       JSON.stringify({
         id: message.id,
         error: {
           code: -32601,
           message:
-            'LumaDock staat geen tooluitvoering toe in deze fase.'
+            'LumaDock does not allow tool execution in this phase.'
         }
       }) + '\n'
     );
@@ -243,7 +242,7 @@ function request(method, params = {}, timeout = 25000) {
       child.killed ||
       !child.stdin.writable
     ) {
-      reject(new Error('ChatGPT is niet gestart.'));
+      reject(new Error('ChatGPT has not started.'));
       return;
     }
 
@@ -254,7 +253,7 @@ function request(method, params = {}, timeout = 25000) {
 
       reject(
         new Error(
-          'ChatGPT reageerde niet op tijd. Probeer opnieuw.'
+          'ChatGPT did not respond in time. Please try again.'
         )
       );
     }, timeout);
@@ -271,7 +270,7 @@ function request(method, params = {}, timeout = 25000) {
 
         reject(
           new Error(
-            'Het verzoek kon niet naar ChatGPT worden gestuurd.'
+            'Could not send the request to ChatGPT.'
           )
         );
       }

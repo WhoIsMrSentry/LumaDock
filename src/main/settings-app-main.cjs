@@ -6,6 +6,8 @@ const { app, BrowserWindow, ipcMain, net, shell, dialog } = require('electron');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..', '..');
+const handleIpc = (ch, fn) => ipcMain?.handle?.(ch, fn);
+const onIpc = (ch, fn) => ipcMain?.on?.(ch, fn);
 let win = null, dirty = false, closing = false;
 // Its own app for Windows: own name, own icon, own taskbar button (tray-main.cjs makes the Start menu shortcut).
 const APP_ID = 'com.lumadock.settings', APP_NAME = 'LumaDock Settings', ICON = path.join(ROOT, 'assets', 'settings-icon.ico');
@@ -87,24 +89,24 @@ const clean = req => ({
   values: Object.fromEntries(Object.entries(req?.values || {}).filter(([k, v]) => /^tc-in-[\w-]+$/.test(k) && typeof v === 'string').map(([k, v]) => [k, v.slice(0, 2000)]))
 });
 
-ipcMain.on('settings-app:open', (e, tab) => { if (fromIsland(e)) open(tab); });
-ipcMain.handle('settings-app:get', async (e, req) => {
+onIpc('settings-app:open', (e, tab) => { if (fromIsland(e)) open(tab); });
+handleIpc('settings-app:get', async (e, req) => {
   if (!fromApp(e)) return null;
   const r = await relay(clean(req));
   if (r?.info) { dirty = !!r.info.dirty; appLang = ['en', 'tr'].includes(r.info.lang) ? r.info.lang : 'en'; }
   return r;
 });
-ipcMain.on('settings-app:dirty', (e, on) => { if (fromApp(e)) dirty = !!on; }); // the AI choice is a draft in the app itself
-ipcMain.on('settings-app:theme', (e, name) => {
+onIpc('settings-app:dirty', (e, on) => { if (fromApp(e)) dirty = !!on; }); // the AI choice is a draft in the app itself
+onIpc('settings-app:theme', (e, name) => {
   if (!fromApp(e) || !THEMES[name]) return;
   theme = name;
   try { win.setTitleBarOverlay({ color: THEMES[name].bg, symbolColor: THEMES[name].symbol, height: 44 }); win.setBackgroundColor(THEMES[name].bg); } catch {}
 });
-ipcMain.on('settings-app:frame', (e, url) => { // the app's own Robo, drawn by the island from your draft (buddy-ui.js)
+onIpc('settings-app:frame', (e, url) => { // the app's own Robo, drawn by the island from your draft (buddy-ui.js)
   if (fromIsland(e) && win && !win.isDestroyed() && typeof url === 'string' && url.startsWith('data:image/')) win.webContents.send('settings-app:face', url);
 });
-app.on('lumadock-open-settings', () => open()); // tray menu, or the Start menu shortcut while LumaDock runs
-if (process.argv.includes('--settings')) app.whenReady().then(() => setTimeout(() => open(), 1200)); // started from the Start menu shortcut
+app?.on?.('lumadock-open-settings', () => open()); // tray menu, or the Start menu shortcut while LumaDock runs
+if (app && process.argv.includes('--settings')) app.whenReady().then(() => setTimeout(() => open(), 1200)); // started from the Start menu shortcut
 
 // Home and Verbindingen: your name, what your AI did, and which AIs LumaDock follows (ai-monitor-main.cjs).
 const os = require('node:os'), fs = require('node:fs');
@@ -114,23 +116,26 @@ async function connections() {
   const view = m.view(), auto = (await m.handlers['ai-monitor:auto-get']()).auto;
   const by = id => view.providers.find(p => p.provider === id) || {};
   const item = (id, on, available, p) => ({ id, on: !!on, available, soon: !!p.soon, state: p.connected ? (p.permission ? 'question' : p.state) : 'off', detail: p.detail || '', project: p.source?.title || '' });
-  return { ok: true, list: [
+  return { ok: true, webMonitor: !view.chatSoon, list: [
     item('claudecode', by('claudecode').hooksInstalled, fs.existsSync(path.join(os.homedir(), '.claude')), by('claudecode')),
     item('codex', by('codex').hooksInstalled, by('codex').available !== false, by('codex')),
-    item('claude', auto.claude, true, by('claude')),
-    item('chatgpt', auto.chatgpt, true, by('chatgpt'))
+    item('gemini', by('gemini').hooksInstalled, by('gemini').available !== false, by('gemini')),
+    item('cursor', by('cursor').hooksInstalled, by('cursor').available !== false, by('cursor')),
+    item('claude', auto.claude, !view.chatSoon, by('claude')),
+    item('chatgpt', auto.chatgpt, !view.chatSoon, by('chatgpt'))
   ] };
 }
 async function connect(id, on) {
   const h = app.lumadockMonitor?.handlers; if (!h) throw new Error(lang() === 'tr' ? 'LumaDock henüz başlatılıyor.' : (lang() === 'en' ? 'LumaDock is still starting up.' : 'LumaDock is nog aan het opstarten.'));
-  if (id === 'claudecode' || id === 'codex') await h[on ? 'ai-monitor:hooks-install' : 'ai-monitor:hooks-uninstall']({ agent: id === 'codex' ? 'codex' : 'claude' });
+  if (id === 'webMonitor') await h['ai-monitor:set-chat-soon']({ enabled: !on });
+  else if (['claudecode', 'codex', 'gemini', 'cursor'].includes(id)) await h[on ? 'ai-monitor:hooks-install' : 'ai-monitor:hooks-uninstall']({ agent: id === 'claudecode' ? 'claude' : id });
   else if (id === 'claude' || id === 'chatgpt') { const r = await h['ai-monitor:auto-set']({ provider: id, on }); if (on && !r.found) return { ...(await connections()), waiting: id }; }
   return connections();
 }
-ipcMain.handle('settings-app:home', e => fromApp(e) ? { ok: true, user: userName(), history: app.lumadockMonitor?.history() || [] } : null);
-ipcMain.handle('settings-app:connections', e => fromApp(e) ? connections() : null);
-ipcMain.handle('settings-app:connect', async (e, req) => {
-  if (!fromApp(e) || !['claudecode', 'codex', 'claude', 'chatgpt'].includes(req?.id)) return null;
+handleIpc('settings-app:home', e => fromApp(e) ? { ok: true, user: userName(), history: app.lumadockMonitor?.history() || [] } : null);
+handleIpc('settings-app:connections', e => fromApp(e) ? connections() : null);
+handleIpc('settings-app:connect', async (e, req) => {
+  if (!fromApp(e) || !['claudecode', 'codex', 'gemini', 'cursor', 'claude', 'chatgpt', 'webMonitor'].includes(req?.id)) return null;
   try { return await connect(req.id, req.on === true); } catch (error) { const msg = error instanceof Error ? error.message : String(error); return { ok: false, error: msg }; }
 });
 
@@ -140,21 +145,27 @@ const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}`;
 let news = null, newsAt = 0;
 
 const { exec } = require('node:child_process');
+const crypto = require('node:crypto');
 
 let cachedCurrentHash = '';
 function currentGitHash() {
   if (cachedCurrentHash) return cachedCurrentHash;
   try {
-    const { execSync } = require('node:child_process');
-    cachedCurrentHash = execSync('git rev-parse --short HEAD', { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-    return cachedCurrentHash;
-  } catch {
-    cachedCurrentHash = '6d90b97';
-    return cachedCurrentHash;
-  }
+    if (fs.existsSync(path.join(ROOT, '.git'))) {
+      const { execSync } = require('node:child_process');
+      cachedCurrentHash = execSync('git rev-parse --short HEAD', { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      if (cachedCurrentHash) return cachedCurrentHash;
+    }
+  } catch {}
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+    cachedCurrentHash = String(pkg.buildHash || pkg.version || '');
+  } catch { cachedCurrentHash = ''; }
+  return cachedCurrentHash;
 }
 
 function remoteGitHashAsync() {
+  if (!fs.existsSync(path.join(ROOT, '.git'))) return Promise.resolve(null);
   return new Promise(resolve => {
     exec(`git ls-remote https://github.com/${GITHUB_REPO}.git HEAD`, { cwd: ROOT, timeout: 4000, encoding: 'utf8' }, (err, stdout) => {
       if (err || !stdout) return resolve(null);
@@ -189,7 +200,7 @@ async function getNews() {
         url: String(r.html_url || ''),
         beta: !!r.prerelease,
         hash: '',
-        assets: (r.assets || []).map(a => ({ name: a.name, url: a.browser_download_url, size: a.size }))
+        assets: (r.assets || []).map(a => ({ name: a.name, url: a.browser_download_url, size: a.size, digest: String(a.digest || '') }))
       }));
     }
 
@@ -260,9 +271,17 @@ async function getNews() {
     return { ok: false, version: currentVersion, hash: currentHash, error: msg };
   }
 }
-ipcMain.handle('settings-app:news', e => fromApp(e) ? getNews() : null);
+handleIpc('settings-app:news', e => fromApp(e) ? getNews() : null);
 
-// Auto-Updater: checks latest GitHub release/commit, downloads installer or verifies hash
+const compareVersions = (a, b) => {
+  const parts = v => String(v || '').replace(/^v/i, '').split('-')[0].split('.').map(n => parseInt(n, 10) || 0);
+  const x = parts(a), y = parts(b);
+  for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0);
+  return 0;
+};
+const isAllowedExternalUrl = url => /^https:\/\/(github\.com\/(WhoIsMrSentry\/LumaDock|lumadock\/lumadock)|lumadock\.app)(\/|$)/.test(String(url || ''));
+
+// Auto-Updater: checks latest GitHub release/commit, verifies checksum & downloads installer
 let updateState = { status: 'idle', tag: '', hash: '', progress: 0, error: '' };
 async function checkAndApplyUpdate(silent = false) {
   try {
@@ -276,10 +295,7 @@ async function checkAndApplyUpdate(silent = false) {
     const latest = data.releases?.[0];
     const latestTag = data.latestTag || latest?.tag || ('v' + currentVersion);
 
-    const parts = v => String(v || '').replace(/^v/i, '').split('-')[0].split('.').map(n => parseInt(n, 10) || 0);
-    const newer = (a, b) => { const x = parts(a), y = parts(b); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
-
-    const hasNewerVersion = newer(latestTag, currentVersion);
+    const hasNewerVersion = compareVersions(latestTag, currentVersion) > 0;
     const hasDifferentHash = remoteHash && currentHash && remoteHash !== currentHash;
 
     if (!hasNewerVersion && !hasDifferentHash) {
@@ -294,11 +310,33 @@ async function checkAndApplyUpdate(silent = false) {
     }
 
     updateState = { status: 'downloading', tag: latestTag, hash: remoteHash, progress: 10, error: '' };
-    const targetFile = path.join(os.tmpdir(), `LumaDock-Setup-${latestTag}.exe`);
+    const targetFile = path.join(os.tmpdir(), `LumaDock-Setup-${latestTag.replace(/[^\w.-]/g, '_')}.exe`);
     const resp = await net.fetch(exeAsset.url, { headers: { 'User-Agent': 'LumaDock' } });
     if (!resp.ok) throw new Error('Download failed: ' + resp.status);
-    const arrayBuffer = await resp.arrayBuffer();
-    fs.writeFileSync(targetFile, Buffer.from(arrayBuffer));
+    const buf = Buffer.from(await resp.arrayBuffer());
+
+    // Verify SHA-256 checksum if digest or .sha256 sidecar asset exists
+    let expectedSha = /^sha256:([a-f0-9]{64})$/i.exec(exeAsset.digest || '')?.[1] || '';
+    if (!expectedSha) {
+      const shaAsset = (latest?.assets || []).find(a => /\.sha256(\.txt)?$/i.test(a.name));
+      if (shaAsset?.url) {
+        try {
+          const sr = await net.fetch(shaAsset.url, { headers: { 'User-Agent': 'LumaDock' } });
+          if (sr.ok) {
+            const txt = await sr.text();
+            expectedSha = txt.match(/\b([a-f0-9]{64})\b/i)?.[1] || '';
+          }
+        } catch {}
+      }
+    }
+    if (expectedSha) {
+      const actualSha = crypto.createHash('sha256').update(buf).digest('hex');
+      if (actualSha.toLowerCase() !== expectedSha.toLowerCase()) {
+        throw new Error('Checksum mismatch for downloaded installer.');
+      }
+    }
+
+    fs.writeFileSync(targetFile, buf);
     updateState = { status: 'ready', tag: latestTag, hash: remoteHash, progress: 100, targetFile };
     if (!silent) {
       const { spawn } = require('node:child_process');
@@ -311,15 +349,17 @@ async function checkAndApplyUpdate(silent = false) {
     return { ok: false, error: updateState.error };
   }
 }
-ipcMain.handle('settings-app:update-check', async (_e, silent) => checkAndApplyUpdate(silent));
-ipcMain.handle('settings-app:update-state', () => updateState);
-// Auto-check periodically in background every 4 hours
-setInterval(() => { checkAndApplyUpdate(true).catch(() => {}); }, 4 * 60 * 60 * 1000);
-setTimeout(() => { checkAndApplyUpdate(true).catch(() => {}); }, 30000); // 30s after startup
-// only our own pages (a release, the download, the site)
-ipcMain.on('settings-app:open-url', (e, url) => { if (fromApp(e) && /^https:\/\/(github\.com\/lumadock\/lumadock|lumadock\.app)(\/|$)/.test(String(url))) shell.openExternal(url); });
+handleIpc('settings-app:update-check', async (_e, silent) => checkAndApplyUpdate(silent));
+handleIpc('settings-app:update-state', () => updateState);
+if (app && ipcMain) {
+  // Auto-check periodically in background every 4 hours
+  setInterval(() => { checkAndApplyUpdate(true).catch(() => {}); }, 4 * 60 * 60 * 1000).unref?.();
+  setTimeout(() => { checkAndApplyUpdate(true).catch(() => {}); }, 30000).unref?.(); // 30s after startup
+}
+// only our own pages (GitHub releases/commits, download, site)
+onIpc('settings-app:open-url', (e, url) => { if (fromApp(e) && isAllowedExternalUrl(url)) shell.openExternal(url); });
 
-module.exports = { open };
+module.exports = { open, isAllowedExternalUrl, compareVersions };
 
 // tests: SETTINGS_DEBUG=<folder> opens the app on Home and Verbindingen and saves pictures (never touches Claude Code or Codex files)
 if (process.env.SETTINGS_DEBUG) app.whenReady().then(() => setTimeout(async () => {

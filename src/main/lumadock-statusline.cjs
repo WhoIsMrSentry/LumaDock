@@ -29,7 +29,8 @@ process.stdin.on('end', () => {
   process.stdout.write(parts.join(' · ') + '\n');
 
   const body = JSON.stringify(usage);
-  const req = http.request({ host: '127.0.0.1', port: 47823, path: '/lumadock-status', method: 'POST', timeout: 800,
+  const port = Number(process.env.LUMADOCK_HOOK_PORT) || 47823;
+  const req = http.request({ host: '127.0.0.1', port, path: '/lumadock-status', method: 'POST', timeout: 800,
     headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body), 'x-lumadock-token': process.argv[2] || '' } });
   req.on('error', () => {}); // LumaDock not running: the status line still works.
   req.on('timeout', () => req.destroy());

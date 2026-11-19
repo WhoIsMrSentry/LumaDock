@@ -4,9 +4,46 @@
   "description": "LumaDock: Dynamic Island for Windows with native AI monitor.",
   "main": "main.js",
   "scripts": {
-    "test": "node --test tests/monitor.test.cjs tests/windows-check.test.cjs tests/claude-code-hooks.test.cjs tests/extras.test.cjs",
+    "test": "node --test tests/monitor.test.cjs tests/windows-check.test.cjs tests/claude-code-hooks.test.cjs tests/extras.test.cjs tests/features.test.cjs",
     "start": "electron .",
-    "check:windows": "node src/main/check-windows.cjs"
+    "check:windows": "node src/main/check-windows.cjs",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win nsis portable zip"
+  },
+  "build": {
+    "appId": "com.lumadock.assistant",
+    "productName": "LumaDock",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "settings-app-preload.js",
+      "mascot.html",
+      "settings-app.html",
+      "assets/**/*",
+      "src/**/*"
+    ],
+    "asarUnpack": [
+      "src/native/**/*",
+      "src/main/lumadock-reply.cjs",
+      "src/main/lumadock-statusline.cjs"
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        "nsis",
+        "portable",
+        "zip"
+      ],
+      "artifactName": "LumaDock-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "LumaDock"
+    }
   },
   "keywords": [
     "dynamic-island",

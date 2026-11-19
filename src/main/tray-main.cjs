@@ -21,7 +21,7 @@ function openIsland() {
 // Start with Windows. During development LumaDock runs as "electron.exe <folder>", so pass those along.
 function loginOptions() { return app.isPackaged ? {} : { path: process.execPath, args: [app.getAppPath()] }; }
 function startsWithWindows() { try { return app.getLoginItemSettings(loginOptions()).openAtLogin; } catch { return false; } }
-function setStartsWithWindows(on) { try { app.setLoginItemSettings({ ...loginOptions(), openAtLogin: !!on }); } catch {} buildMenu(); }
+function setStartsWithWindows(on) { try { app.setLoginItemSettings({ ...loginOptions(), openAtLogin: !!on }); } catch { } buildMenu(); }
 
 function quit() { app.quit(); } // main.js shows the goodbye first
 function restart() { app.relaunch(); app.quit(); }
@@ -61,14 +61,14 @@ if (!app.requestSingleInstanceLock()) {
         try {
           const info = require('node:fs').existsSync(old) && shell.readShortcutLink(old);
           if (info && info.appUserModelId === 'com.lumadock.assistant' && path.resolve(info.target) === path.resolve(process.execPath)) require('node:fs').unlinkSync(old);
-        } catch {}
+        } catch { }
         // Clean legacy shortcuts and registry keys
         try {
-          ['TwoCode.lnk', 'TwoCode Instellingen.lnk'].forEach(f => {
+          ['LumaDock.lnk', 'LumaDock Instellingen.lnk'].forEach(f => {
             const legacy = path.join(programs, f);
             if (require('node:fs').existsSync(legacy)) require('node:fs').unlinkSync(legacy);
           });
-        } catch {}
+        } catch { }
         shell.writeShortcutLink(link, require('node:fs').existsSync(link) ? 'replace' : 'create', {
           target: process.execPath,
           args: app.isPackaged ? '' : `"${app.getAppPath()}"`,
@@ -87,20 +87,20 @@ if (!app.requestSingleInstanceLock()) {
           appUserModelId: 'com.lumadock.settings',
           description: 'LumaDock Settings: connections, Robo, wardrobe and more'
         });
-      } catch {}
+      } catch { }
       // The shortcut alone was not enough: Windows also reads the name and icon of notifications from
       // HKCU\Software\Classes\AppUserModelId\<app id>. Only LumaDock's own key, in the user's own registry part.
       try {
         const ROOT = path.resolve(__dirname, '..', '..');
         const { execFile } = require('node:child_process');
         const key = 'HKCU\\Software\\Classes\\AppUserModelId\\com.lumadock.assistant';
-        const set = (name, value) => execFile('reg.exe', ['add', key, '/v', name, '/t', 'REG_SZ', '/d', value, '/f'], { windowsHide: true }, () => {});
+        const set = (name, value) => execFile('reg.exe', ['add', key, '/v', name, '/t', 'REG_SZ', '/d', value, '/f'], { windowsHide: true }, () => { });
         set('DisplayName', 'LumaDock');
         set('IconUri', path.join(ROOT, 'assets', 'icon-256.png'));
         const key2 = 'HKCU\\Software\\Classes\\AppUserModelId\\com.lumadock.settings';
-        execFile('reg.exe', ['add', key2, '/v', 'DisplayName', '/t', 'REG_SZ', '/d', 'LumaDock Settings', '/f'], { windowsHide: true }, () => {});
-        execFile('reg.exe', ['add', key2, '/v', 'IconUri', '/t', 'REG_SZ', '/d', path.join(ROOT, 'assets', 'settings-icon.png'), '/f'], { windowsHide: true }, () => {});
-      } catch {}
+        execFile('reg.exe', ['add', key2, '/v', 'DisplayName', '/t', 'REG_SZ', '/d', 'LumaDock Settings', '/f'], { windowsHide: true }, () => { });
+        execFile('reg.exe', ['add', key2, '/v', 'IconUri', '/t', 'REG_SZ', '/d', path.join(ROOT, 'assets', 'settings-icon.png'), '/f'], { windowsHide: true }, () => { });
+      } catch { }
     }
     const image = nativeImage.createFromPath(path.join(path.resolve(__dirname, '..', '..'), 'assets', 'tray.png'));
     tray = new Tray(image);
@@ -109,7 +109,7 @@ if (!app.requestSingleInstanceLock()) {
     buildMenu();
   });
   // the icon stays during the goodbye and goes when the app really stops
-  app.on('will-quit', () => { try { tray?.destroy(); } catch {} tray = null; });
+  app.on('will-quit', () => { try { tray?.destroy(); } catch { } tray = null; });
 
   // only the island itself may change these
   const fromIsland = e => /mascot\.html/.test(e.senderFrame?.url || '');

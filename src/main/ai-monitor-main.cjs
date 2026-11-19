@@ -125,11 +125,10 @@ function setup(electron, options = {}) {
   const { app, BrowserWindow, ipcMain, shell, Notification } = electron;
   const worker = options.worker || new NativeWorker();
   const sessions = new Map(), notifications = new Set(), answering = new Set();
-  // ChatGPT and Claude (the chat apps / websites) come later, with the LumaDock extension for Chrome.
-  // Until then only Claude Code and Codex are followed; the window-reading code stays for that moment.
-  const chatSoon = options.chatSoon ?? !options.worker;
+  // ChatGPT and Claude browser/desktop monitor: disabled by default unless user toggles it on in Settings → Connections.
+  let chatSoon = options.chatSoon ?? !options.worker;
   const liveNotifications = new Set();
-  let found = new Map(), interval = null, polling = false, scanPromise = null, closing = false;
+  let found = new Map(), interval = null, autoTimer = null, polling = false, scanPromise = null, closing = false;
   const settingsPath = () => path.join(app.getPath('userData'), 'ai-monitor-windows.json');
   const trusted = event => {
     try {
@@ -137,15 +136,15 @@ function setup(electron, options = {}) {
       return process.platform === 'win32' ? actual.toLowerCase() === expected.toLowerCase() : actual === expected;
     } catch { return false; }
   };
-  // Claude Code reports its own status through hooks (tests pass no hub).
+  // Coding agents report status via hooks (tests pass no hub).
   const hub = options.hub !== undefined ? options.hub : options.worker ? null : createHub({
     userData: app.getPath('userData'), onChange: () => emit(), onFinish: session => notifyHook(session), resolvePid: windowPidOf });
-  const view = () => ({ ok: true, available: process.platform === 'win32' || Boolean(options.worker),
+  const view = () => ({ ok: true, available: process.platform === 'win32' || Boolean(options.worker), chatSoon,
     providers: [...Object.keys(PROVIDERS).map(provider => (!chatSoon && sessions.get(provider)?.public()) ||
       { provider, name: PROVIDERS[provider].name, state: 'disconnected', connected: false, soon: chatSoon, detail: chatSoon ? 'Binnenkort' : 'Verbind jouw gesprek', question: '', elapsed: 0, canReply: false }),
-    ...(hub ? [hub.view('claude'), hub.view('codex')] : [])],
-    // the last jobs of Claude Code and Codex, so a quiet page still shows what they did for you
-    history: (hub?.history?.() || []).slice(0, 12).map(h => ({ at: h.at, agent: h.agent, project: h.project, prompt: String(h.prompt || '').slice(0, 300), result: h.result, files: h.files, seconds: h.seconds })) });
+    ...(hub ? [hub.view('claude'), hub.view('codex'), hub.view('gemini'), hub.view('cursor')] : [])],
+    // the last jobs across coding agents, so a quiet page still shows what they did for you
+    history: (hub?.history?.() || []).slice(0, 12).map(h => ({ at: h.at, agent: h.agent, project: h.project, prompt: String(h.prompt || '').slice(0, 300), result: h.result, files: h.files, seconds: h.seconds, tokens: h.tokens, costUsd: h.costUsd })) });
   const emit = () => {
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed() && trusted({ sender: win.webContents })) win.webContents.send('ai-monitor:state', view());
@@ -222,9 +221,13 @@ function setup(electron, options = {}) {
   // Turned on per AI in LumaDock → Verbindingen. Every few seconds, while it is on and not connected,
   // the open windows are checked and the first one that really shows that conversation is followed.
   const autoPath = () => path.join(app.getPath('userData'), 'ai-monitor-auto.json');
-  let auto = { claude: false, chatgpt: false }, autoBusy = false;
-  try { auto = { ...auto, ...JSON.parse(fs.readFileSync(autoPath(), 'utf8')) }; } catch {}
-  const saveAuto = () => { try { fs.writeFileSync(autoPath(), JSON.stringify(auto)); } catch {} };
+  let auto = { claude: false, chatgpt: false, chatSoon: true }, autoBusy = false;
+  try {
+    const savedAuto = JSON.parse(fs.readFileSync(autoPath(), 'utf8'));
+    auto = { ...auto, ...savedAuto };
+    if (options.chatSoon === undefined && typeof savedAuto.chatSoon === 'boolean') chatSoon = savedAuto.chatSoon;
+  } catch {}
+  const saveAuto = () => { try { fs.writeFileSync(autoPath(), JSON.stringify({ ...auto, chatSoon })); } catch {} };
   // A browser shows the chat's own title (not "ChatGPT"), so every browser and chat-app window is checked;
   // what the window really shows (chatgpt.com or claude.ai) decides. Windows that are something else are
   // skipped for a minute, so this stays light.
@@ -260,36 +263,63 @@ function setup(electron, options = {}) {
     if (!payload || !Object.hasOwn(PROVIDERS, payload.provider)) throw new Error('ChatGPT veya Claude seçin.');
     return payload.provider;
   }
+  const HOOK_OPS = {
+    claude: ['install', 'uninstall'],
+    codex: ['installCodex', 'uninstallCodex'],
+    gemini: ['installGemini', 'uninstallGemini'],
+    cursor: ['installCursor', 'uninstallCursor']
+  };
   const handlers = {
     'ai-monitor:get': async () => view(),
     'ai-monitor:windows': scan,
+    'ai-monitor:set-chat-soon': async payload => {
+      chatSoon = payload?.enabled === false;
+      saveAuto();
+      if (!chatSoon && !autoTimer) {
+        autoTimer = setInterval(autoTick, 8000);
+        autoTimer.unref?.();
+        autoTick();
+      }
+      emit();
+      return view();
+    },
     'ai-monitor:connect': async payload => {
-      if (chatSoon) throw new Error('ChatGPT ve Claude yakında eklenecek.');
+      if (chatSoon) throw new Error('Browser AI monitoring is turned off. Enable it in Settings → Connections.');
       const provider = providerOf(payload), target = found.get(payload.targetId);
-      if (!target) throw new Error('Pencere listesini yenileyip bir pencere seçin.');
-      if (answering.has(provider)) throw new Error('Gönderim kontrol edilene kadar bekleyin.');
+      if (!target) throw new Error('Refresh the window list and choose a window.');
+      if (answering.has(provider)) throw new Error('Please wait until the reply check finishes.');
       const result = await worker.request('read', { target }), obs = observe(result, provider);
       if (!obs.valid) return { ok: false, error: obs.detail, login: obs.login };
       const session = new Session(provider, target); session.accept(obs); sessions.set(provider, session); notifications.clear(); save(); emit();
       return view();
     },
-    // agent: 'claude' (Claude Code) or 'codex'
-    'ai-monitor:hooks-install': async payload => { if (!hub) throw new Error('Niet beschikbaar.'); if (payload?.agent === 'codex') hub.installCodex(); else hub.install(); return view(); },
-    'ai-monitor:hooks-uninstall': async payload => { if (!hub) throw new Error('Niet beschikbaar.'); if (payload?.agent === 'codex') hub.uninstallCodex(); else hub.uninstall(); return view(); },
+    // agent: 'claude', 'codex', 'gemini', or 'cursor'
+    'ai-monitor:hooks-install': async payload => {
+      if (!hub) throw new Error('Not available.');
+      const op = HOOK_OPS[payload?.agent || 'claude']?.[0] || 'install';
+      hub[op]();
+      return view();
+    },
+    'ai-monitor:hooks-uninstall': async payload => {
+      if (!hub) throw new Error('Not available.');
+      const op = HOOK_OPS[payload?.agent || 'claude']?.[1] || 'uninstall';
+      hub[op]();
+      return view();
+    },
     'ai-monitor:hooks-answer': async payload => {
-      if (!hub) throw new Error('Niet beschikbaar.');
+      if (!hub) throw new Error('Not available.');
       hub.answerQuestions(String(payload?.sessionId || ''), payload?.answers || {}); return view();
     },
     'ai-monitor:hooks-plan': async payload => {
-      if (!hub) throw new Error('Niet beschikbaar.');
+      if (!hub) throw new Error('Not available.');
       hub.decidePlan(String(payload?.sessionId || ''), Boolean(payload?.approve), payload?.feedback); return view();
     },
     'ai-monitor:hooks-jump': async payload => {
       const pid = hub?.pidOf(String(payload?.sessionId || ''));
-      if (!pid) throw new Error('LumaDock weet nog niet welk venster bij deze sessie hoort. Dat leert hij na het eerste antwoord van Claude.');
+      if (!pid) throw new Error('LumaDock does not know which window belongs to this session yet.');
       const focused = await focusWindowOf(pid);
-      if (focused === 'blocked') throw new Error('Windows liet LumaDock het venster niet naar voren halen. Klik op de terminal in je taakbalk.');
-      if (focused !== true) { hub?.forgetWindow?.(String(payload?.sessionId || '')); throw new Error('Het terminalvenster is niet gevonden. Is het nog open?'); }
+      if (focused === 'blocked') throw new Error('Windows blocked window activation. Click the terminal in your taskbar.');
+      if (focused !== true) { hub?.forgetWindow?.(String(payload?.sessionId || '')); throw new Error('Terminal window not found. Is it still open?'); }
       return view();
     },
     'ai-monitor:set-notify':async payload => { notifyEnabled = Boolean(payload?.enabled); return view(); },
@@ -330,17 +360,17 @@ function setup(electron, options = {}) {
           multiSelect: false, options: [{ label: 'Blue', description: 'Calm, matches the logo' }, { label: 'Green', description: 'Stands out more' }, { label: 'Orange', description: 'Warm and friendly' }] }] } }, res); },
         'demo-plan': () => { const res = { writeHead() { return this; }, end() {}, on() {} }; hub.apply({ ...base, hook_event_name: 'PermissionRequest', tool_name: 'ExitPlanMode', tool_input: { plan: String(payload?.command || '## Dark mode\n1. Add a theme switch to the header\n2. Save the choice in localStorage\n3. Use CSS variables for every colour\n4. Test both themes').slice(0, 4000) } }, res); }
       };
-      if (!scenes[payload?.kind]) throw new Error('Onbekende test.');
+      if (!scenes[payload?.kind]) throw new Error('Unknown test scene.');
       scenes[payload.kind](); return view();
     },
-    'ai-monitor:hooks-model': async payload => { if (!hub) throw new Error('Niet beschikbaar.'); hub.setModel(String(payload?.model || '')); return view(); },
+    'ai-monitor:hooks-model': async payload => { if (!hub) throw new Error('Not available.'); hub.setModel(String(payload?.model || '')); return view(); },
     'ai-monitor:hooks-reply':async payload => {
-      if (!hub) throw new Error('Niet beschikbaar.');
+      if (!hub) throw new Error('Not available.');
       hub.reply(String(payload?.sessionId || ''), payload?.text); return view();
     },
-    'ai-monitor:hooks-seen':async () => { if (!hub) throw new Error('Niet beschikbaar.'); hub.seen(); return view(); },
+    'ai-monitor:hooks-seen':async () => { if (!hub) throw new Error('Not available.'); hub.seen(); return view(); },
     'ai-monitor:hooks-decide': async payload => {
-      if (!hub) throw new Error('Niet beschikbaar.');
+      if (!hub) throw new Error('Not available.');
       hub.decide(String(payload?.sessionId || ''), payload?.behavior); return view();
     },
     'ai-monitor:auto-get': async () => ({ ok: true, auto: chatSoon ? { claude: false, chatgpt: false } : { ...auto } }),
@@ -353,7 +383,7 @@ function setup(electron, options = {}) {
     },
     'ai-monitor:disconnect': async payload => {
       const provider = providerOf(payload);
-      if (answering.has(provider)) throw new Error('Wacht tot de verzending is gecontroleerd.');
+      if (answering.has(provider)) throw new Error('Wait until the reply check finishes.');
       sessions.delete(provider); notifications.clear(); save(); emit(); return view();
     },
     'ai-monitor:open-source': async payload => {
@@ -363,23 +393,23 @@ function setup(electron, options = {}) {
     },
     'ai-monitor:reply': async payload => {
       const provider = providerOf(payload), session = sessions.get(provider);
-      if (answering.has(provider)) throw new Error('Je antwoord wordt al gecontroleerd.');
+      if (answering.has(provider)) throw new Error('Your reply is already being verified.');
       if (!session || session.state !== 'question' || !session.questionId || session.questionId !== payload.questionId)
-        throw new Error('Deze vraag is niet meer actief. Bekijk de actuele status.');
+        throw new Error('This question is no longer active.');
       const text = typeof payload.text === 'string' ? payload.text.trim() : '';
-      if (!text || text.length > 5000) throw new Error('Typ een antwoord van maximaal 5000 tekens.');
+      if (!text || text.length > 5000) throw new Error('Enter a reply of at most 5000 characters.');
       answering.add(provider);
       try {
         const fresh = await worker.request('read', { target: session.target });
         const obs = observe(fresh, provider);
         if (!obs.valid || obs.stop || !obs.completed || !obs.question || !obs.composer ||
             obs.contextKey !== session.contextKey || obs.assistant?.fingerprint !== payload.questionId)
-          throw new Error('Het gesprek of de vraag is veranderd. Er is niets verstuurd.');
-        session.state = 'sending'; session.detail = 'Antwoord versturen'; emit();
+          throw new Error('The conversation or question changed. Nothing was sent.');
+        session.state = 'sending'; session.detail = 'Sending reply'; emit();
         const result = await worker.request('reply', { target: session.target, contextKey: session.contextKey,
           composerId: obs.composer.id, guards: obs.assistant.guards,
           timeline: fresh.nodes.filter(n => n.type === 'Text' && n.index < obs.composer.index).map(n => ({ id: n.id, name: n.name })), text });
-        if (!result?.ok) throw new Error(result?.error || 'Het antwoord kon niet worden verstuurd.');
+        if (!result?.ok) throw new Error(result?.error || 'Could not send the reply.');
         // Do not retry an uncertain send: a user could otherwise receive duplicate prompts.
         const until = Date.now() + 12000;
         while (Date.now() < until) {
@@ -389,7 +419,7 @@ function setup(electron, options = {}) {
           }
           await new Promise(resolve => setTimeout(resolve, 700));
         }
-        throw new Error('Verzending niet bevestigd. Controleer het gesprek voordat je opnieuw verstuurt.');
+        throw new Error('Delivery not confirmed. Check the conversation before sending again.');
       } catch (error) {
         session.state = 'error'; session.detail = error.message; session.run = null; emit();
         return { ok: false, error: error.message, uncertain: true };
@@ -397,7 +427,7 @@ function setup(electron, options = {}) {
     }
   };
   for (const [channel, handler] of Object.entries(handlers)) ipcMain.handle(channel, async (event, payload) => {
-    if (!trusted(event)) return { ok: false, error: 'Dit venster heeft geen toegang tot de AI-monitor.' };
+    if (!trusted(event)) return { ok: false, error: 'This window does not have access to the AI monitor.' };
     try { return await handler(payload); } catch (error) { return { ok: false, error: error.message }; }
   });
   app.whenReady().then(() => {
@@ -409,15 +439,15 @@ function setup(electron, options = {}) {
       }
     } catch {}
     interval = setInterval(poll, 2600); interval.unref?.(); if (sessions.size) poll();
-    if (!chatSoon) { const autoTimer = setInterval(autoTick, 8000); autoTimer.unref?.(); setTimeout(autoTick, 4000); }
+    if (!chatSoon) { autoTimer = setInterval(autoTick, 8000); autoTimer.unref?.(); setTimeout(autoTick, 4000); }
     hub?.start();
-    // Keep the Claude Code clock ticking while it works.
-    if (hub) { const tick = setInterval(() => { if (hub.view('claude').state === 'running' || hub.view('codex').state === 'running') emit(); }, 1000); tick.unref?.(); }
+    // Keep coding agent clocks ticking while active.
+    if (hub) { const tick = setInterval(() => { if (['claude', 'codex', 'gemini', 'cursor'].some(a => hub.view(a).state === 'running')) emit(); }, 1000); tick.unref?.(); }
   });
-  app.on('before-quit', () => { closing = true; clearInterval(interval); worker.close(); hub?.stop(); liveNotifications.clear(); });
+  app.on('before-quit', () => { closing = true; clearInterval(interval); if (autoTimer) clearInterval(autoTimer); worker.close(); hub?.stop(); liveNotifications.clear(); });
   // The LumaDock app (settings-app-main.cjs) reads the connections and the history from here.
   app.lumadockMonitor = { view, handlers, history: () => hub?.history() || [], projects: () => hub?.projects?.() || [] };
-  return { view, handlers, poll, close: () => { closing = true; clearInterval(interval); worker.close(); } };
+  return { view, handlers, poll, close: () => { closing = true; clearInterval(interval); if (autoTimer) clearInterval(autoTimer); worker.close(); } };
 }
 if (process.versions.electron) setup(require('electron'));
 module.exports = { NativeWorker, setup };

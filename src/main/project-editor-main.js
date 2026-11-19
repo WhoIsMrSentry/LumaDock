@@ -338,8 +338,8 @@ module.exports = function projectEditorMain(deps) {
         finish(job, {
           ok: false,
           error:
-            'VS Code reageert niet. Controleer of de ' +
-            'LumaDock-extensie actief is en probeer opnieuw.',
+            'VS Code is not responding. Check that the ' +
+            'LumaDock extension is active and try again.',
           uncertain: job.committed
         });
       }, 90000);

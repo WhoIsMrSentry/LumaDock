@@ -2436,7 +2436,9 @@ const SPOTIFY_SCOPES = [
   'user-read-playback-state',
   'user-modify-playback-state',
   'user-read-currently-playing',
-  'user-read-playback-position'
+  'user-read-playback-position',
+  'playlist-read-private',
+  'playlist-read-collaborative'
 ].join(' ');
 
 
@@ -2470,6 +2472,24 @@ function sendMediaCommand(cmd) {
   }
 }
 
+function normalizeTrackMeta(rawTitle, rawArtist) {
+  let title = String(rawTitle || '')
+    .replace(/\s*[-|•]\s*(YouTube Music|YouTube|Spotify|SoundCloud|Apple Music)\s*$/i, '')
+    .trim();
+  let artist = String(rawArtist || '').trim();
+  if ((!artist || /^(youtube|chrome|msedge|brave|firefox|opera|music)$/i.test(artist)) && title.includes(' - ')) {
+    const idx = title.indexOf(' - ');
+    artist = title.slice(0, idx).trim();
+    title = title.slice(idx + 3).trim();
+  }
+  const cleanTitle = title
+    .replace(/\s*[\(\[]\s*(?:official|lyric|lyrics|audio|video|hd|4k|visualizer|remaster(?:ed)?|live|feat\.?|ft\.?)[^\)\]]*[\)\]]/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim() || title;
+  const cleanArtist = artist.replace(/\s*[-–]\s*Topic$/i, '').trim();
+  return { title: cleanTitle, artist: cleanArtist };
+}
+
 async function fetchTrackArtwork(title, artist) {
   if (!title) return '';
   const cacheKey = `${title}:::${artist || ''}`.toLowerCase();
@@ -2479,11 +2499,12 @@ async function fetchTrackArtwork(title, artist) {
   if (artworkInFlight.has(cacheKey)) return '';
   artworkInFlight.add(cacheKey);
 
+  const clean = normalizeTrackMeta(title, artist);
   let cover = '';
   // 1. iTunes Search API (fast, 600x600 HD artwork, no auth required)
   try {
-    const cleanTitle = title.replace(/\s*[\(\[\-].*$/, '').trim() || title;
-    const term = encodeURIComponent(`${cleanTitle} ${artist || ''}`.trim());
+    const shortTitle = clean.title.replace(/\s*[\(\[].*$/, '').trim() || clean.title;
+    const term = encodeURIComponent(`${shortTitle} ${clean.artist || ''}`.trim());
     const res = await fetch(`https://itunes.apple.com/search?term=${term}&entity=song&limit=1`, {
       signal: AbortSignal.timeout(3000)
     });
@@ -2500,7 +2521,7 @@ async function fetchTrackArtwork(title, artist) {
   if (!cover) {
     try {
       if (loadSpotifyTokens()) {
-        const q = encodeURIComponent(`track:${title} artist:${artist || ''}`);
+        const q = encodeURIComponent(`track:${clean.title} artist:${clean.artist || ''}`);
         const data = await spotifyApi(`/v1/search?type=track&q=${q}&limit=1`);
         const track = data?.tracks?.items?.[0];
         cover = track?.album?.images?.[0]?.url || '';
@@ -2634,7 +2655,7 @@ function encryptString(
     !safeStorage.isEncryptionAvailable()
   ) {
     throw new Error(
-      'Veilige Windows-opslag is niet beschikbaar.'
+      'Windows güvenli depolama kullanılamıyor.'
     );
   }
 
@@ -2842,7 +2863,7 @@ async function connectToLumaDock() {
     !startData?.pair_code
   ) {
     throw new Error(
-      'LumaDock koppeling kon niet gestart worden.'
+      'Could not start LumaDock pairing.'
     );
   }
 
@@ -3393,8 +3414,10 @@ async function spotifyToken(
 // SPOTIFY CONNECT
 // ============================================================
 
-async function spotifyConnect() {
+async function spotifyConnect(options = {}) {
+  const force = Boolean(options?.force);
   if (
+    !force &&
     loadSpotifyTokens()
       ?.refresh_token
   ) {
@@ -3517,7 +3540,7 @@ async function spotifyConnect() {
                     state
                 ) {
                   throw new Error(
-                    'Ongeldige Spotify callback.'
+                    'Geçersiz Spotify geri çağrısı.'
                   );
                 }
 
@@ -3532,7 +3555,7 @@ async function spotifyConnect() {
                   oauthError
                 ) {
                   throw new Error(
-                    'Spotify koppeling geannuleerd.'
+                    'Spotify bağlantısı iptal edildi.'
                   );
                 }
 
@@ -3545,7 +3568,7 @@ async function spotifyConnect() {
 
                 if (!code) {
                   throw new Error(
-                    'Geen Spotify-code ontvangen.'
+                    'Spotify yetkilendirme kodu alınamadı.'
                   );
                 }
 
@@ -3567,7 +3590,7 @@ async function spotifyConnect() {
 
                 res.end(`
                   <!doctype html>
-                  <html lang="nl">
+                  <html lang="tr">
                   <body style="
                     font-family:system-ui;
                     background:#0b0e0b;
@@ -3575,8 +3598,8 @@ async function spotifyConnect() {
                     padding:50px;
                     text-align:center;
                   ">
-                    <h2>Spotify gekoppeld ✓</h2>
-                    <p>Je kunt dit tabblad sluiten.</p>
+                    <h2>Spotify bağlandı ✓</h2>
+                    <p>Bu sekmeyi kapatabilirsiniz.</p>
                   </body>
                   </html>
                 `);
@@ -3602,7 +3625,7 @@ async function spotifyConnect() {
 
 
                   res.end(
-                    'Spotify koppeling mislukt.'
+                    'Spotify bağlantısı başarısız.'
                   );
 
                 } catch {}
@@ -3624,7 +3647,7 @@ async function spotifyConnect() {
                 reject,
 
                 new Error(
-                  'Spotify koppeling verlopen.'
+                  'Spotify bağlantısı zaman aşımına uğradı.'
                 )
               );
             },
@@ -3676,7 +3699,9 @@ async function spotifyConnect() {
                 code_challenge:
                   challenge,
 
-                state
+                state,
+
+                ...(force ? { show_dialog: 'true' } : {})
               }).toString();
 
 
@@ -3734,7 +3759,7 @@ async function spotifyApi(
 
   if (!token) {
     throw new Error(
-      'Spotify is nog niet gekoppeld.'
+      'Spotify henüz bağlanmadı.'
     );
   }
 
@@ -3820,10 +3845,12 @@ async function spotifyApi(
   if (
     !response.ok
   ) {
-    throw new Error(
+    const err = new Error(
       data?.error?.message ||
       `Spotify HTTP ${response.status}`
     );
+    err.status = response.status;
+    throw err;
   }
 
 
@@ -3840,6 +3867,7 @@ async function getSpotifyState() {
 
   // 1. Instant local Windows GSMTC session (0ms latency, zero rate limits, no hangs)
   if (localMedia) {
+    const clean = normalizeTrackMeta(localMedia.title, localMedia.artist);
     const cover = getArtworkOrFetchBackground(localMedia.title, localMedia.artist);
     return {
       ok: true,
@@ -3851,9 +3879,10 @@ async function getSpotifyState() {
       track: {
         id: 'local-' + Buffer.from(localMedia.title).toString('hex').slice(0, 12),
         uri: '',
-        name: localMedia.title,
-        artist: localMedia.artist || 'Müzik',
-        image_url: cover || ''
+        name: clean.title || localMedia.title,
+        artist: clean.artist || localMedia.artist || 'Müzik',
+        image_url: cover || '',
+        source: localMedia.source || 'Spotify'
       },
       device: {
         id: 'local',
@@ -4086,15 +4115,102 @@ async function spotifySeek(positionMs) {
 }
 
 // ============================================================
-// SPOTIFY LYRICS (LRCLIB Time-synced Lyrics)
+// SPOTIFY PLAYLISTS (Cover-Only Browser & Player)
 // ============================================================
 
+let playlistsCache = null;
+
+async function spotifyPlaylists(force = false) {
+  const tokens = loadSpotifyTokens();
+  if (!tokens?.access_token && !tokens?.refresh_token) {
+    return { ok: false, needsAuth: true, playlists: [] };
+  }
+  if (!force && playlistsCache && Date.now() - playlistsCache.at < 60000) {
+    return { ok: true, playlists: playlistsCache.items };
+  }
+  try {
+    const data = await spotifyApi('/v1/me/playlists?limit=24');
+    const items = (data?.items || [])
+      .filter(p => p && p.uri && p.images?.[0]?.url)
+      .map(p => ({
+        id: String(p.id || ''),
+        name: String(p.name || ''),
+        uri: String(p.uri || ''),
+        image_url: String(p.images[0].url || ''),
+        external_url: String(p.external_urls?.spotify || ''),
+        tracks_total: Number(p.tracks?.total || 0)
+      }));
+    playlistsCache = { at: Date.now(), items };
+    return { ok: true, playlists: items };
+  } catch (error) {
+    const status = error?.status || (/403/.test(error?.message) ? 403 : /401/.test(error?.message) ? 401 : 0);
+    if (status === 401 || status === 403 || /scope|insufficient/i.test(error?.message || '')) {
+      return { ok: false, needsReauth: true, playlists: [], error: error.message };
+    }
+    return { ok: false, playlists: playlistsCache?.items || [], error: error?.message || 'Playlistler alınamadı.' };
+  }
+}
+
+async function spotifyPlayPlaylist(payload) {
+  const uri = String(payload?.uri || '').trim();
+  const extUrl = String(payload?.url || '').trim();
+  if (!/^spotify:playlist:[A-Za-z0-9]+$/.test(uri)) {
+    return { ok: false, error: 'Geçersiz çalma listesi URI.' };
+  }
+  try {
+    await spotifyApi('/v1/me/player/play', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ context_uri: uri })
+    });
+    return { ok: true, method: 'api' };
+  } catch (error) {
+    // Spotify Free veya aktif uzak cihaz yoksa masaüstü Spotify uygulamasında çalma listesini aç
+    try {
+      await shell.openExternal(uri);
+      return { ok: true, method: 'uri', fallback: true, note: error?.message };
+    } catch {
+      if (/^https:\/\/open\.spotify\.com\/playlist\//.test(extUrl)) {
+        await shell.openExternal(extUrl).catch(() => {});
+        return { ok: true, method: 'web', fallback: true };
+      }
+      return { ok: false, error: error?.message || 'Playlist açılamadı.' };
+    }
+  }
+}
+
+// ============================================================
+// SPOTIFY LYRICS (LRCLIB Time-synced Lyrics + Disk Cache)
+// ============================================================
+
+const LYRICS_CACHE_FILE = () => path.join(app.getPath('userData'), 'lyrics-cache.json');
 const lyricsCache = new Map();
+let lyricsDiskLoaded = false;
+
+function loadLyricsDiskCache() {
+  if (lyricsDiskLoaded) return;
+  lyricsDiskLoaded = true;
+  const saved = readJson(LYRICS_CACHE_FILE());
+  if (saved && typeof saved === 'object') {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v && v.ok && Array.isArray(v.lines)) lyricsCache.set(k, v);
+    }
+  }
+}
+
+function saveLyricsDiskCache() {
+  try {
+    const entries = [...lyricsCache.entries()].filter(([, v]) => v?.ok).slice(-200);
+    writeJson(LYRICS_CACHE_FILE(), Object.fromEntries(entries));
+  } catch {}
+}
 
 async function fetchLyrics(title, artist, durationMs) {
   if (!title) return { ok: false, error: 'No track title' };
-  const cleanTitle = title.replace(/\s*[\(\[\-].*$/, '').trim() || title;
-  const cacheKey = `${cleanTitle}:::${artist || ''}`.toLowerCase();
+  loadLyricsDiskCache();
+  const norm = normalizeTrackMeta(title, artist);
+  const cleanTitle = norm.title.replace(/\s*[\(\[].*$/, '').trim() || norm.title;
+  const cacheKey = `${cleanTitle}:::${norm.artist || ''}`.toLowerCase();
   if (lyricsCache.has(cacheKey)) {
     return lyricsCache.get(cacheKey);
   }
@@ -4104,7 +4220,7 @@ async function fetchLyrics(title, artist, durationMs) {
   try {
     const params = new URLSearchParams({
       track_name: cleanTitle,
-      artist_name: artist || ''
+      artist_name: norm.artist || ''
     });
     if (durationMs) params.append('duration', String(Math.round(durationMs / 1000)));
     const res = await fetch(`https://lrclib.net/api/get?${params}`, {
@@ -4117,7 +4233,7 @@ async function fetchLyrics(title, artist, durationMs) {
   // 2. Search fallback
   if (!lrcData || (!lrcData.syncedLyrics && !lrcData.plainLyrics)) {
     try {
-      const q = encodeURIComponent(`${cleanTitle} ${artist || ''}`.trim());
+      const q = encodeURIComponent(`${cleanTitle} ${norm.artist || ''}`.trim());
       const res = await fetch(`https://lrclib.net/api/search?q=${q}`, {
         headers: { 'User-Agent': 'LumaDock/1.2.0' },
         signal: AbortSignal.timeout(3500)
@@ -4166,13 +4282,36 @@ async function fetchLyrics(title, artist, durationMs) {
   };
 
   lyricsCache.set(cacheKey, result);
+  saveLyricsDiskCache();
   return result;
 }
 
 
 // ============================================================
-// WINDOW POSITION
+// WINDOW POSITION, DISPLAY & FULLSCREEN AUTO-HIDE
 // ============================================================
+
+const WINDOW_PREFS_FILE = () => path.join(app.getPath('userData'), 'window-prefs.json');
+let windowPrefs = { fullscreenHide: false, displayIndex: -1 };
+let lastFullscreenActive = false;
+
+function loadWindowPrefs() {
+  const saved = readJson(WINDOW_PREFS_FILE());
+  if (saved && typeof saved === 'object') {
+    windowPrefs = {
+      fullscreenHide: Boolean(saved.fullscreenHide),
+      displayIndex: Number.isInteger(saved.displayIndex) ? saved.displayIndex : -1
+    };
+  }
+}
+
+function getTargetDisplay() {
+  const all = screen.getAllDisplays();
+  if (windowPrefs.displayIndex >= 0 && all[windowPrefs.displayIndex]) {
+    return all[windowPrefs.displayIndex];
+  }
+  return screen.getPrimaryDisplay();
+}
 
 function positionMascot() {
   if (
@@ -4183,8 +4322,7 @@ function positionMascot() {
   }
 
 
-  const display =
-    screen.getPrimaryDisplay();
+  const display = getTargetDisplay();
 
 
   const x =
@@ -4208,6 +4346,16 @@ function positionMascot() {
     false
   );
 }
+
+app.on('lumadock-fullscreen', active => {
+  lastFullscreenActive = Boolean(active);
+  if (!mascotWindow || mascotWindow.isDestroyed()) return;
+  if (windowPrefs.fullscreenHide && lastFullscreenActive) {
+    if (mascotWindow.isVisible()) mascotWindow.hide();
+  } else if (!mascotWindow.isVisible() && !app.isQuitting) {
+    mascotWindow.showInactive();
+  }
+});
 
 
 // ============================================================
@@ -4575,8 +4723,8 @@ ipcMain.handle(
 ipcMain.handle(
   'spotify:connect',
 
-  async () =>
-    spotifyConnect()
+  async (_event, options) =>
+    spotifyConnect(options)
 );
 
 
@@ -4604,6 +4752,37 @@ ipcMain.handle(
 ipcMain.handle('spotify:devices', () => spotifyDevices()); // Spotify Connect: where it can play
 ipcMain.handle('spotify:transfer', (_event, id) => spotifyTransfer(id));
 ipcMain.handle('spotify:lyrics', (_event, q) => fetchLyrics(q?.title, q?.artist, q?.duration));
+ipcMain.handle('spotify:playlists', (_event, force) => spotifyPlaylists(Boolean(force)));
+ipcMain.handle('spotify:play-playlist', (_event, payload) => spotifyPlayPlaylist(payload));
+ipcMain.handle('island:displays', () => {
+  const primary = screen.getPrimaryDisplay().id;
+  return screen.getAllDisplays().map((d, i) => ({
+    index: i,
+    id: d.id,
+    primary: d.id === primary,
+    width: d.bounds.width,
+    height: d.bounds.height,
+    label: (d.label || `Display ${i + 1}`) + ` (${d.bounds.width}×${d.bounds.height})`
+  }));
+});
+ipcMain.on('island:window-prefs', (_event, prefs) => {
+  if (!prefs || typeof prefs !== 'object') return;
+  windowPrefs = {
+    fullscreenHide: Boolean(prefs.fullscreenHide),
+    displayIndex: Number.isInteger(prefs.displayIndex) ? prefs.displayIndex : -1
+  };
+  try { writeJson(WINDOW_PREFS_FILE(), windowPrefs); } catch {}
+  positionMascot();
+  if (!windowPrefs.fullscreenHide && mascotWindow && !mascotWindow.isDestroyed() && !mascotWindow.isVisible() && !app.isQuitting) {
+    mascotWindow.showInactive();
+  }
+});
+ipcMain.handle('lumadock:open-external', async (_event, url) => {
+  const s = String(url || '').trim();
+  if (!/^https:\/\//i.test(s)) return { ok: false };
+  await shell.openExternal(s);
+  return { ok: true };
+});
 
 ipcMain.handle(
   'spotify:seek',
@@ -4683,6 +4862,7 @@ app.on(
   'before-quit',
 
   event => {
+    app.isQuitting = true;
     if (
       goodbyeShown ||
       !mascotWindow ||
@@ -4724,6 +4904,7 @@ ipcMain.on(
 
 app.whenReady().then(
   () => {
+    loadWindowPrefs();
     createMascot();
     startWindowsMediaWatcher();
 

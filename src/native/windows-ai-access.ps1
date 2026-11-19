@@ -41,7 +41,7 @@ while ($null -ne ($line = [Console]::ReadLine())) {
           [string]$request.composerId, [LumaDock.Native.Guard[]]$guards, [LumaDock.Native.Guard[]]$timeline, [string]$request.text)
         $result = @{ ok = $true }
       }
-      default { throw 'Onbekende opdracht.' }
+      default { throw 'Unknown command.' }
     }
     $response = @{ id = $request.id; result = $result }
   } catch {
