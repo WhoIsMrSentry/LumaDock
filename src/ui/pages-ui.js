@@ -36,7 +36,7 @@
 
   const baseHeight = targetHeight;
   // Spotify is a wide, low player (like NotchNook); the other pages need more height.
-  targetHeight = function () { return currentView === 'spotify' ? 196 : PAGE.isPage(currentView) ? PAGE.height : baseHeight(); };
+  targetHeight = function () { return currentView === 'spotify' ? (window.__lumadockSpotifyHeight?.() || 196) : PAGE.isPage(currentView) ? PAGE.height : baseHeight(); };
 
   // Smooth page changes: canvas pages fade in, DOM pages fade + slide in.
   let lastView = null, changedAt = 0;

@@ -1,7 +1,7 @@
 'use strict';
 
-/** Default public Spotify PKCE application client ID. */
-const DEFAULT_SPOTIFY_CLIENT_ID = '4cd26d1c69a14dffa0649606f75a4418';
+/** Spotify Client ID must be supplied locally via Settings or LUMADOCK_SPOTIFY_CLIENT_ID (never hardcoded in git). */
+const DEFAULT_SPOTIFY_CLIENT_ID = '';
 
 /** Validate a Spotify 32-char hexadecimal Client ID. */
 function isValidSpotifyClientId(value) {

@@ -2472,7 +2472,7 @@ function getSpotifyClientId() {
 }
 
 function isCustomSpotifyClientId() {
-  return getSpotifyClientId() !== DEFAULT_SPOTIFY_CLIENT_ID;
+  return isValidSpotifyClientId(getSpotifyClientId());
 }
 
 function setSpotifyClientId(clientId) {
@@ -3197,10 +3197,15 @@ function loadSpotifyTokens() {
 
 
   try {
-    return JSON.parse(
+    const parsed = JSON.parse(
       raw
     );
-
+    const activeId = getSpotifyClientId();
+    if (!parsed || !activeId || parsed.clientId !== activeId) {
+      if (activeId) clearSpotifyTokens();
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -3283,6 +3288,9 @@ async function exchangeSpotifyCode(
 
     scope:
       String(data.scope || SPOTIFY_SCOPES),
+
+    clientId:
+      getSpotifyClientId(),
 
     expires_at:
       Date.now() +
@@ -3391,6 +3399,9 @@ async function refreshSpotifyToken(
       current.scope ||
       SPOTIFY_SCOPES,
 
+    clientId:
+      getSpotifyClientId(),
+
     expires_at:
       Date.now() +
       Number(
@@ -3466,6 +3477,10 @@ async function spotifyToken(
 // ============================================================
 
 async function spotifyConnect(options = {}) {
+  const clientId = getSpotifyClientId();
+  if (!isValidSpotifyClientId(clientId)) {
+    throw new Error('Önce Ayarlar -> Bağlantılar bölümünden Spotify Client ID girin.');
+  }
   const existing = loadSpotifyTokens();
   const force = Boolean(options?.force) || (Boolean(existing?.refresh_token) && !hasSpotifyPlaylistScope(existing));
   if (
@@ -4182,7 +4197,7 @@ function mergePlaylists(customList, apiList = []) {
   const seen = new Set();
   const out = [];
   for (const item of [...customList, ...apiList]) {
-    if (!item?.uri || !item?.image_url || seen.has(item.uri)) continue;
+    if (!item?.uri || seen.has(item.uri)) continue;
     seen.add(item.uri);
     out.push(item);
   }
@@ -4258,14 +4273,14 @@ async function spotifyPlaylists(force = false) {
     return { ok: true, playlists: mergePlaylists(custom, playlistsCache.items) };
   }
   try {
-    const data = await spotifyApi('/v1/me/playlists?limit=24');
+    const data = await spotifyApi('/v1/me/playlists?limit=50');
     const items = (data?.items || [])
-      .filter(p => p && p.uri && p.images?.[0]?.url)
+      .filter(p => p && p.uri)
       .map(p => ({
         id: String(p.id || ''),
         name: String(p.name || ''),
         uri: String(p.uri || ''),
-        image_url: String(p.images[0].url || ''),
+        image_url: String(p.images?.[0]?.url || ''),
         external_url: String(p.external_urls?.spotify || ''),
         tracks_total: Number(p.tracks?.total || 0)
       }));

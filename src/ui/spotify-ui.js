@@ -117,9 +117,31 @@
   }, 1200);
 
   // ---- Spotify Cover-Only Playlists ----
-  let playlistsOpen = false, playlistsLoading = false, playlists = [], playlistsAuthNeed = false, playlistsNote = '', plPage = 0;
+  const MAX_PL_TILES = 48;
+  let playlistsOpen = false, playlistsExpanded = false, playlistsLoading = false, playlists = [], playlistsAuthNeed = false, playlistsNote = '', plPage = 0, currentPerPage = 16;
   const playlistImages = new Map();
-  const plHover = new Array(8).fill(0);
+  const plHover = new Array(MAX_PL_TILES).fill(0);
+
+  window.__lumadockSpotifyHeight = () => (playlistsOpen && playlistsExpanded) ? 310 : 196;
+
+  function expandIcon(cx, cy, shrink, col) {
+    ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    if (!shrink) {
+      // outward diagonal arrows
+      ctx.moveTo(cx + 1, cy - 4.5); ctx.lineTo(cx + 4.5, cy - 4.5); ctx.lineTo(cx + 4.5, cy - 1);
+      ctx.moveTo(cx + 4.5, cy - 4.5); ctx.lineTo(cx + 1, cy - 1);
+      ctx.moveTo(cx - 1, cy + 4.5); ctx.lineTo(cx - 4.5, cy + 4.5); ctx.lineTo(cx - 4.5, cy + 1);
+      ctx.moveTo(cx - 4.5, cy + 4.5); ctx.lineTo(cx - 1, cy + 1);
+    } else {
+      // inward diagonal arrows
+      ctx.moveTo(cx + 4.5, cy - 4.5); ctx.lineTo(cx + 1, cy - 1);
+      ctx.moveTo(cx + 1, cy - 4); ctx.lineTo(cx + 1, cy - 1); ctx.lineTo(cx + 4, cy - 1);
+      ctx.moveTo(cx - 4.5, cy + 4.5); ctx.lineTo(cx - 1, cy + 1);
+      ctx.moveTo(cx - 1, cy + 4); ctx.lineTo(cx - 1, cy + 1); ctx.lineTo(cx - 4, cy + 1);
+    }
+    ctx.stroke(); ctx.restore();
+  }
 
   function getPlaylistImage(url) {
     if (!url) return null;
@@ -333,15 +355,19 @@
     // Clear overlay hit zones
     for (let i = 0; i < 5; i++) hit['spDev' + i] = null;
     for (let i = 0; i < 4; i++) hit['spLrc' + i] = null;
-    for (let i = 0; i < 8; i++) hit['spPlTile' + i] = null;
+    for (let i = 0; i < MAX_PL_TILES; i++) hit['spPlTile' + i] = null;
     hit.spLyricsClose = hit.spLrcMinus = hit.spLrcReset = hit.spLrcPlus = null;
-    hit.spDevClose = hit.spPlClose = hit.spPlRefresh = hit.spPlPrev = hit.spPlNext = hit.spPlAuth = hit.spPlAddClip = hit.spPlSettings = null;
+    hit.spDevClose = hit.spPlClose = hit.spPlRefresh = hit.spPlPrev = hit.spPlNext = hit.spPlAuth = hit.spPlAddClip = hit.spPlSettings = hit.spPlExpand = null;
 
     const anyDrawer = lyricsOpen || devicesOpen || playlistsOpen;
     drawerAnim += ((anyDrawer ? 1 : 0) - drawerAnim) * (1 - Math.exp(-20 * dt));
     if (!anyDrawer || drawerAnim < 0.02) return;
 
-    const px = x - 8, py = top - 2, pw = right - px + 4, ph = size + 4;
+    const fullMode = playlistsOpen && playlistsExpanded;
+    const px = fullMode ? left : (x - 8);
+    const py = top - 2;
+    const pw = (fullMode ? right - left : right - px) + 4;
+    const ph = fullMode ? Math.max(size + 4, content.height - 2) : (size + 4);
     ctx.save();
     ctx.globalAlpha *= drawerAnim;
     const sc = 0.97 + 0.03 * drawerAnim, pcx = px + pw / 2, pcy = py + ph / 2;
@@ -349,10 +375,24 @@
     ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.65)'; ctx.shadowBlur = 20; box(px, py, pw, ph, 16, '#121512'); ctx.restore();
 
     if (playlistsOpen) {
-      // Header: icon only + refresh + paging arrows + close — ZERO playlist names!
+      // Dynamic cover grid filling all available drawer width & height
+      const padX = 14, gapX = fullMode ? 10 : 8, gapY = fullMode ? 10 : 8;
+      const minTile = fullMode ? 60 : 44, maxTile = fullMode ? 90 : 52;
+      const headerH = 34;
+      const availW = Math.max(80, pw - padX * 2);
+      const availH = Math.max(50, ph - headerH - 6);
+      const maxCols = Math.max(4, Math.floor((availW + gapX) / (minTile + gapX)));
+      const maxRows = Math.max(1, Math.floor((availH + gapY) / (minTile + gapY)));
+      const perPage = Math.max(4, Math.min(MAX_PL_TILES, maxCols * maxRows));
+      currentPerPage = perPage;
+
       gridIcon(px + 20, py + 19, 11, colour);
-      const totalPages = Math.max(1, Math.ceil(playlists.length / 8));
+      const totalPages = Math.max(1, Math.ceil(playlists.length / perPage));
       if (plPage >= totalPages) plPage = totalPages - 1;
+
+      const ex = px + pw - 90, overExp = inside(pointer.x, pointer.y, { x: ex - 11, y: py + 6, width: 22, height: 24 });
+      expandIcon(ex, py + 19, playlistsExpanded, playlistsExpanded ? colour : (overExp ? '#fff' : 'rgba(255,255,255,.72)'));
+      hit.spPlExpand = { x: ex - 11, y: py + 6, width: 22, height: 24 };
 
       const ax = px + pw - 66, overAdd = inside(pointer.x, pointer.y, { x: ax - 11, y: py + 6, width: 22, height: 24 });
       text('+', ax, py + 23, 15.5, overAdd ? colour : 'rgba(255,255,255,.72)', 700, 'center');
@@ -366,7 +406,7 @@
       hit.spPlClose = { x: px + pw - 30, y: py + 6, width: 24, height: 24 };
 
       if (totalPages > 1) {
-        const ax1 = px + pw - 114, ax2 = px + pw - 90;
+        const ax1 = px + pw - 138, ax2 = px + pw - 114;
         const o1 = inside(pointer.x, pointer.y, { x: ax1 - 10, y: py + 6, width: 20, height: 24 });
         const o2 = inside(pointer.x, pointer.y, { x: ax2 - 10, y: py + 6, width: 20, height: 24 });
         text('‹', ax1, py + 23, 15, plPage > 0 ? (o1 ? '#fff' : 'rgba(255,255,255,.75)') : 'rgba(255,255,255,.2)', 700, 'center');
@@ -391,16 +431,24 @@
         pill(px + 16, py + 84, btnW, '+', L('Add from Clipboard', 'Pano\'dan Ekle'), 'spPlAddClip');
         pill(px + 24 + btnW, py + 84, btnW, '⚙', L('Connections', 'Bağlantılar'), 'spPlSettings');
       } else {
-        // Cover-only 4x2 grid (NO playlist names shown!)
-        const cols = 4, padX = 16, gapX = 12, gapY = 8;
-        const tileS = Math.min(44, Math.floor((pw - padX * 2 - gapX * (cols - 1)) / cols), Math.floor((ph - 42 - gapY) / 2));
-        const gridW = cols * tileS + (cols - 1) * gapX;
+        // Cover-only auto-fit grid (NO playlist names shown!)
+        const slice = playlists.slice(plPage * perPage, plPage * perPage + perPage);
+        let effCols = maxCols, effRows = maxRows;
+        if (fullMode && slice.length > 0 && slice.length < perPage) {
+          effRows = Math.min(maxRows, Math.max(1, Math.ceil(slice.length / maxCols)));
+          if (slice.length > 6 && effRows === 1 && maxRows >= 2) effRows = 2;
+          effCols = Math.min(maxCols, Math.max(4, Math.ceil(slice.length / effRows)));
+        }
+        const tileS = Math.min(maxTile, Math.floor((availW - gapX * (effCols - 1)) / effCols), Math.floor((availH - gapY * (effRows - 1)) / effRows));
+        const usedCols = Math.min(effCols, Math.max(1, slice.length));
+        const usedRows = Math.max(1, Math.ceil(slice.length / effCols));
+        const gridW = usedCols * tileS + (usedCols - 1) * gapX;
+        const gridH = usedRows * tileS + (usedRows - 1) * gapY;
         const startX = px + Math.round((pw - gridW) / 2);
-        const startY = py + 33;
-        const slice = playlists.slice(plPage * 8, plPage * 8 + 8);
+        const startY = py + headerH + Math.max(0, Math.round((availH - gridH) / 2));
 
         slice.forEach((pl, i) => {
-          const col = i % cols, row = Math.floor(i / cols);
+          const col = i % effCols, row = Math.floor(i / effCols);
           const tx = startX + col * (tileS + gapX), ty = startY + row * (tileS + gapY);
           const bounds = { x: tx, y: ty, width: tileS, height: tileS };
           const over = inside(pointer.x, pointer.y, bounds);
@@ -411,25 +459,25 @@
           ctx.save();
           ctx.translate(cxT, cyT); ctx.scale(scale, scale); ctx.translate(-cxT, -cyT);
           if (hv > 0.04) { ctx.shadowColor = colour; ctx.shadowBlur = 12 * hv; }
-          box(tx, ty, tileS, tileS, 9, '#1c211c');
+          box(tx, ty, tileS, tileS, fullMode ? 12 : 9, '#1c211c');
           ctx.shadowBlur = 0;
 
           const img = getPlaylistImage(pl.image_url);
           if (img) {
-            ctx.save(); ctx.beginPath(); ctx.roundRect(tx, ty, tileS, tileS, 9); ctx.clip();
+            ctx.save(); ctx.beginPath(); ctx.roundRect(tx, ty, tileS, tileS, fullMode ? 12 : 9); ctx.clip();
             ctx.drawImage(img, tx, ty, tileS, tileS);
             ctx.restore();
           } else {
-            window.__lumadockIcon?.('music', cxT, cyT, 18, '#667262');
+            window.__lumadockIcon?.('music', cxT, cyT, fullMode ? 24 : 18, '#667262');
           }
 
           if (hv > 0.04) {
             ctx.save();
-            ctx.beginPath(); ctx.roundRect(tx + 0.5, ty + 0.5, tileS - 1, tileS - 1, 9);
+            ctx.beginPath(); ctx.roundRect(tx + 0.5, ty + 0.5, tileS - 1, tileS - 1, fullMode ? 12 : 9);
             ctx.strokeStyle = colour; ctx.globalAlpha = 0.85 * hv; ctx.lineWidth = 1.6; ctx.stroke();
-            ctx.fillStyle = `rgba(0,0,0,${0.42 * hv})`; ctx.beginPath(); ctx.arc(cxT, cyT, tileS * 0.28, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = `rgba(0,0,0,${0.42 * hv})`; ctx.beginPath(); ctx.arc(cxT, cyT, tileS * 0.26, 0, Math.PI * 2); ctx.fill();
             ctx.globalAlpha = hv;
-            mediaIcon('play', cxT + 1, cyT, 10, '#fff');
+            mediaIcon('play', cxT + 1, cyT, fullMode ? 13 : 10, '#fff');
             ctx.restore();
           }
           ctx.restore();
@@ -544,8 +592,8 @@
   });
   window.addEventListener('click', e => { if (swallowClick) { swallowClick = false; e.preventDefault(); e.stopImmediatePropagation(); } }, true);
   canvas.addEventListener('wheel', e => {
-    if (currentView === 'spotify' && mode === 'expanded' && playlistsOpen && playlists.length > 8 && inside(e.clientX, e.clientY, islandBounds)) {
-      const totalPages = Math.ceil(playlists.length / 8);
+    if (currentView === 'spotify' && mode === 'expanded' && playlistsOpen && playlists.length > currentPerPage && inside(e.clientX, e.clientY, islandBounds)) {
+      const totalPages = Math.ceil(playlists.length / currentPerPage);
       if (e.deltaY > 0 || e.deltaX > 0) plPage = Math.min(totalPages - 1, plPage + 1);
       else if (e.deltaY < 0 || e.deltaX < 0) plPage = Math.max(0, plPage - 1);
       return;
@@ -577,9 +625,11 @@
       }])),
       spPlaylists: () => {
         playlistsOpen = !playlistsOpen;
+        if (!playlistsOpen) playlistsExpanded = false;
         if (playlistsOpen) { devicesOpen = false; lyricsOpen = false; loadPlaylists(false); }
       },
-      spPlClose: () => { playlistsOpen = false; },
+      spPlExpand: () => { playlistsExpanded = !playlistsExpanded; plPage = 0; },
+      spPlClose: () => { playlistsOpen = false; playlistsExpanded = false; },
       spPlRefresh: () => { loadPlaylists(true); },
       spPlAddClip: async () => {
         const res = await api.spotifyAddPlaylistUrl?.({ fromClipboard: true }).catch(e => ({ ok: false, error: e?.message }));
@@ -608,7 +658,7 @@
         }
         await loadPlaylists(true);
       },
-      ...Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7].map(i => ['spPlTile' + i, () => hit['spPlTile' + i]?.playlist && openPlaylist(hit['spPlTile' + i].playlist)])),
+      ...Object.fromEntries(Array.from({ length: MAX_PL_TILES }, (_, i) => ['spPlTile' + i, () => hit['spPlTile' + i]?.playlist && openPlaylist(hit['spPlTile' + i].playlist)])),
       spPrev: () => control('previous'), spNext: () => control('next'),
       spPlay: () => control(spotifyState.is_playing ? 'pause' : 'play'), spOpen: () => control('open'), spTitle: () => control('open'),
       spConnect: async () => { try { await api.spotifyConnect(); } catch {} refreshSpotify(); },
@@ -624,8 +674,8 @@
       }
     };
     const lrcKeys = ['spLyrics', 'spLyricsClose', 'spLrcMinus', 'spLrcReset', 'spLrcPlus', 'spLrc0', 'spLrc1', 'spLrc2', 'spLrc3'];
-    const plKeys = ['spPlaylists', 'spPlClose', 'spPlRefresh', 'spPlAddClip', 'spPlSettings', 'spPlPrev', 'spPlNext', 'spPlAuth', ...[0, 1, 2, 3, 4, 5, 6, 7].map(i => 'spPlTile' + i)];
-    if (playlistsOpen && !plKeys.some(k => inside(x, y, hit[k]))) { playlistsOpen = false; event.preventDefault(); event.stopImmediatePropagation(); return; }
+    const plKeys = ['spPlaylists', 'spPlClose', 'spPlExpand', 'spPlRefresh', 'spPlAddClip', 'spPlSettings', 'spPlPrev', 'spPlNext', 'spPlAuth', ...Array.from({ length: MAX_PL_TILES }, (_, i) => 'spPlTile' + i)];
+    if (playlistsOpen && !plKeys.some(k => inside(x, y, hit[k]))) { playlistsOpen = false; playlistsExpanded = false; event.preventDefault(); event.stopImmediatePropagation(); return; }
     if (lyricsOpen && !lrcKeys.some(k => inside(x, y, hit[k]))) { lyricsOpen = false; event.preventDefault(); event.stopImmediatePropagation(); return; }
     if (devicesOpen && !['spDevices', 'spDevClose', 'spDev0', 'spDev1', 'spDev2', 'spDev3'].some(k => inside(x, y, hit[k]))) { devicesOpen = false; event.preventDefault(); event.stopImmediatePropagation(); return; }
     for (const [key, run] of Object.entries(hits)) {

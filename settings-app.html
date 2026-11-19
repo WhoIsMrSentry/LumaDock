@@ -864,35 +864,26 @@ function drawConnect() {
   const spSub = lang === 'tr'
     ? 'Çalma listeleri ve cihaz kontrolü için Spotify OAuth bağlantısı. Redirect URI: http://127.0.0.1:8888/callback'
     : 'Spotify OAuth for playlist covers and remote devices. Redirect URI: http://127.0.0.1:8888/callback';
-  const spStatusTag = spCfg?.connected
-    ? (spCfg.isCustom
-        ? `<span class="tag good"><i></i>${t().cxOn}</span>`
-        : `<span class="tag warn">${lang === 'tr' ? 'Eski Uygulama (TwoCode / 403 Kısıtlı)' : 'Legacy Default App (403 Restricted)'}</span>`)
-    : '';
-  const spLegacyWarn = spCfg && !spCfg.isCustom
-    ? `<span class="note">${lang === 'tr'
-        ? 'Uyarı: Özel Client ID boş olduğu için yetki ekranında "TwoCode Assistent" görünür ve Spotify API playlistleri 403 ile engeller. Aşağıya kendi Client ID\'nizi kaydedin (ya da alt satırdan şifresiz playlist linki ekleyin).'
-        : 'Warning: Default Client ID belongs to "TwoCode Assistent" and is 403-restricted in Development Mode. Paste your own Client ID below (or pin zero-auth playlist links below).'}</span>`
-    : '';
+  const spStatusTag = spCfg?.connected ? `<span class="tag good"><i></i>${t().cxOn}</span>` : '';
   const customPls = (spCfg?.customPlaylists || []).map(pl =>
     `<span class="tag">${esc(pl.name)} <button type="button" class="iconbtn" style="width:18px;height:18px;font-size:12px" data-sp="del-pl" data-id="${esc(pl.id)}" title="Sil">×</button></span>`
   ).join(' ');
   const spCard = spCfg ? `<p class="section">Spotify</p><div class="group">
-    <div class="row"><span class="tile" style="--c:#1ed760">${icon('music')}</span><div class="text"><b>Spotify</b><small>${esc(spSub)}</small>${spLegacyWarn}</div>
+    <div class="row"><span class="tile" style="--c:#1ed760">${icon('music')}</span><div class="text"><b>Spotify</b><small>${esc(spSub)}</small></div>
       ${spStatusTag}
       <button class="btn ${spCfg.connected ? 'ghost' : 'main'}" data-sp="connect" ${spBusy ? 'disabled' : ''}>${spCfg.connected ? (lang === 'tr' ? 'Yeniden Yetkilendir' : 'Reauthorize') : (lang === 'tr' ? 'Bağlan' : 'Connect')}</button>
       ${spCfg.connected ? `<button class="btn ghost" data-sp="disconnect" ${spBusy ? 'disabled' : ''}>${t().logout}</button>` : ''}
     </div>
-    <div class="row"><div class="text"><b>${lang === 'tr' ? 'Özel Spotify Client ID (403 ve LumaDock İsmi İçin)' : 'Custom Spotify Client ID (Fixes TwoCode Name & 403)'}</b>
-      <small>${lang === 'tr' ? 'developer.spotify.com üzerinden "LumaDock" adlı app açın, Redirect URI: http://127.0.0.1:8888/callback ekleyin, aldığınız Client ID\'yi kaydedin.' : 'Create an app named "LumaDock" on developer.spotify.com, set Redirect URI to http://127.0.0.1:8888/callback, and save its Client ID here.'}</small></div>
+    <div class="row"><div class="text"><b>${lang === 'tr' ? 'Özel Spotify Client ID (İsteğe Bağlı)' : 'Custom Spotify Client ID (Optional)'}</b>
+      <small>${lang === 'tr' ? 'Varsayılan olarak LumaDock Spotify uygulaması kullanılır. Farklı bir app kullanmak isterseniz 32 haneli Client ID girin.' : 'Uses LumaDock\'s Spotify app by default. Paste another 32-char Client ID if desired.'}</small></div>
       <div class="tc-step"><a class="btn ghost" href="https://developer.spotify.com/dashboard" target="_blank" rel="noreferrer" style="text-decoration:none">Dashboard ↗</a>
       <button class="btn ghost" type="button" data-sp="copy-uri">${lang === 'tr' ? 'URI Kopyala' : 'Copy URI'}</button>
-      <input class="field" id="spClientIdIn" value="${spCfg.isCustom ? esc(spCfg.clientId) : ''}" placeholder="${lang === 'tr' ? '32 haneli Client ID yapıştırın…' : 'Paste your 32-char Client ID…'}" spellcheck="false" autocomplete="off">
+      <input class="field" id="spClientIdIn" value="${spCfg.isCustom ? esc(spCfg.clientId) : ''}" placeholder="${lang === 'tr' ? 'Özel Client ID (opsiyonel)…' : 'Custom Client ID (optional)…'}" spellcheck="false" autocomplete="off">
       <button class="btn main" data-sp="save-id" ${spBusy ? 'disabled' : ''}>${lang === 'tr' ? 'Kaydet & Bağla' : 'Save & Connect'}</button>
       ${spCfg.isCustom ? `<button class="btn ghost" data-sp="reset-id" ${spBusy ? 'disabled' : ''}>${lang === 'tr' ? 'Sıfırla' : 'Reset'}</button>` : ''}</div>
     </div>
-    <div class="row"><div class="text"><b>${lang === 'tr' ? 'Sabit Çalma Listeleri (403 OAuth Gerektirmez)' : 'Pinned Playlists (Zero-Auth Covers)'}</b>
-      <small>${lang === 'tr' ? 'Spotify\'dan Paylaş -> Bağlantıyı Kopyala ile aldığınız playlist linkini ekleyin; ada üzerinde kapağıyla listelenir.' : 'Paste any open.spotify.com/playlist/... link to pin its cover directly in the island.'}</small>
+    <div class="row"><div class="text"><b>${lang === 'tr' ? 'Sabit Çalma Listeleri (Link ile Ekle)' : 'Pinned Playlists (Add by URL)'}</b>
+      <small>${lang === 'tr' ? 'Spotify\'dan Paylaş -> Bağlantıyı Kopyala ile aldığınız playlist linkini ekleyebilirsiniz.' : 'Optionally paste an open.spotify.com/playlist/... link to pin a playlist cover.'}</small>
       ${customPls ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${customPls}</div>` : ''}</div>
       <div class="tc-step"><input class="field" id="spPlaylistUrlIn" placeholder="https://open.spotify.com/playlist/..." spellcheck="false" autocomplete="off">
       <button class="btn main" data-sp="add-pl" ${spBusy ? 'disabled' : ''}>+ ${lang === 'tr' ? 'Ekle' : 'Add'}</button></div>

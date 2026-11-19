@@ -164,7 +164,8 @@ test('spotify helpers normalize Turkish/remastered metadata, parse extended LRC 
     parseSpotifyPlaylistInput
   } = require(path.join(ROOT, 'src', 'main', 'spotify-helpers.cjs'));
 
-  assert.equal(isValidSpotifyClientId(DEFAULT_SPOTIFY_CLIENT_ID), true);
+  assert.equal(DEFAULT_SPOTIFY_CLIENT_ID, '');
+  assert.equal(isValidSpotifyClientId('0123456789abcdef0123456789abcdef'), true);
   assert.equal(isValidSpotifyClientId('bad-id'), false);
 
   assert.equal(hasSpotifyPlaylistScope({ scope: 'user-read-playback-state playlist-read-private' }), true);
