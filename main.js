@@ -32,6 +32,7 @@ const {
   collectPagedSpotifyTracks,
   collectPagedSpotifyPlaylists
 } = require('./src/main/spotify-helpers.cjs');
+const i18n = require('./src/shared/i18n.cjs');
 
 require('./src/main/project-mode-main');
 require('./src/main/ai-monitor-main.cjs');
@@ -769,7 +770,7 @@ async function scanProject(
       selected: false,
 
       error:
-        'De gekozen projectmap bestaat niet meer.'
+        i18n.t('project.errors.folderMissing')
     };
   }
 
@@ -789,7 +790,7 @@ async function scanProject(
       selected: false,
 
       error:
-        'De projectmap kan niet gelezen worden.'
+        i18n.t('project.errors.folderUnreadable')
     };
   }
 
@@ -802,7 +803,7 @@ async function scanProject(
       selected: false,
 
       error:
-        'De geselecteerde locatie is geen map.'
+        i18n.t('project.errors.notAFolder')
     };
   }
 
@@ -1039,7 +1040,7 @@ async function chooseProject() {
 
   const options = {
     title:
-      'Kies je LumaDock-project',
+      i18n.t('project.chooseTitle'),
 
     defaultPath:
       currentPath ||
@@ -1048,7 +1049,7 @@ async function chooseProject() {
       ),
 
     buttonLabel:
-      'Project kiezen',
+      i18n.t('project.chooseButton'),
 
     properties: [
       'openDirectory'
@@ -1095,7 +1096,7 @@ async function chooseProject() {
       ok: false,
 
       error:
-        'Deze map kon niet geopend worden.'
+        i18n.t('project.errors.folderOpenFailed')
     };
   }
 
@@ -1318,206 +1319,37 @@ async function collectProjectTextFiles(
 
 const PROJECT_STOP_WORDS =
   new Set([
-    'de',
-    'het',
-    'een',
-    'en',
-    'of',
-
-    'ik',
-    'jij',
-    'je',
-    'mijn',
-    'me',
-
-    'dit',
-    'dat',
-    'die',
-    'deze',
-
-    'kan',
-    'kun',
-    'moet',
-    'wil',
-    'willen',
-
-    'maak',
-    'maken',
-    'fix',
-    'fixen',
-
-    'haal',
-    'weg',
-
-    'even',
-    'gewoon',
-
-    'naar',
-    'van',
-    'voor',
-    'met',
-    'bij',
-    'op',
-    'in',
-    'uit',
-
-    'er',
-    'is',
-    'zijn',
-
-    'waar',
-    'hoe',
-
-    'code',
-    'bestand',
-    'bestanden'
+    'the', 'and', 'for', 'with', 'that', 'this', 'from', 'into', 'where', 'what', 'which', 'how',
+    'can', 'could', 'would', 'should', 'make', 'fix', 'find', 'show', 'get', 'code', 'file', 'files',
+    'bir', 'bu', 've', 'ile', 'icin', 'nerede', 'nasil', 'nedir', 'hangi', 'dosya', 'dosyalar', 'kod'
   ]);
 
 
 const PROJECT_QUERY_EXPANSIONS = {
-  spotify: [
-    'spotify',
-    'player',
-    'playback',
-    'track'
-  ],
-
-  play: [
-    'play',
-    'pause',
-    'playing',
-    'control'
-  ],
-
-  knop: [
-    'button',
-    'control',
-    'hit',
-    'click'
-  ],
-
-  button: [
-    'button',
-    'control',
-    'hit',
-    'click'
-  ],
-
-  wave: [
-    'wave',
-    'waveform',
-    'bars',
-    'audio'
-  ],
-
-  waves: [
-    'wave',
-    'waveform',
-    'bars',
-    'audio'
-  ],
-
-  geluid: [
-    'sound',
-    'audio',
-    'speaker',
-    'volume'
-  ],
-
-  sound: [
-    'sound',
-    'audio',
-    'speaker',
-    'volume'
-  ],
-
-  album: [
-    'album',
-    'cover',
-    'image',
-    'image_url'
-  ],
-
-  cover: [
-    'cover',
-    'album',
-    'image',
-    'image_url'
-  ],
-
-  instellingen: [
-    'settings',
-    'setting',
-    'config'
-  ],
-
-  instelling: [
-    'settings',
-    'setting',
-    'config'
-  ],
-
-  spook: [
-    'ghost',
-    'mascot'
-  ],
-
-  spookje: [
-    'ghost',
-    'mascot'
-  ],
-
-  mascot: [
-    'ghost',
-    'mascot'
-  ],
-
-  menu: [
-    'menu',
-    'home',
-    'apps',
-    'view'
-  ],
-
-  project: [
-    'project'
-  ],
-
-  animatie: [
-    'animation',
-    'animate',
-    'transition',
-    'motion'
-  ],
-
-  animaties: [
-    'animation',
-    'animate',
-    'transition',
-    'motion'
-  ],
-
-  hover: [
-    'hover',
-    'mousemove',
-    'pointer',
-    'mouseenter',
-    'mouseleave'
-  ],
-
-  klik: [
-    'click',
-    'onclick',
-    'pointerdown',
-    'hit'
-  ],
-
-  klikken: [
-    'click',
-    'onclick',
-    'pointerdown',
-    'hit'
-  ]
+  spotify: ['spotify', 'player', 'playback', 'track'],
+  play: ['play', 'pause', 'playing', 'control'],
+  button: ['button', 'control', 'hit', 'click'],
+  dugme: ['button', 'control', 'hit', 'click'],
+  buton: ['button', 'control', 'hit', 'click'],
+  wave: ['wave', 'waveform', 'bars', 'audio'],
+  waves: ['wave', 'waveform', 'bars', 'audio'],
+  sound: ['sound', 'audio', 'speaker', 'volume'],
+  ses: ['sound', 'audio', 'speaker', 'volume'],
+  album: ['album', 'cover', 'image', 'image_url'],
+  cover: ['cover', 'album', 'image', 'image_url'],
+  kapak: ['cover', 'album', 'image', 'image_url'],
+  settings: ['settings', 'setting', 'config'],
+  ayarlar: ['settings', 'setting', 'config'],
+  mascot: ['ghost', 'mascot'],
+  robo: ['ghost', 'mascot', 'robo'],
+  menu: ['menu', 'home', 'apps', 'view'],
+  project: ['project'],
+  proje: ['project'],
+  animation: ['animation', 'animate', 'transition', 'motion'],
+  animasyon: ['animation', 'animate', 'transition', 'motion'],
+  hover: ['hover', 'mousemove', 'pointer', 'mouseenter', 'mouseleave'],
+  click: ['click', 'onclick', 'pointerdown', 'hit'],
+  tikla: ['click', 'onclick', 'pointerdown', 'hit']
 };
 
 
@@ -1736,7 +1568,7 @@ async function searchProject(
     return {
       ok: false,
       error:
-        'Kies eerst een projectmap.'
+        i18n.t('project.errors.pickProjectFirst')
     };
   }
 
@@ -1755,7 +1587,7 @@ async function searchProject(
       ok: false,
 
       error:
-        'Typ eerst wat je wilt zoeken.'
+        i18n.t('project.errors.typeSearchFirst')
     };
   }
 
@@ -1774,7 +1606,7 @@ async function searchProject(
       ok: false,
 
       error:
-        'De projectmap bestaat niet meer.'
+        i18n.t('project.errors.folderMissing')
     };
   }
 
@@ -1793,7 +1625,7 @@ async function searchProject(
       ok: false,
 
       error:
-        'Ik kon geen bruikbare zoekterm uit je vraag halen.'
+        i18n.t('project.errors.noSearchTerms')
     };
   }
 
@@ -2133,7 +1965,7 @@ async function resolveProjectFile(
     !selectedRoot
   ) {
     throw new Error(
-      'Geen project geselecteerd.'
+      i18n.t('project.errors.noProjectSelected')
     );
   }
 
@@ -2158,7 +1990,7 @@ async function resolveProjectFile(
     )
   ) {
     throw new Error(
-      'Ongeldig bestand.'
+      i18n.t('project.errors.invalidFile')
     );
   }
 
@@ -2177,7 +2009,7 @@ async function resolveProjectFile(
     )
   ) {
     throw new Error(
-      'Dit bestand ligt buiten het gekozen project.'
+      i18n.t('project.errors.outsideProject')
     );
   }
 
@@ -2193,7 +2025,7 @@ async function resolveProjectFile(
 
   } catch {
     throw new Error(
-      'Bestand bestaat niet meer.'
+      i18n.t('project.errors.fileMissing')
     );
   }
 
@@ -2205,7 +2037,7 @@ async function resolveProjectFile(
     )
   ) {
     throw new Error(
-      'Dit bestand ligt buiten het gekozen project.'
+      i18n.t('project.errors.outsideProject')
     );
   }
 
@@ -2222,7 +2054,7 @@ async function resolveProjectFile(
     )
   ) {
     throw new Error(
-      'Dit bestand is om veiligheidsredenen afgeschermd.'
+      i18n.t('project.errors.sensitiveFileBlocked')
     );
   }
 
@@ -2233,7 +2065,7 @@ async function resolveProjectFile(
     )
   ) {
     throw new Error(
-      'Dit bestandstype kan niet als code worden geopend.'
+      i18n.t('project.errors.unsupportedFileType')
     );
   }
 
@@ -2248,7 +2080,7 @@ async function resolveProjectFile(
     !stat.isFile()
   ) {
     throw new Error(
-      'Dit is geen bestand.'
+      i18n.t('project.errors.notAFile')
     );
   }
 
@@ -2258,7 +2090,7 @@ async function resolveProjectFile(
     PROJECT_READ_MAX_BYTES
   ) {
     throw new Error(
-      'Dit bestand is te groot om in Project Mode te bekijken.'
+      i18n.t('project.errors.fileTooLarge')
     );
   }
 
@@ -2326,7 +2158,7 @@ async function readProjectFile(
       ok: false,
 
       error:
-        'Het bestand kon niet gelezen worden.'
+        i18n.t('project.errors.fileReadError')
     };
   }
 
@@ -2489,7 +2321,7 @@ function setSpotifyClientId(clientId) {
     return { ok: true, clientId: getSpotifyClientId(), isCustom: false };
   }
   if (!isValidSpotifyClientId(trimmed)) {
-    return { ok: false, error: 'Geçersiz Client ID formatı (32 karakterlik hexadecimal kod olmalı).' };
+    return { ok: false, error: i18n.t('spotify.errors.invalidClientId') };
   }
   writeJson(SPOTIFY_CONFIG_FILE(), { clientId: trimmed });
   clearSpotifyTokens();
@@ -2694,7 +2526,7 @@ function encryptString(
     !safeStorage.isEncryptionAvailable()
   ) {
     throw new Error(
-      'Windows güvenli depolama kullanılamıyor.'
+      i18n.t('spotify.errors.dpapiUnavailable')
     );
   }
 
@@ -2989,7 +2821,7 @@ async function connectToLumaDock() {
       'denied'
     ) {
       throw new Error(
-        'Koppeling geweigerd.'
+        i18n.t('buddy.errors.pairingDenied')
       );
     }
 
@@ -2999,14 +2831,14 @@ async function connectToLumaDock() {
       'expired'
     ) {
       throw new Error(
-        'De koppeling is verlopen.'
+        i18n.t('buddy.errors.pairingExpired')
       );
     }
   }
 
 
   throw new Error(
-    'De koppeling duurde te lang.'
+    i18n.t('buddy.errors.pairingTimeout')
   );
 }
 
@@ -3276,7 +3108,7 @@ async function exchangeSpotifyCode(
     throw new Error(
       data?.error_description ||
       data?.error ||
-      'Spotify bağlantısı kurulamadı.'
+      i18n.t('spotify.errors.connectFailed')
     );
   }
 
@@ -3329,7 +3161,7 @@ async function refreshSpotifyToken(
 
 
     throw new Error(
-      'Spotify oturumunun yenilenmesi gerekiyor.'
+      i18n.t('spotify.errors.sessionNeedsRefresh')
     );
   }
 
@@ -3381,7 +3213,7 @@ async function refreshSpotifyToken(
     throw new Error(
       data?.error_description ||
       data?.error ||
-      'Spotify token yenileme başarısız.'
+      i18n.t('spotify.errors.refreshFailed')
     );
   }
 
@@ -3481,7 +3313,7 @@ async function spotifyToken(
 async function spotifyConnect(options = {}) {
   const clientId = getSpotifyClientId();
   if (!isValidSpotifyClientId(clientId)) {
-    throw new Error('Önce Ayarlar -> Bağlantılar bölümünden Spotify Client ID girin.');
+    throw new Error(i18n.t('spotify.errors.setClientIdFirst'));
   }
   const existing = loadSpotifyTokens();
   const force = Boolean(options?.force) || (Boolean(existing?.refresh_token) && !hasSpotifyPlaylistScope(existing));
@@ -3615,7 +3447,7 @@ async function spotifyConnect(options = {}) {
                     state
                 ) {
                   throw new Error(
-                    'Geçersiz Spotify geri çağrısı.'
+                    i18n.t('spotify.errors.invalidCallback')
                   );
                 }
 
@@ -3630,7 +3462,7 @@ async function spotifyConnect(options = {}) {
                   oauthError
                 ) {
                   throw new Error(
-                    'Spotify bağlantısı iptal edildi.'
+                    i18n.t('spotify.errors.authCancelled')
                   );
                 }
 
@@ -3643,7 +3475,7 @@ async function spotifyConnect(options = {}) {
 
                 if (!code) {
                   throw new Error(
-                    'Spotify yetkilendirme kodu alınamadı.'
+                    i18n.t('spotify.errors.noAuthCode')
                   );
                 }
 
@@ -3706,7 +3538,7 @@ async function spotifyConnect(options = {}) {
                 reject,
 
                 new Error(
-                  'Spotify bağlantısı zaman aşımına uğradı.'
+                  i18n.t('spotify.errors.authTimedOut')
                 )
               );
             },
@@ -3805,7 +3637,7 @@ async function spotifyApi(
     spotifyRateLimitedUntil
   ) {
     throw new Error(
-      'Spotify istek sınırı aşıldı, lütfen biraz bekleyin.'
+      i18n.t('spotify.errors.rateLimited')
     );
   }
 
@@ -3818,7 +3650,7 @@ async function spotifyApi(
 
   if (!token) {
     throw new Error(
-      'Spotify henüz bağlanmadı.'
+      i18n.t('spotify.errors.notConnected')
     );
   }
 
@@ -3882,7 +3714,7 @@ async function spotifyApi(
 
 
     throw new Error(
-      'Spotify istek sınırı aşıldı, lütfen biraz bekleyin.'
+      i18n.t('spotify.errors.rateLimited')
     );
   }
 
@@ -3941,7 +3773,7 @@ async function getSpotifyState() {
         id: 'local-' + Buffer.from(localMedia.title).toString('hex').slice(0, 12),
         uri: '',
         name: clean.title || localMedia.title,
-        artist: clean.artist || localMedia.artist || 'Müzik',
+        artist: clean.artist || localMedia.artist || i18n.t('spotify.fallbackArtist'),
         image_url: cover || '',
         source: localMedia.source || 'Spotify'
       },
@@ -4106,7 +3938,7 @@ async function spotifyDevices() {
       ok: true,
       devices: [localDev],
       error: /403|premium/i.test(error.message)
-        ? 'Cihazlar arası aktarım için Spotify Premium gereklidir.'
+        ? i18n.t('spotify.premiumRequiredDevices')
         : error.message
     };
   }
@@ -4114,13 +3946,13 @@ async function spotifyDevices() {
 
 async function spotifyTransfer(id) {
   if (id === 'local') return { ok: true };
-  if (typeof id !== 'string' || !/^[\w-]{6,80}$/.test(id)) return { ok: false, error: 'Bilinmeyen cihaz.' };
+  if (typeof id !== 'string' || !/^[\w-]{6,80}$/.test(id)) return { ok: false, error: i18n.t('status.unknown') };
   try {
     await spotifyApi('/v1/me/player', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ device_ids: [id], play: true }) });
     return { ok: true };
   } catch (error) {
     const isPremium = /premium|403/i.test(error.message);
-    return { ok: false, error: isPremium ? 'Cihaz aktarımı için Spotify Premium gereklidir.' : error.message };
+    return { ok: false, error: isPremium ? i18n.t('spotify.premiumRequiredTransfer') : error.message };
   }
 }
 
@@ -4213,8 +4045,8 @@ async function addCustomSpotifyPlaylist(payload = {}) {
     return {
       ok: false,
       error: payload?.fromClipboard
-        ? 'Panoda geçerli Spotify çalma listesi bağlantısı bulunamadı. Spotify\'da playlist\'e sağ tık -> Paylaş -> Bağlantıyı Kopyala yapın.'
-        : 'Geçersiz Spotify çalma listesi bağlantısı (https://open.spotify.com/playlist/...).'
+        ? i18n.t('spotify.errors.invalidPlaylistClip')
+        : i18n.t('spotify.errors.invalidPlaylistUrl')
     };
   }
   try {
@@ -4223,12 +4055,12 @@ async function addCustomSpotifyPlaylist(payload = {}) {
       { signal: AbortSignal.timeout(4500), headers: { 'User-Agent': 'LumaDock/1.2.0' } }
     );
     if (!oembedRes.ok) {
-      return { ok: false, error: `Spotify playlist kapağı alınamadı (HTTP ${oembedRes.status}).` };
+      return { ok: false, error: i18n.t('spotify.errors.oembedHttpError', { status: oembedRes.status }) };
     }
     const meta = await oembedRes.json();
     const imageUrl = String(meta?.thumbnail_url || '').trim();
     if (!imageUrl) {
-      return { ok: false, error: 'Bu çalma listesi için kapak fotoğrafı bulunamadı.' };
+      return { ok: false, error: i18n.t('spotify.errors.noPlaylistCoverFound') };
     }
     const item = {
       id: parsed.id,
@@ -4244,7 +4076,7 @@ async function addCustomSpotifyPlaylist(payload = {}) {
     playlistsCache = null;
     return { ok: true, playlist: item, customPlaylists: next };
   } catch (err) {
-    return { ok: false, error: err?.message || 'Playlist kapağı yüklenemedi.' };
+    return { ok: false, error: err?.message || i18n.t('spotify.errors.coverLoadFailed') };
   }
 }
 
@@ -4267,9 +4099,9 @@ async function spotifyPlaylists(force = false) {
   }
   if (!hasSpotifyPlaylistScope(tokens)) {
     if (custom.length) {
-      return { ok: true, playlists: custom, partialError: 'Çalma listesi okuma izni eksik.' };
+      return { ok: true, playlists: custom, partialError: i18n.t('spotify.errors.missingPlaylistScope') };
     }
-    return { ok: false, needsReauth: true, playlists: [], error: 'Çalma listesi okuma izni eksik; yeniden yetkilendirin.' };
+    return { ok: false, needsReauth: true, playlists: [], error: i18n.t('spotify.errors.missingPlaylistScopeReauth') };
   }
   if (!force && playlistsCache && Date.now() - playlistsCache.at < 60000) {
     return { ok: true, playlists: mergePlaylists(custom, playlistsCache.items) };
@@ -4296,7 +4128,7 @@ async function spotifyPlaylistTracks(playlistId, force = false) {
   const id = String(typeof playlistId === 'object' ? playlistId?.id : playlistId || '').trim();
   const bypassCache = Boolean(force || (typeof playlistId === 'object' && playlistId?.force));
   if (!/^[A-Za-z0-9]{10,40}$/.test(id)) {
-    return { ok: false, tracks: [], total: 0, error: 'Geçersiz çalma listesi kimliği.' };
+    return { ok: false, tracks: [], total: 0, error: i18n.t('spotify.errors.invalidPlaylistId') };
   }
   const cached = playlistTracksCache.get(id);
   if (!bypassCache && cached && Date.now() - cached.at < 60000) {
@@ -4333,7 +4165,7 @@ async function spotifyPlaylistTracks(playlistId, force = false) {
       ok: false,
       tracks: cached?.items || [],
       total: cached?.total || cached?.items?.length || 0,
-      error: error?.message || 'Şarkılar alınamadı.'
+      error: error?.message || i18n.t('spotify.errors.tracksFetchFailed')
     };
   }
 }
@@ -4344,7 +4176,7 @@ async function spotifyPlayPlaylist(payload) {
   const offsetUri = String(payload?.offsetUri || '').trim();
   const validOffset = /^spotify:(?:track|episode):[A-Za-z0-9]+$/.test(offsetUri) ? offsetUri : '';
   if (!/^spotify:playlist:[A-Za-z0-9]+$/.test(uri)) {
-    return { ok: false, error: 'Geçersiz çalma listesi URI.' };
+    return { ok: false, error: i18n.t('spotify.errors.invalidPlaylistUri') };
   }
   try {
     const body = validOffset
@@ -4357,7 +4189,7 @@ async function spotifyPlayPlaylist(payload) {
     });
     return { ok: true, method: 'api' };
   } catch (error) {
-    // Spotify Free veya aktif uzak cihaz yoksa masaüstü Spotify uygulamasında aç
+    // Open in desktop Spotify app when Spotify Free or no remote active device is available.
     try {
       await shell.openExternal(validOffset || uri);
       return { ok: true, method: 'uri', fallback: true, note: error?.message };
@@ -4366,7 +4198,7 @@ async function spotifyPlayPlaylist(payload) {
         await shell.openExternal(extUrl).catch(() => {});
         return { ok: true, method: 'web', fallback: true };
       }
-      return { ok: false, error: error?.message || 'Playlist açılamadı.' };
+      return { ok: false, error: error?.message || i18n.t('spotify.errors.playlistOpenFailed') };
     }
   }
 }
@@ -4718,7 +4550,7 @@ function createMascot() {
       alwaysOnTop:
         true,
 
-      // nodig om in Project Mode te kunnen typen
+      // required so text inputs in Project Mode can receive focus
       focusable:
         true,
 
@@ -5063,8 +4895,8 @@ ipcMain.on(
 );
 
 
-// Goodbye: before closing, LumaDock waves "Doei!" and the island
-// closes smoothly (lumadock-fun.js), then the app really quits.
+// Goodbye: before closing, LumaDock plays the farewell animation and the island
+// closes smoothly (lumadock-fun.js), then the app exits.
 let goodbyeShown = false;
 
 app.on(
@@ -5113,6 +4945,8 @@ ipcMain.on(
 
 app.whenReady().then(
   () => {
+    i18n.initI18n({ userData: app.getPath('userData') });
+    i18n.registerI18nIpc(ipcMain, { BrowserWindow });
     loadWindowPrefs();
     createMascot();
     startWindowsMediaWatcher();

@@ -1,5 +1,5 @@
 'use strict';
-// Small tools in the island: clipboard history ("Klembord") and one quick note ("Notitie"),
+// Small tools in the island: clipboard history and one quick note,
 // plus the keyboard shortcuts Ctrl+Alt+1..6. Layout comes from pages-ui.js (same as every page).
 (function toolsPages() {
   const api = window.lumadock;
@@ -24,6 +24,7 @@
 #lumadock-tools .tl-saved{color:#7f8a7a;font-size:10.5px;margin-top:10px}`;
   document.head.appendChild(style);
   const esc = s => String(s).replace(/[&<>"]/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[x]));
+  const t = (key, params) => (window.__lumadockT ? window.__lumadockT(key, params) : key);
 
   // ---- clipboard ----
   let clips = [], copied = -1, lastRender = '';
@@ -37,18 +38,27 @@
     const view = currentView, key = view + ':' + clips.length + ':' + copied + ':' + (note === null);
     if (!force && key === lastRender) return; lastRender = key;
     if (view === 'clips') {
-      root.innerHTML = `<div class="tc-page-head"><div><p class="tc-page-title">Klembord</p><p class="tc-page-sub">Je laatst gekopieerde tekst · klik om opnieuw te kopiëren</p></div>${clips.length ? '<button class="tl-head-btn" data-clear="1">Wissen</button>' : ''}</div>${
-        clips.length ? `<div class="tl-list">${clips.map((c, i) => `<button class="tl-clip ${i === copied ? 'done' : ''}" data-i="${i}">${i === copied ? `<b>${esc(window.__lumadockTr?.('Gekopieerd ✓') ?? 'Gekopieerd ✓')}</b>` : ''}${esc(c.text)}</button>`).join('')}</div>`
-          : '<div class="tl-empty"><strong>Nog niks gekopieerd</strong><span>Kopieer iets (Ctrl + C), dan verschijnt het hier.</span></div>'}`;
+      root.innerHTML = `<div class="tc-page-head"><div><p class="tc-page-title">${esc(t('toolsPage.clipboardTitle'))}</p><p class="tc-page-sub">${esc(t('toolsPage.clipboardSub'))}</p></div>${clips.length ? `<button class="tl-head-btn" data-clear="1">${esc(t('common.clear'))}</button>` : ''}</div>${
+        clips.length ? `<div class="tl-list">${clips.map((c, i) => `<button class="tl-clip ${i === copied ? 'done' : ''}" data-i="${i}">${i === copied ? `<b>${esc(t('common.copiedCheck'))}</b>` : ''}${esc(c.text)}</button>`).join('')}</div>`
+          : `<div class="tl-empty"><strong>${esc(t('toolsPage.clipboardEmptyTitle'))}</strong><span>${esc(t('toolsPage.clipboardEmptySub'))}</span></div>`}`;
     } else if (view === 'note') {
-      if (root.querySelector('textarea')) return; // don't rebuild while typing
-      root.innerHTML = `<div class="tc-page-head"><div><p class="tc-page-title">Notitie</p><p class="tc-page-sub">Even iets opschrijven · wordt vanzelf bewaard</p></div></div><textarea id="tl-note" placeholder="Typ hier…" maxlength="20000">${esc(note || '')}</textarea>`;
+      const existing = root.querySelector('textarea');
+      if (existing) {
+        const titleEl = root.querySelector('.tc-page-title');
+        const subEl = root.querySelector('.tc-page-sub');
+        if (titleEl) titleEl.textContent = t('toolsPage.noteTitle');
+        if (subEl) subEl.textContent = t('toolsPage.noteSub');
+        existing.placeholder = t('toolsPage.notePlaceholder');
+        return; // keep current typing buffer intact
+      }
+      root.innerHTML = `<div class="tc-page-head"><div><p class="tc-page-title">${esc(t('toolsPage.noteTitle'))}</p><p class="tc-page-sub">${esc(t('toolsPage.noteSub'))}</p></div></div><textarea id="tl-note" placeholder="${esc(t('toolsPage.notePlaceholder'))}" maxlength="20000">${esc(note || '')}</textarea>`;
       const area = root.querySelector('textarea');
       area.addEventListener('focus', () => { projectInputFocused = true; sendInteractive(true); });
       area.addEventListener('blur', () => { projectInputFocused = false; });
       area.addEventListener('input', () => { note = area.value; clearTimeout(saveTimer); saveTimer = setTimeout(() => api.noteSet(note).then(() => { savedAt = Date.now(); }), 400); });
     }
   }
+  window.__lumadockI18n?.onChange?.(() => { lastRender = ''; if (shown) render(true); });
   root.addEventListener('click', e => {
     const clip = e.target.closest('[data-i]');
     if (clip) { api.clipsCopy(Number(clip.dataset.i)).then(r => { if (r.ok) { clips = r.clips; copied = 0; render(true); sound('click'); setTimeout(() => { copied = -1; render(true); }, 1400); } }); return; }

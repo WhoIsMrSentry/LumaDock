@@ -118,7 +118,7 @@
       stat.size > 300 * 1024
     ) {
       throw new Error(
-        'Het bestand kan niet veilig worden bewerkt.'
+        'This file cannot be edited safely.'
       );
     }
 
@@ -126,22 +126,22 @@
 
     if (hash(bytes) !== job.hash) {
       throw new Error(
-        'Het bestand is ondertussen veranderd. ' +
-        'Verstuur je opdracht opnieuw.'
+        'The file changed meanwhile. ' +
+        'Resend your request.'
       );
     }
 
     if (document.isDirty) {
       throw new Error(
-        'Sla eerst je eigen wijzigingen in VS Code op. ' +
-        'LumaDock heeft niets overschreven.'
+        'Save your own edits in VS Code first. ' +
+        'LumaDock did not overwrite anything.'
       );
     }
 
     if (hash(norm(document.getText())) !== job.textHash) {
       throw new Error(
-        'VS Code toont een andere versie. ' +
-        'Sla het bestand op en probeer opnieuw.'
+        'VS Code shows a different version. ' +
+        'Save the file and try again.'
       );
     }
 
@@ -180,7 +180,7 @@
     }
 
     if (!['apply', 'restore'].includes(job.kind)) {
-      throw new Error('Onbekende LumaDock-opdracht.');
+      throw new Error('Unknown LumaDock command.');
     }
 
     const version = doc.version;
@@ -195,7 +195,7 @@
         !job.edits.length ||
         job.edits.length > 20
       ) {
-        throw new Error('Ongeldige codewijziging.');
+        throw new Error('Invalid code change.');
       }
 
       let previous = -1;
@@ -211,7 +211,7 @@
           typeof edit.text !== 'string'
         ) {
           throw new Error(
-            'Ongeldig bereik voor de wijziging.'
+            'Invalid range for the change.'
           );
         }
 
@@ -231,7 +231,7 @@
         hash(target) !== job.targetHash
       ) {
         throw new Error(
-          'De wijziging is niet volledig ontvangen.'
+          'The change was not received completely.'
         );
       }
     } else {
@@ -240,7 +240,7 @@
         Buffer.byteLength(job.content) > 300 * 1024 ||
         hash(Buffer.from(job.content)) !== job.originalHash
       ) {
-        throw new Error('De backup is niet geldig.');
+        throw new Error('The backup is not valid.');
       }
     }
 
@@ -248,8 +248,8 @@
 
     if (doc.version !== version || doc.getText() !== source) {
       throw new Error(
-        'Je hebt ondertussen in VS Code getypt. ' +
-        'Er is niets overschreven.'
+        'You typed in VS Code meanwhile. ' +
+        'Nothing was overwritten.'
       );
     }
 
@@ -298,10 +298,10 @@
     }
 
     if (!await vscode.workspace.applyEdit(edit, {
-      label: 'LumaDock wijziging'
+      label: 'LumaDock edit'
     })) {
       throw new Error(
-        'VS Code kon de wijziging niet uitvoeren.'
+        'VS Code could not apply the change.'
       );
     }
 
@@ -309,8 +309,8 @@
 
     if (norm(doc.getText()) !== target) {
       throw new Error(
-        'De inhoud is tijdens het aanpassen veranderd. ' +
-        'Controleer het bestand in VS Code.'
+        'The content changed while applying edits. ' +
+        'Please inspect the file in VS Code.'
       );
     }
 
@@ -325,22 +325,22 @@
       doc.version !== appliedVersion
     ) {
       throw new Error(
-        'Het bestand is tegelijkertijd aangepast. ' +
-        'LumaDock heeft niet opgeslagen.'
+        'The file was modified concurrently. ' +
+        'LumaDock did not save.'
       );
     }
 
     if (!autoSaved && !await doc.save()) {
       throw new Error(
-        'De wijziging staat in VS Code, maar opslaan is mislukt. ' +
-        'Je backup is bewaard.'
+        'The change is in VS Code, but saving failed. ' +
+        'Your backup is preserved.'
       );
     }
 
     if (doc.isDirty) {
       throw new Error(
-        'Er zijn nieuwe wijzigingen in VS Code. ' +
-        'Controleer het bestand.'
+        'There are unsaved changes in VS Code. ' +
+        'Please inspect the file.'
       );
     }
 
@@ -407,10 +407,10 @@
               job = data.job;
 
               const title = job.kind === 'apply'
-                ? 'Code aanpassen'
+                ? 'Editing code'
                 : job.kind === 'restore'
-                  ? 'Vorige versie herstellen'
-                  : 'Bestand openen';
+                  ? 'Restoring previous version'
+                  : 'Opening file';
 
               const result = await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Window,
@@ -425,7 +425,7 @@
               const result = {
                 ok: false,
                 error: String(
-                  error.message || 'De wijziging is mislukt.'
+                  error.message || 'The change failed.'
                 ).slice(0, 700),
                 savedHash: job?.savedHash || ''
               };

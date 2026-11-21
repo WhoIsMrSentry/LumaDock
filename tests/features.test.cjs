@@ -139,9 +139,9 @@ test('AI model catalog uses real models and custom base URL config', () => {
   assert.match(src, /ai-settings:set-base-url/);
 });
 
-test('inline scripts in mascot.html and settings-app.html parse with zero syntax errors', () => {
+test('inline scripts in mascot.html, settings-app.html and buddy.html parse with zero syntax errors', () => {
   const vm = require('node:vm');
-  for (const name of ['mascot.html', 'settings-app.html']) {
+  for (const name of ['mascot.html', 'settings-app.html', 'buddy.html']) {
     const html = fs.readFileSync(path.join(ROOT, name), 'utf8');
     const scripts = [...html.matchAll(/<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)];
     assert.ok(scripts.length >= 1, `Expected inline script in ${name}`);
@@ -202,9 +202,19 @@ test('spotify helpers normalize Turkish/remastered metadata, parse extended LRC 
   assert.equal(errDev403.needsReauth, false);
   assert.equal(errDev403.devModeError, true);
 
-  const html = renderSpotifyCallbackHtml(true);
-  assert.match(html, /<meta charset="utf-8">/i);
-  assert.match(html, /Spotify bağlandı/);
+  const { setLanguage, getLanguage } = require(path.join(ROOT, 'src', 'shared', 'i18n.cjs'));
+  const prevLang = getLanguage();
+  try {
+    setLanguage('en');
+    const htmlEn = renderSpotifyCallbackHtml(true);
+    assert.match(htmlEn, /<meta charset="utf-8">/i);
+    assert.match(htmlEn, /Spotify connected/);
+    setLanguage('tr');
+    const htmlTr = renderSpotifyCallbackHtml(true);
+    assert.match(htmlTr, /Spotify bağlandı/);
+  } finally {
+    setLanguage(prevLang);
+  }
 
   const plUrl = parseSpotifyPlaylistInput('https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M?si=abc123');
   assert.deepEqual(plUrl, {
@@ -343,4 +353,74 @@ test('Windows media watcher preserves Turkish UTF-8 characters without mojibake'
   const parsed = JSON.parse(out.trim());
   assert.equal(parsed.title, 'Öğle Güneşi');
   assert.equal(parsed.artist, 'Şebnem Ferah');
+});
+
+test('i18n catalogs have full EN/TR key and placeholder parity and support only en/tr', () => {
+  const i18n = require(path.join(ROOT, 'src', 'shared', 'i18n.cjs'));
+  const { en, tr } = i18n.getCatalogs(true);
+  const flatten = (obj, prefix = '') => {
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) {
+      const key = prefix ? `${prefix}.${k}` : k;
+      if (v && typeof v === 'object' && !Array.isArray(v)) Object.assign(out, flatten(v, key));
+      else out[key] = v;
+    }
+    return out;
+  };
+  const enFlat = flatten(en);
+  const trFlat = flatten(tr);
+  assert.deepEqual(Object.keys(trFlat).sort(), Object.keys(enFlat).sort(), 'EN and TR locale keys must match');
+
+  const placeholders = s => [...String(s).matchAll(/\{(\w+)\}/g)].map(m => m[1]).sort();
+  for (const key of Object.keys(enFlat)) {
+    if (typeof enFlat[key] === 'string' && typeof trFlat[key] === 'string') {
+      assert.deepEqual(placeholders(trFlat[key]), placeholders(enFlat[key]), `Placeholder mismatch in ${key}`);
+    }
+    assert.doesNotMatch(String(trFlat[key]), /twocode/i, `Legacy brand in tr.${key}`);
+    assert.doesNotMatch(String(enFlat[key]), /twocode/i, `Legacy brand in en.${key}`);
+  }
+
+  assert.deepEqual(i18n.SUPPORTED_LANGS, ['en', 'tr']);
+  assert.equal(i18n.normalizeLang('tr-TR'), 'tr');
+  assert.equal(i18n.normalizeLang('nl-NL'), 'en');
+  assert.equal(i18n.normalizeLang('en-US'), 'en');
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumadock-i18n-'));
+  const prevLang = i18n.getLanguage();
+  try {
+    let notified = null;
+    const off = i18n.onLanguageChange(lang => { notified = lang; });
+    i18n.setLanguage('en');
+    assert.equal(i18n.setLanguage('tr', { persist: true, userDataDir: tmpDir }), 'tr');
+    assert.equal(notified, 'tr');
+    off();
+    assert.equal(i18n.detectLanguage(tmpDir), 'tr');
+    assert.equal(i18n.tn('monitor.files', 1, null, 'en'), '1 file');
+    assert.equal(i18n.tn('monitor.files', 3, null, 'en'), '3 files');
+    assert.equal(i18n.tn('monitor.files', 3, null, 'tr'), '3 dosya');
+  } finally {
+    i18n.setLanguage(prevLang);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('AI monitor supports Turkish and English chat window detection without Dutch phrases', () => {
+  const { observe, questionFrom } = require(path.join(ROOT, 'src', 'main', 'ai-monitor-model.cjs'));
+  const obsTr = observe({
+    ok: true,
+    provider: 'chatgpt',
+    contextKey: '1:1:1:https://chatgpt.com/c/tr',
+    nodes: [
+      { index: 0, parent: -1, id: 'n0', type: 'Document', name: 'ChatGPT', enabled: true },
+      { index: 1, parent: 0, id: 'n1', type: 'Text', name: 'ChatGPT dedi:', enabled: true },
+      { index: 2, parent: 0, id: 'n2', type: 'Text', name: 'Hangi rengi istersin?', enabled: true },
+      { index: 3, parent: 0, id: 'n3', type: 'Button', name: 'Kopyala', enabled: true },
+      { index: 4, parent: 0, id: 'n4', type: 'Edit', name: 'ChatGPT\'e sor', enabled: true }
+    ]
+  }, 'chatgpt');
+  assert.equal(obsTr.valid, true);
+  assert.equal(obsTr.completed, true);
+  assert.equal(obsTr.question, 'Hangi rengi istersin?');
+  assert.notEqual(questionFrom('Hazır. Haber ver.'), '');
+  assert.equal(questionFrom('Örnek: hangi rengi istersin?'), '');
 });

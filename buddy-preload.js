@@ -2,6 +2,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 const subscribe = (channel, callback) => { const fn = (_e, data) => callback(data); ipcRenderer.on(channel, fn); return () => ipcRenderer.removeListener(channel, fn); };
 contextBridge.exposeInMainWorld('buddy', {
+  i18nBundle: () => ipcRenderer.sendSync('i18n:get-bundle'),
+  i18nSetLang: lang => ipcRenderer.invoke('i18n:set-lang', lang),
+  onI18nChanged: callback => subscribe('i18n:lang-changed', callback),
   onState: callback => subscribe('buddy:state', callback),
   onMove: callback => subscribe('buddy:move', callback),
   onLens: callback => subscribe('buddy:lens', callback),

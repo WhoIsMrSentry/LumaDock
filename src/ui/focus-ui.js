@@ -47,6 +47,8 @@
   document.head.appendChild(style);
 
   const F = () => window.__lumadockFocus;
+  const t = (key, params) => (window.__lumadockT ? window.__lumadockT(key, params) : key);
+  const loc = () => (window.__lumadockLocale ? window.__lumadockLocale() : 'en-US');
   let lastKey = '';
   const pad = n => String(n).padStart(2, '0');
   function render() {
@@ -56,15 +58,21 @@
     if (key === lastKey) return update(); // only rebuild when something changed
     lastKey = key;
     const sec = f.chosen(), h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
-    const dial = (unit, value, label) => `<div class="fo-dial"><button type="button" class="fo-arrow" data-add="${unit}" aria-label="${label} meer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg></button><b>${pad(value)}</b><small>${label}</small><button type="button" class="fo-arrow" data-add="${-unit}" aria-label="${label} minder"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>`;
-    root.innerHTML = `<div class="tc-page-head"><div><p class="tc-page-title">Focus</p><p class="tc-page-sub">${running ? 'Je bent aan het focussen. LumaDock houdt de tijd bij.' : 'Kies hoe lang je wil focussen'}</p></div></div>${
+    const dial = (unit, value, label) => `<div class="fo-dial"><button type="button" class="fo-arrow" data-add="${unit}" aria-label="${t('focus.moreLabel', { label })}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg></button><b>${pad(value)}</b><small>${label}</small><button type="button" class="fo-arrow" data-add="${-unit}" aria-label="${t('focus.fewerLabel', { label })}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>`;
+    const presets = [
+      [15 * 60, t('focus.minutesUnit', { n: 15 })],
+      [25 * 60, t('focus.minutesUnit', { n: 25 })],
+      [45 * 60, t('focus.minutesUnit', { n: 45 })],
+      [3600, t('focus.oneHour')]
+    ];
+    root.innerHTML = `<div class="tc-page-head"><div><p class="tc-page-title">${t('focus.title')}</p><p class="tc-page-sub">${running ? t('focus.runningSub') : t('focus.idleSub')}</p></div></div>${
       running
         ? `<div class="fo-body fo-running"><div class="fo-ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="fo-ring-bg"/><circle cx="60" cy="60" r="52" class="fo-ring-fill" id="fo-ring" pathLength="100"/></svg><div class="fo-ring-text"><b id="fo-left">${f.label()}</b><small id="fo-total"></small></div></div>
-           <div class="fo-side"><p class="fo-kicker"><span class="fo-dot"></span>Focus loopt</p><p class="fo-end" id="fo-end"></p><p class="fo-note">Muziek en Claude blijven gewoon zichtbaar in het kleine eiland.</p>
-           <div class="fo-row"><button type="button" data-plus="300">+5 min</button><button type="button" data-plus="900">+15 min</button><button type="button" class="fo-stop" data-stop="1">Stoppen</button></div></div></div>`
-        : `<div class="fo-body"><div class="fo-dials" id="fo-dials">${dial(3600, h, 'Uren')}<span class="fo-colon">:</span>${dial(60, m, 'Minuten')}<span class="fo-colon">:</span>${dial(1, s, 'Seconden')}</div>
-           <div class="fo-side"><div class="fo-presets">${[[15 * 60, '15 min'], [25 * 60, '25 min'], [45 * 60, '45 min'], [3600, '1 uur']].map(([v, l]) => `<button type="button" data-set="${v}"${v === sec ? ' class="on""' : ''}>${l}</button>`).join('')}</div>
-           <button type="button" class="fo-start" data-start="1">Start focus</button></div></div>`
+           <div class="fo-side"><p class="fo-kicker"><span class="fo-dot"></span>${t('focus.runningKicker')}</p><p class="fo-end" id="fo-end"></p><p class="fo-note">${t('focus.stayVisibleNote')}</p>
+           <div class="fo-row"><button type="button" data-plus="300">+5 min</button><button type="button" data-plus="900">+15 min</button><button type="button" class="fo-stop" data-stop="1">${t('focus.stop')}</button></div></div></div>`
+        : `<div class="fo-body"><div class="fo-dials" id="fo-dials">${dial(3600, h, t('focus.hours'))}<span class="fo-colon">:</span>${dial(60, m, t('focus.minutes'))}<span class="fo-colon">:</span>${dial(1, s, t('focus.seconds'))}</div>
+           <div class="fo-side"><div class="fo-presets">${presets.map(([v, l]) => `<button type="button" data-set="${v}"${v === sec ? ' class="on"' : ''}>${l}</button>`).join('')}</div>
+           <button type="button" class="fo-start" data-start="1">${t('focus.startFocus')}</button></div></div>`
     }`;
     update();
   }
@@ -76,10 +84,11 @@
     // The ring is full at the start and runs empty as time passes.
     const ring = root.querySelector('#fo-ring'), end = root.querySelector('#fo-end'), total = root.querySelector('#fo-total');
     if (ring) ring.style.strokeDashoffset = String(100 * (1 - f.left() / f.length()));
-    const locale = window.__lumadockPrefs?.().lang === 'tr' ? 'tr-TR' : 'en-GB';
-    if (end) end.textContent = 'Klaar om ' + new Date(Date.now() + f.left()).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-    if (total) total.textContent = 'van ' + Math.round(f.length() / 60000) + ' min';
+    const timeStr = new Date(Date.now() + f.left()).toLocaleTimeString(loc(), { hour: '2-digit', minute: '2-digit' });
+    if (end) end.textContent = t('focus.doneAt', { time: timeStr });
+    if (total) total.textContent = t('focus.ofMinutes', { mins: Math.round(f.length() / 60000) });
   }
+  window.__lumadockI18n?.onChange?.(() => { lastKey = ''; if (shown) render(); });
   root.addEventListener('click', e => {
     const b = e.target.closest('button'), f = F(); if (!b || !f) return;
     if (b.dataset.add) f.choose(f.chosen() + Number(b.dataset.add));

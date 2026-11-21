@@ -101,12 +101,13 @@
       ctx.save(); ctx.globalAlpha *= pillAnim.shown; ctx.beginPath(); ctx.roundRect(pillAnim.x - 17 - stretch / 2, 3, 34 + stretch, 30, 12); ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fill(); ctx.restore();
     }
     icon('home', homeX, 18, 19); icon('chat', chatX, 18, 19); icon('plus', appsX, 18, 19); icon('speaker', soundX, 18, 19, LINE, volume); icon('gear', settingsX, 18, 18); icon('collapse', collapseX, 18, 19); drawPower(powerX, 18, inside(pointer.x, pointer.y, hit.power) || quitAsk > 0);
-    // editing the home widgets: a Klaar button (like iPhone) and a hint
+    // editing the home widgets: a Done button (like iPhone) and a hint
     if (currentView === 'home' && window.__lumadockHomeEditing?.() && !window.__lumadockGalleryOpen?.() && !barOpen) {
+      const t = key => (window.__lumadockT ? window.__lumadockT(key) : key);
       const b = { x: left + 88, y: 5, width: 62, height: 26 }, over = inside(pointer.x, pointer.y, b);
       ctx.beginPath(); ctx.roundRect(b.x, b.y, b.width, b.height, 13); ctx.fillStyle = over ? '#d9f7b3' : '#c6e994'; ctx.fill();
-      text('Klaar', b.x + b.width / 2, b.y + 17, 11.5, '#10180c', 700, 'center');
-      text('Sleep om te verplaatsen  ·  + voor nieuwe widgets', b.x + b.width + 14, b.y + 17, 11, '#7f8a7a', 500);
+      text(t('header.doneBtn'), b.x + b.width / 2, b.y + 17, 11.5, '#10180c', 700, 'center');
+      text(t('header.dragHint'), b.x + b.width + 14, b.y + 17, 11, '#7f8a7a', 500);
       hit.hmDone = b;
     }
     if (barOpen && performance.now() - barTouched > 3500 && !dragging) barOpen = false;
@@ -140,7 +141,7 @@
     drawQuitAsk(left, right);
     ctx.restore();
   };
-  // The power button: a click asks "are you sure?" in the header first; Ja closes LumaDock (with the goodbye).
+  // The power button: a click asks "are you sure?" in the header first; Yes closes LumaDock (with the goodbye).
   let quitAsk = 0, quitAskAt = 0;
   function drawPower(x, y, hot) {
     ctx.save(); ctx.lineCap = 'round'; ctx.lineWidth = 1.9; ctx.strokeStyle = hot ? '#ff8a8a' : '#dce4d9';
@@ -150,18 +151,19 @@
   function drawQuitAsk(left, right) {
     const open = quitAsk > 0 && performance.now() - quitAskAt < 7000; // no answer: it goes away by itself
     if (!open) { quitAsk = 0; hit.quitYes = hit.quitNo = null; return; }
+    const t = key => (window.__lumadockT ? window.__lumadockT(key) : key);
     const k = Math.min(1, (performance.now() - quitAskAt) / 220), e = 1 - Math.pow(1 - k, 3);
-    const w = 330 * e, x = right - 8 - w, y = 4, h = 28;
+    const w = 356 * e, x = right - 8 - w, y = 4, h = 28;
     ctx.save(); ctx.globalAlpha *= Math.min(1, k * 1.5);
     ctx.beginPath(); ctx.roundRect(x, y, w, h, 14); ctx.fillStyle = 'rgba(30,22,22,.98)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,138,138,.35)'; ctx.stroke();
     if (k > 0.6) {
-      text('LumaDock afsluiten?', x + 16, y + 18.5, 11.5, '#ffd6d6', 700);
+      text(t('header.quitTitle'), x + 16, y + 18.5, 11.5, '#ffd6d6', 700);
       const yes = { x: right - 8 - 4 - 150, y: y + 3, width: 96, height: 22 }, no = { x: right - 8 - 4 - 50, y: y + 3, width: 50, height: 22 };
       const overYes = inside(pointer.x, pointer.y, yes), overNo = inside(pointer.x, pointer.y, no);
       ctx.beginPath(); ctx.roundRect(yes.x, yes.y, yes.width, yes.height, 11); ctx.fillStyle = overYes ? '#ff9c9c' : '#ff7a7a'; ctx.fill();
-      text('Ja, afsluiten', yes.x + yes.width / 2, yes.y + 15, 10.5, '#2a0d0d', 700, 'center');
+      text(t('header.quitYes'), yes.x + yes.width / 2, yes.y + 15, 10.5, '#2a0d0d', 700, 'center');
       ctx.beginPath(); ctx.roundRect(no.x, no.y, no.width, no.height, 11); ctx.fillStyle = overNo ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.1)'; ctx.fill();
-      text('Nee', no.x + no.width / 2, no.y + 15, 10.5, '#e8eee4', 700, 'center');
+      text(t('header.quitNo'), no.x + no.width / 2, no.y + 15, 10.5, '#e8eee4', 700, 'center');
       hit.quitYes = yes; hit.quitNo = no;
     }
     ctx.restore();

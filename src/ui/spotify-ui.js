@@ -3,13 +3,7 @@
 // timestamped lyrics (+ sync offset), device switcher, and real-time controls.
 (function spotifyScreen() {
   const api = window.lumadock;
-  const isTr = () => {
-    try {
-      const p = JSON.parse(localStorage.getItem('lumadock:prefs') || '{}');
-      return p.lang === 'tr';
-    } catch { return false; }
-  };
-  const L = (en, tr) => (isTr() ? tr : en);
+  const st = (key, params) => (window.__lumadockT ? window.__lumadockT('spotify.' + key, params) : key);
 
   let seeking = false, seekPreviewMs = 0, smoothPart = 0, lastFrameNow = performance.now();
   const accent = () => window.__lumadockAlbumColour || '#1ed760';
@@ -176,14 +170,14 @@
       playlists = Array.isArray(r?.playlists) ? r.playlists : [];
       playlistsAuthNeed = Boolean(r?.needsAuth || r?.needsReauth);
       if (r?.ok) {
-        playlistsNote = playlists.length ? '' : L('No playlist covers found.', 'Kapaklı çalma listesi bulunamadı.');
+        playlistsNote = playlists.length ? '' : st('noPlaylistCovers');
       } else if (r?.error) {
         playlistsNote = r.error;
       } else if (!playlists.length && !playlistsAuthNeed) {
-        playlistsNote = L('No playlist covers found.', 'Kapaklı çalma listesi bulunamadı.');
+        playlistsNote = st('noPlaylistCovers');
       }
     } catch (err) {
-      playlistsNote = String(err?.message || '') || L('Could not load playlists.', 'Çalma listeleri yüklenemedi.');
+      playlistsNote = String(err?.message || '') || st('couldNotLoadPlaylists');
     } finally {
       playlistsLoading = false;
     }
@@ -220,9 +214,9 @@
       const r = await api.spotifyPlaylistTracks?.(pl.id, Boolean(force));
       plTracks = Array.isArray(r?.tracks) ? r.tracks : [];
       if (!r?.ok && r?.error) plTracksNote = r.error;
-      else if (!plTracks.length) plTracksNote = L('No playable tracks found in this playlist.', 'Bu çalma listesinde parça bulunamadı.');
+      else if (!plTracks.length) plTracksNote = st('noPlayableTracks');
     } catch (err) {
-      plTracksNote = String(err?.message || '') || L('Could not load tracks.', 'Şarkılar yüklenemedi.');
+      plTracksNote = String(err?.message || '') || st('couldNotLoadTracks');
     } finally {
       plTracksLoading = false;
     }
@@ -258,15 +252,15 @@
       devices = r?.devices || [];
       if (!r?.ok && r?.error) {
         if (/403|premium/i.test(r.error)) {
-          devicesNote = L('Device switching requires Spotify Premium.', 'Cihaz aktarımı için Spotify Premium gereklidir.');
+          devicesNote = st('premiumRequiredDevices');
         } else {
           devicesNote = r.error;
         }
       } else {
-        devicesNote = devices.length ? '' : L('Open Spotify on another device to see it here.', 'Başka bir cihazda Spotify açarsanız burada görünür.');
+        devicesNote = devices.length ? '' : st('noOtherDevices');
       }
     } catch {
-      devicesNote = L('Could not retrieve devices.', 'Cihazlar alınamadı.');
+      devicesNote = st('couldNotRetrieveDevices');
     }
   }
   async function moveTo(device) {
@@ -274,7 +268,7 @@
       devicesOpen = false;
       return;
     }
-    devicesNote = L('Switching to ' + device.name + '…', device.name + ' cihazına geçiliyor…');
+    devicesNote = st('switchingTo', { name: device.name });
     const r = await api.spotifyTransfer?.(device.id).catch(e => ({ ok: false, error: e.message }));
     if (r?.ok) {
       devicesOpen = false;
@@ -284,9 +278,9 @@
       setTimeout(() => refreshSpotify(), 250);
     } else {
       if (/403|premium/i.test(r?.error)) {
-        devicesNote = L('Spotify Premium required to transfer playback.', 'Cihaz değiştirmek için Spotify Premium gereklidir.');
+        devicesNote = st('premiumRequiredTransfer');
       } else {
-        devicesNote = r?.error || L('Action failed.', 'İşlem başarısız oldu.');
+        devicesNote = r?.error || st('actionFailed');
       }
     }
   }
@@ -306,9 +300,9 @@
 
     if (!spotifyConnected) {
       window.__lumadockIcon?.('music', left + 24, top + 40, 30);
-      text(L('Connect Spotify', 'Spotify\'ı Bağla'), left + 56, top + 36, 19, '#fff', 700);
-      text(L('See and control your music right here.', 'Müziğinizi doğrudan buradan görün ve kontrol edin.'), left + 56, top + 56, 12, '#9aa596');
-      pill(left + 56, top + 74, 190, '♫', L('Connect Spotify', 'Spotify\'ı Bağla'), 'spConnect');
+      text(st('connectTitle'), left + 56, top + 36, 19, '#fff', 700);
+      text(st('connectSub'), left + 56, top + 56, 12, '#9aa596');
+      pill(left + 56, top + 74, 190, '♫', st('connectBtn'), 'spConnect');
       return;
     }
 
@@ -334,8 +328,8 @@
     hit.spLrcMinus = hit.spLrcReset = hit.spLrcPlus = hit.spLiveLrc = null;
 
     if (!track) {
-      text(L('Nothing is playing right now', 'Şu an çalan bir şey yok'), x, top + 26, 17, '#fff', 700, 'left', w - vizW - 16);
-      text(L('Start music in Spotify or pick a playlist cover.', 'Spotify\'da müzik başlatın veya sağ alttan playlist seçin.'), x, top + 44, 12, 'rgba(235,240,230,.6)', 500, 'left', w - vizW - 16);
+      text(st('nothingPlayingTitle'), x, top + 26, 17, '#fff', 700, 'left', w - vizW - 16);
+      text(st('nothingPlayingSub'), x, top + 44, 12, 'rgba(235,240,230,.6)', 500, 'left', w - vizW - 16);
       if (!modalOpen) hit.spTitle = { x, y: top + 10, width: w - vizW, height: 28 };
     } else {
       const over = !modalOpen && inside(pointer.x, pointer.y, { x, y: top + 10, width: w - vizW - 16, height: 24 });
@@ -356,7 +350,7 @@
           text(`[${activeLine.displayTime}]`, x, top + 61, 10, colour, 700, 'left');
           text(activeLine.text, x + 38, top + 61, 11, 'rgba(240,245,235,.9)', 600, 'left', Math.max(40, w - offCtrlW - 44));
         } else if (lyricsLoading) {
-          text(L('Loading lyrics…', 'Sözler yükleniyor…'), x, top + 61, 10.5, 'rgba(255,255,255,.4)', 500, 'left');
+          text(st('loadingLyrics'), x, top + 61, 10.5, 'rgba(255,255,255,.4)', 500, 'left');
         }
         // Subtle inline LRC sync steppers (-0.5 / +0.0s / +0.5) without popup panel
         if (lyrics?.synced && !modalOpen) {
@@ -378,7 +372,7 @@
     const overDev = !modalOpen && inside(pointer.x, pointer.y, { x: bx, y: by, width: bw, height: 30 });
     box(bx, by, bw, 30, 15, devicesOpen || overDev ? 'rgba(255,255,255,.16)' : 'rgba(255,255,255,.08)');
     devIcon(dev?.type || 'Computer', bx + 18, by + 15, 15, elsewhere ? colour : '#e8ece6');
-    text(dev ? dev.name : L('Devices', 'Cihazlar'), bx + 34, by + 19.5, 11.5, elsewhere ? colour : '#e8ece6', 700, 'left', bw - 44);
+    text(dev ? dev.name : st('devicesBtn'), bx + 34, by + 19.5, 11.5, elsewhere ? colour : '#e8ece6', 700, 'left', bw - 44);
     if (!modalOpen) hit.spDevices = { x: bx, y: by, width: bw, height: 30 };
 
     // Smooth progress bar
@@ -464,7 +458,7 @@
       const playAllX = px + 66, playAllW = fullMode ? 90 : 78;
       const overPlayAll = inside(pointer.x, pointer.y, { x: playAllX, y: py + 7, width: playAllW, height: 22 });
       box(playAllX, py + 7, playAllW, 22, 11, overPlayAll ? colour : 'rgba(255,255,255,.1)');
-      text('▶ ' + L('Play All', 'Tümünü Çal'), playAllX + playAllW / 2, py + 21.5, fullMode ? 10 : 9.5, overPlayAll ? '#050605' : '#eef2ec', 700, 'center');
+      text('▶ ' + st('playAll'), playAllX + playAllW / 2, py + 21.5, fullMode ? 10 : 9.5, overPlayAll ? '#050605' : '#eef2ec', 700, 'center');
       hit.spPlPlayAll = { x: playAllX, y: py + 7, width: playAllW, height: 22 };
 
       const rowH = fullMode ? 33 : 38;
@@ -509,10 +503,10 @@
       }
 
       if (plTracksLoading) {
-        text(L('Loading tracks…', 'Şarkılar yükleniyor…'), px + 16, py + headerH + 28, 12, 'rgba(255,255,255,.55)', 500);
+        text(st('loadingTracks'), px + 16, py + headerH + 28, 12, 'rgba(255,255,255,.55)', 500);
       } else if (!plTracks.length) {
-        text(plTracksNote || L('No tracks loaded.', 'Şarkılar yüklenemedi.'), px + 16, py + headerH + 22, 11, '#ffb35c', 600, 'left', pw - 32);
-        pill(px + 16, py + headerH + 38, 220, '♫', L('Open Playlist in Spotify', 'Spotify\'da Başlat'), 'spPlPlayAll');
+        text(plTracksNote || st('noTracksLoaded'), px + 16, py + headerH + 22, 11, '#ffb35c', 600, 'left', pw - 32);
+        pill(px + 16, py + headerH + 38, 220, '♫', st('openInSpotify'), 'spPlPlayAll');
       } else {
         const sbPad = hasScroll ? 12 : 0;
         const slice = plTracks.slice(plTrackOffset, plTrackOffset + perTrackPage);
@@ -601,20 +595,20 @@
       }
 
       if (playlistsAuthNeed) {
-        text(L('Spotify permission needed for auto-sync.', 'Otomatik liste için Spotify izni veya link ekleme kullanın.'), px + 16, py + 48, 11, 'rgba(255,255,255,.8)', 600, 'left', pw - 32);
+        text(st('permissionNeededSub'), px + 16, py + 48, 11, 'rgba(255,255,255,.8)', 600, 'left', pw - 32);
         if (playlistsNote) text(playlistsNote, px + 16, py + 64, 10, '#ffb35c', 500, 'left', pw - 32);
         const btnW = Math.floor((pw - 40) / 2);
-        pill(px + 16, py + 82, btnW, '♫', L('Authorize', 'Spotify Yetki'), 'spPlAuth');
-        pill(px + 24 + btnW, py + 82, btnW, '+', L('Paste Link', 'Pano\'dan Ekle'), 'spPlAddClip');
+        pill(px + 16, py + 82, btnW, '♫', st('authorizeBtn'), 'spPlAuth');
+        pill(px + 24 + btnW, py + 82, btnW, '+', st('pasteLinkBtn'), 'spPlAddClip');
       } else if (playlistsLoading && !playlists.length) {
-        text(L('Loading covers…', 'Kapaklar yükleniyor…'), px + 16, py + 64, 12, 'rgba(255,255,255,.5)', 500);
+        text(st('loadingCovers'), px + 16, py + 64, 12, 'rgba(255,255,255,.5)', 500);
       } else if (!playlists.length) {
-        const msg = String(playlistsNote || L('Copy a Spotify playlist link or set Client ID in Connections.', 'Spotify\'dan playlist linki kopyalayıp ekleyin veya Client ID girin.'));
+        const msg = String(playlistsNote || st('copyOrClientIdHint'));
         text(msg, px + 16, py + 52, 10.8, '#ffb35c', 600, 'left', pw - 32);
-        text(L('Tip: Right-click any Spotify playlist -> Share -> Copy link', 'İpucu: Spotify\'da playlist\'e sağ tık -> Paylaş -> Bağlantıyı Kopyala'), px + 16, py + 68, 10, 'rgba(255,255,255,.55)', 500, 'left', pw - 32);
+        text(st('tipCopyLink'), px + 16, py + 68, 10, 'rgba(255,255,255,.55)', 500, 'left', pw - 32);
         const btnW = Math.floor((pw - 40) / 2);
-        pill(px + 16, py + 84, btnW, '+', L('Add from Clipboard', 'Pano\'dan Ekle'), 'spPlAddClip');
-        pill(px + 24 + btnW, py + 84, btnW, '⚙', L('Connections', 'Bağlantılar'), 'spPlSettings');
+        pill(px + 16, py + 84, btnW, '+', st('addFromClipboardBtn'), 'spPlAddClip');
+        pill(px + 24 + btnW, py + 84, btnW, '⚙', st('connectionsBtn'), 'spPlSettings');
       } else {
         // Cover-only auto-fit grid (NO playlist names shown!)
         const slice = playlists.slice(plPage * perPage, plPage * perPage + perPage);
@@ -671,7 +665,7 @@
         });
       }
     } else if (devicesOpen) {
-      text(L('Play on', 'Cihazda Çal'), px + 16, py + 24, 13, '#fff', 700);
+      text(st('playOnTitle'), px + 16, py + 24, 13, '#fff', 700);
       text('✕', px + pw - 18, py + 24, 13, 'rgba(255,255,255,.6)', 700, 'center');
       hit.spDevClose = { x: px + pw - 32, y: py + 6, width: 28, height: 28 };
       const list = devices.slice(0, 4);
@@ -680,7 +674,7 @@
         if (over) box(px + 8, ry, pw - 16, 22, 8, 'rgba(255,255,255,.07)');
         devIcon(d.type, px + 24, ry + 11, 13, d.active ? colour : '#cfd5cc');
         text(d.name, px + 40, ry + 15, 12, d.active ? colour : '#eef2ec', d.active ? 700 : 600, 'left', pw - 150);
-        text(d.active ? L('Playing now', 'Şu an çalıyor') : d.here ? L('This PC', 'Bu bilgisayar') : '', px + pw - 16, ry + 15, 10.5, d.active ? colour : 'rgba(255,255,255,.45)', 600, 'right');
+        text(d.active ? st('playingNowBadge') : d.here ? st('thisPcBadge') : '', px + pw - 16, ry + 15, 10.5, d.active ? colour : 'rgba(255,255,255,.45)', 600, 'right');
         hit['spDev' + i] = { x: px + 8, y: ry, width: pw - 16, height: 22, device: d };
       });
       if (devicesNote) text(devicesNote, px + 16, py + ph - 12, 10.5, 'rgba(255,255,255,.55)', 600, 'left', pw - 32);
@@ -702,7 +696,7 @@
   const canSwipe = (x, y) => !(playlistsOpen || devicesOpen) && spotifyConnected && spotifyState.track && inside(x, y, islandBounds) && (mode === 'compact' || currentView === 'spotify');
   function swipe(dir) {
     if (performance.now() - lastSwipe < 700) return; lastSwipe = performance.now();
-    window.__lumadockFlash?.(dir > 0 ? (L('⏭ Next track', '⏭ Sonraki parça')) : (L('⏮ Previous track', '⏮ Önceki parça')), 900);
+    window.__lumadockFlash?.(dir > 0 ? st('nextTrack') : st('prevTrack'), 900);
     window.__lumadockKick?.(dir > 0 ? -0.05 : 0.05);
     control(dir > 0 ? 'next' : 'previous');
   }
@@ -790,7 +784,7 @@
             window.__lumadockChime?.('pop');
             await loadPlaylists(true);
           } else {
-            playlistsNote = res?.error || L('No playlist URL in clipboard.', 'Panoda playlist bağlantısı yok.');
+            playlistsNote = res?.error || st('noPlaylistUrlClip');
           }
         },
         spPlSettings: () => { api.settingsOpen?.('connect'); },
@@ -815,13 +809,13 @@
           plTrackWheelAcc = 0;
         },
         spPlAuth: async () => {
-          playlistsNote = L('Waiting for Spotify browser approval…', 'Tarayıcıda Spotify onayı bekleniyor…');
+          playlistsNote = st('waitBrowserApproval');
           try {
             await api.spotifyReconnect?.();
             playlistsAuthNeed = false; playlistsNote = '';
             refreshSpotify();
           } catch (err) {
-            playlistsNote = String(err?.message || err || L('Authorization failed.', 'Yetkilendirme başarısız.'));
+            playlistsNote = String(err?.message || err || st('authFailed'));
             return;
           }
           await loadPlaylists(true);

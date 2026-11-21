@@ -4,6 +4,7 @@
 // of your 5-hour and weekly limit you have used. We forward that to LumaDock (for the ring) and
 // print a short status line in the terminal. Usage: node lumadock-statusline.cjs <token>
 const http = require('node:http');
+const { t } = require('../shared/i18n.cjs');
 
 let input = '';
 process.stdin.setEncoding('utf8');
@@ -23,9 +24,9 @@ process.stdin.on('end', () => {
   };
 
   const parts = ['LumaDock'];
-  if (usage.five_hour?.used != null) parts.push('5 uur: ' + usage.five_hour.used + '%');
-  if (usage.seven_day?.used != null) parts.push('week: ' + usage.seven_day.used + '%');
-  if (usage.context != null) parts.push('gesprek: ' + usage.context + '% vol');
+  if (usage.five_hour?.used != null) parts.push(t('monitor.statusLineFiveHour', { pct: usage.five_hour.used }));
+  if (usage.seven_day?.used != null) parts.push(t('monitor.statusLineWeek', { pct: usage.seven_day.used }));
+  if (usage.context != null) parts.push(t('monitor.statusLineContext', { pct: usage.context }));
   process.stdout.write(parts.join(' · ') + '\n');
 
   const body = JSON.stringify(usage);

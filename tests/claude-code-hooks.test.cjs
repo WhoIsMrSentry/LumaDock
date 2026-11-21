@@ -6,6 +6,8 @@ const os = require('node:os');
 const path = require('node:path');
 process.env.LUMADOCK_HOOK_PORT ||= '47899';
 const { createHub, EVENTS, PORT } = require('../src/main/claude-code-hooks.cjs');
+const { setLanguage } = require('../src/shared/i18n.cjs');
+setLanguage('en');
 
 function temp() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumadock-hooks-'));
@@ -33,9 +35,10 @@ test('install keeps existing settings and hooks, uninstall removes only ours', (
 test('broken settings.json is never overwritten', () => {
   const t = temp();
   try {
+    setLanguage('en');
     fs.mkdirSync(path.dirname(t.settingsFile), { recursive: true }); fs.writeFileSync(t.settingsFile, '{ broken');
     const hub = createHub({ userData: t.dir, settingsFile: t.settingsFile });
-    assert.throws(() => hub.install(), /geen geldige JSON/);
+    assert.throws(() => hub.install(), /not valid JSON/);
     assert.equal(fs.readFileSync(t.settingsFile, 'utf8'), '{ broken');
   } finally { t.cleanup(); }
 });
@@ -49,14 +52,15 @@ test('hook events drive the traffic light: busy, question, done, error', () => {
     send('PreToolUse', { tool_name: 'Edit', tool_input: { file_path: 'C:\\code\\app\\main.js' } });
     send('PermissionRequest', { tool_name: 'Bash' }); assert.deepEqual(finished, ['question']);
     send('PostToolUse');
-    send('Stop', { last_assistant_message: 'Klaar. Wil je dat ik ook de tests draai?' }); assert.equal(finished.at(-1), 'question');
-    send('UserPromptSubmit'); send('Stop', { last_assistant_message: 'Alles is gefixt.' }); assert.equal(finished.at(-1), 'done');
+    send('Stop', { last_assistant_message: 'Done. Should I also run the tests?' }); assert.equal(finished.at(-1), 'question');
+    send('UserPromptSubmit'); send('Stop', { last_assistant_message: 'Everything is fixed.' }); assert.equal(finished.at(-1), 'done');
     send('UserPromptSubmit'); send('StopFailure', { error_type: 'rate_limit' }); assert.equal(finished.at(-1), 'error');
   } finally { t.cleanup(); }
 });
 
-test('permission waits for Toestaan in the island and answers Claude Code; a later event releases it', async () => {
+test('permission waits for Allow in the island and answers Claude Code; a later event releases it', async () => {
   const t = temp();
+  setLanguage('en');
   const hub = createHub({ userData: t.dir, settingsFile: t.settingsFile });
   try {
     hub.install(); hub.start();
@@ -69,7 +73,7 @@ test('permission waits for Toestaan in the island and answers Claude Code; a lat
     hub.decide('p', 'allow');
     const answer = await (await asking).json();
     assert.deepEqual(answer, { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow', updatedInput: { command: 'npm i' } } } });
-    assert.throws(() => hub.decide('p', 'allow'), /al beantwoord/);
+    assert.throws(() => hub.decide('p', 'allow'), /already answered/);
     // Answered in the terminal instead: the next tool event releases the open request with an empty body.
     const second = post({ session_id: 'p', hook_event_name: 'PermissionRequest', tool_name: 'Edit', tool_input: { file_path: '/w/a.js' } });
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -80,28 +84,29 @@ test('permission waits for Toestaan in the island and answers Claude Code; a lat
 
 test('multiple-choice questions and plans are answered from the island; tool counts per turn', async () => {
   const t = temp();
+  setLanguage('en');
   const hub = createHub({ userData: t.dir, settingsFile: t.settingsFile });
   try {
     hub.install(); hub.start();
     await new Promise(resolve => setTimeout(resolve, 100));
     const token = fs.readFileSync(path.join(t.dir, 'claude-code-hook-token'), 'utf8');
     const post = body => fetch('http://127.0.0.1:' + PORT + '/lumadock-hook', { method: 'POST', headers: { 'content-type': 'application/json', 'x-lumadock-token': token }, body: JSON.stringify(body) });
-    const questions = [{ question: 'Welke kleur?', header: 'Kleur', multiSelect: false, options: [{ label: 'Blauw', description: 'rustig' }, { label: 'Groen', description: '' }] },
-      { question: 'Welke delen?', header: 'Delen', multiSelect: true, options: [{ label: 'Knop', description: '' }, { label: 'Titel', description: '' }] }];
+    const questions = [{ question: 'Which color?', header: 'Color', multiSelect: false, options: [{ label: 'Blue', description: 'calm' }, { label: 'Green', description: '' }] },
+      { question: 'Which parts?', header: 'Parts', multiSelect: true, options: [{ label: 'Button', description: '' }, { label: 'Title', description: '' }] }];
     const asking = post({ session_id: 'q', hook_event_name: 'PermissionRequest', tool_name: 'AskUserQuestion', tool_input: { questions } });
     await new Promise(resolve => setTimeout(resolve, 100));
-    assert.equal(hub.view().ask.length, 2); assert.equal(hub.view().ask[0].options[0].label, 'Blauw');
-    assert.throws(() => hub.answerQuestions('q', { 'Welke kleur?': 'Blauw' }), /elke vraag/);
-    hub.answerQuestions('q', { 'Welke kleur?': 'Blauw', 'Welke delen?': ['Knop', 'Titel'] });
+    assert.equal(hub.view().ask.length, 2); assert.equal(hub.view().ask[0].options[0].label, 'Blue');
+    assert.throws(() => hub.answerQuestions('q', { 'Which color?': 'Blue' }), /each question/);
+    hub.answerQuestions('q', { 'Which color?': 'Blue', 'Which parts?': ['Button', 'Title'] });
     const sent = await (await asking).json();
-    assert.deepEqual(sent.hookSpecificOutput.decision, { behavior: 'allow', updatedInput: { questions, answers: { 'Welke kleur?': 'Blauw', 'Welke delen?': 'Knop, Titel' } } });
+    assert.deepEqual(sent.hookSpecificOutput.decision, { behavior: 'allow', updatedInput: { questions, answers: { 'Which color?': 'Blue', 'Which parts?': 'Button, Title' } } });
 
-    const planning = post({ session_id: 'q', hook_event_name: 'PermissionRequest', tool_name: 'ExitPlanMode', tool_input: { plan: '# Plan\n- stap 1' } });
+    const planning = post({ session_id: 'q', hook_event_name: 'PermissionRequest', tool_name: 'ExitPlanMode', tool_input: { plan: '# Plan\n- step 1' } });
     await new Promise(resolve => setTimeout(resolve, 100));
-    assert.equal(hub.view().plan, '# Plan\n- stap 1');
-    hub.decidePlan('q', false, 'Eerst de tests');
+    assert.equal(hub.view().plan, '# Plan\n- step 1');
+    hub.decidePlan('q', false, 'First run the tests');
     const back = await (await planning).json();
-    assert.equal(back.hookSpecificOutput.decision.behavior, 'deny'); assert.match(back.hookSpecificOutput.decision.message, /Eerst de tests/);
+    assert.equal(back.hookSpecificOutput.decision.behavior, 'deny'); assert.match(back.hookSpecificOutput.decision.message, /First run the tests/);
 
     for (const tool of ['Read', 'Read', 'Edit', 'Bash']) hub.apply({ session_id: 'q', hook_event_name: 'PostToolUse', tool_name: tool });
     assert.deepEqual(hub.view().stats, { read: 2, edit: 1, run: 1 });
@@ -116,7 +121,7 @@ test('seen: green, red and questions go quiet after you looked; nothing else cha
   try {
     hub.install(); hub.start();
     await new Promise(resolve => setTimeout(resolve, 100));
-    hub.apply({ session_id: 'g', hook_event_name: 'Stop', last_assistant_message: 'Klaar.' });
+    hub.apply({ session_id: 'g', hook_event_name: 'Stop', last_assistant_message: 'Done.' });
     hub.apply({ session_id: 'r', hook_event_name: 'StopFailure', error_type: 'overloaded' });
     assert.equal(hub.view().state, 'error');
     hub.seen();
@@ -129,6 +134,7 @@ test('seen: green, red and questions go quiet after you looked; nothing else cha
 
 test('status line prints usage and forwards it to the ring; your own status line is never replaced', async () => {
   const t = temp();
+  setLanguage('en');
   const hub = createHub({ userData: t.dir, settingsFile: t.settingsFile });
   try {
     hub.install(); hub.start();
@@ -140,13 +146,14 @@ test('status line prints usage and forwards it to the ring; your own status line
     const input = JSON.stringify({ session_id: 's', context_window: { used_percentage: 8.4 },
       rate_limits: { five_hour: { used_percentage: 23.5, resets_at: Math.floor(Date.now() / 1000) + 3600 }, seven_day: { used_percentage: 41.2 } } });
     const { execFileSync } = require('node:child_process');
-    const out = execFileSync(process.execPath, [path.join(__dirname, '..', 'src', 'main', 'lumadock-statusline.cjs'), token], { input, encoding: 'utf8' });
-    assert.equal(out.trim(), 'LumaDock · 5 uur: 24% · week: 41% · gesprek: 8% vol');
+    const isolatedEnv = { ...process.env, APPDATA: t.dir, XDG_CONFIG_HOME: t.dir };
+    const out = execFileSync(process.execPath, [path.join(__dirname, '..', 'src', 'main', 'lumadock-statusline.cjs'), token], { input, encoding: 'utf8', env: isolatedEnv });
+    assert.equal(out.trim(), 'LumaDock · 5h: 24% · week: 41% · context: 8% used');
     await new Promise(resolve => setTimeout(resolve, 150));
     const usage = hub.view().usage;
     assert.equal(usage.fiveHour.used, 24); assert.equal(usage.sevenDay.used, 41); assert.equal(usage.context, 8);
 
-    const own = { type: 'command', command: 'echo mijn eigen balk' };
+    const own = { type: 'command', command: 'echo my own status line' };
     fs.writeFileSync(t.settingsFile, JSON.stringify({ ...settings, statusLine: own }));
     hub.install(); hub.uninstall();
     assert.deepEqual(JSON.parse(fs.readFileSync(t.settingsFile, 'utf8')).statusLine, own);
@@ -155,6 +162,7 @@ test('status line prints usage and forwards it to the ring; your own status line
 
 test('answer typed in the island wakes Claude (exit 2); typing in the terminal cancels it (exit 0)', async () => {
   const t = temp();
+  setLanguage('en');
   const hub = createHub({ userData: t.dir, settingsFile: t.settingsFile });
   const { spawn } = require('node:child_process');
   const run = (token, sessionId) => {
@@ -170,20 +178,20 @@ test('answer typed in the island wakes Claude (exit 2); typing in the terminal c
     assert.equal(stop.asyncRewake, true); assert.match(stop.command, /lumadock-reply\.cjs/);
     const token = stop.command.split(' ').at(-1);
 
-    hub.apply({ session_id: 'r', hook_event_name: 'Stop', last_assistant_message: 'Welke kleur wil je?' });
+    hub.apply({ session_id: 'r', hook_event_name: 'Stop', last_assistant_message: 'Which color do you want?' });
     const woke = run(token, 'r');
     await new Promise(resolve => setTimeout(resolve, 400));
     assert.equal(hub.view().canReply, true);
-    hub.reply('r', 'Blauw graag');
+    hub.reply('r', 'Blue please');
     const result = await woke;
-    assert.equal(result.code, 2); assert.match(result.stderr, /Blauw graag/);
+    assert.equal(result.code, 2); assert.match(result.stderr, /Blue please/);
     assert.equal(hub.view().state, 'running');
 
     const cancelled = run(token, 'r');
     await new Promise(resolve => setTimeout(resolve, 400));
     hub.apply({ session_id: 'r', hook_event_name: 'UserPromptSubmit' });
     assert.equal((await cancelled).code, 0);
-    assert.throws(() => hub.reply('r', 'te laat'), /wacht niet meer/);
+    assert.throws(() => hub.reply('r', 'too late'), /no longer waiting/);
   } finally { hub.stop(); t.cleanup(); }
 });
 

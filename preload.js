@@ -16,6 +16,9 @@
   }
 
   contextBridge.exposeInMainWorld('lumadock', {
+    i18nBundle: () => ipcRenderer.sendSync('i18n:get-bundle'),
+    i18nSetLang: lang => ipcRenderer.invoke('i18n:set-lang', lang),
+    onI18nChanged: callback => subscribe('i18n:lang-changed', callback),
     connect: () => ipcRenderer.invoke('lumadock:connect'),
     getConnection: () => ipcRenderer.invoke('lumadock:get-connection'),
     getState: () => ipcRenderer.invoke('lumadock:get-state'),

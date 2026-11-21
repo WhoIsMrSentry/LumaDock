@@ -9,11 +9,13 @@ const { pathToFileURL } = require('node:url');
 const project = path.resolve(__dirname, '..');
 const { observe, Session, questionFrom } = require(project + '/src/main/ai-monitor-model.cjs');
 const { setup, NativeWorker } = require(project + '/src/main/ai-monitor-main.cjs');
+const { setLanguage } = require(project + '/src/shared/i18n.cjs');
+setLanguage('en');
 const target = { id: '7:123:456', handle: 123, pid: 7, started: '456', process: 'chrome', title: 'ChatGPT' };
 function snapshot(options = {}) {
-  const names = options.names || ['Welke kleur wil je gebruiken?'];
+  const names = options.names || ['Which color do you want to use?'];
   const nodes = [
-    { type: 'Document', name: 'ChatGPT' }, { type: 'Text', name: 'ChatGPT zei:' },
+    { type: 'Document', name: 'ChatGPT' }, { type: 'Text', name: 'ChatGPT said:' },
     ...names.map(name => ({ type: 'Text', name })),
     ...(options.copy === false ? [] : [{ type: 'Button', name: 'Copy' }]),
     ...(options.stop ? [{ type: 'Button', name: 'Stop generating' }] : []),
@@ -24,20 +26,20 @@ function snapshot(options = {}) {
 }
 test('orange question is taken from the last assistant message, not from a user prompt', () => {
   const obs = observe(snapshot(), 'chatgpt');
-  assert.equal(obs.valid, true); assert.equal(obs.question, 'Welke kleur wil je gebruiken?');
+  assert.equal(obs.valid, true); assert.equal(obs.question, 'Which color do you want to use?');
   assert.equal(obs.assistant.guards.length, 1);
-  const data = snapshot(); data.nodes.splice(3, 0, { index: 2.5, id: 'user', type: 'Text', name: 'Je zei:' });
+  const data = snapshot(); data.nodes.splice(3, 0, { index: 2.5, id: 'user', type: 'Text', name: 'You said:' });
   assert.equal(observe(data, 'chatgpt').question, '');
-  assert.equal(questionFrom('Voorbeeld: welke kleur wil je?'), '');
-  assert.equal(questionFrom('> Welke kleur wil je?'), '');
+  assert.equal(questionFrom('Example: which color do you want?'), '');
+  assert.equal(questionFrom('> Which color do you want?'), '');
 });
 test('a question near the end, or "type 1 or 2", also waits for you; a plain summary does not', () => {
-  assert.notEqual(questionFrom('Wat wil je dat ik doe?\n\n1. Skill\n2. Lade\n\nTyp gewoon **1** of **2**.'), '');
-  assert.notEqual(questionFrom('Klaar.\n\nWil je dat ik ook de tests draai?\n\nDan weet je zeker dat alles werkt.'), '');
-  assert.notEqual(questionFrom('Het staat klaar. Zeg het maar.'), '');
-  assert.equal(questionFrom('Wil je dit?\n\n- regel 1\n- regel 2\n- regel 3\n\nAlles werkt en is opgeslagen.'), '');
-  assert.equal(questionFrom('Klaar! De app staat open.'), '');
-  assert.equal(questionFrom('Klaar.\n```\nwil je dit?\n```'), '');
+  assert.notEqual(questionFrom('What do you want me to do?\n\n1. Skill\n2. Tray\n\nType just **1** or **2**.'), '');
+  assert.notEqual(questionFrom('Done.\n\nShould I also run the tests?\n\nThen you know for sure everything works.'), '');
+  assert.notEqual(questionFrom('It is ready. Let me know.'), '');
+  assert.equal(questionFrom('Do you want this?\n\n- line 1\n- line 2\n- line 3\n\nEverything works and is saved.'), '');
+  assert.equal(questionFrom('Done! The app is open.'), '');
+  assert.equal(questionFrom('Done.\n```\ndo you want this?\n```'), '');
 });
 function claudeTurns(last) {
   // Mirrors the 2026 claude.ai accessibility tree: "Message N of M" groups with a role summary line.
@@ -46,10 +48,10 @@ function claudeTurns(last) {
     [1, 0, 'Group', 'Message 1 of 2'], [2, 1, 'Text', 'You said: help'], [3, 1, 'Text', 'help'],
     [4, 0, 'Group', 'Message 2 of 2'],
     ...(last === 'user'
-      ? [[5, 4, 'Text', 'You said: nog iets'], [6, 4, 'Text', 'nog iets']]
-      : [[5, 4, 'Text', 'Claude responded: Druk op Ctrl+O.'], [6, 4, 'Group', ''], [7, 6, 'Text', 'Druk op '],
+      ? [[5, 4, 'Text', 'You said: something else'], [6, 4, 'Text', 'something else']]
+      : [[5, 4, 'Text', 'Claude responded: Press Ctrl+O.'], [6, 4, 'Group', ''], [7, 6, 'Text', 'Press '],
         [8, 6, 'Text', ''], [9, 8, 'Text', 'Ctrl+O'], [10, 6, 'Text', '.'], [11, 4, 'Group', ''],
-        [12, 11, 'Text', 'Wil je dat ik het voor je doe?'], [13, 4, 'ToolBar', 'Message actions'], [14, 13, 'Button', 'Copy']]),
+        [12, 11, 'Text', 'Should I do it for you?'], [13, 4, 'ToolBar', 'Message actions'], [14, 13, 'Button', 'Copy']]),
     [20, 0, 'Edit', 'Write your prompt to Claude', 'tiptap ProseMirror'], [21, 0, 'Button', 'Send message']
   ];
   const nodes = raw.map(([index, parent, type, name, className]) => ({ index, parent, type, name, className, id: 'c' + index, enabled: true }));
@@ -58,8 +60,8 @@ function claudeTurns(last) {
 test('Claude message turns: full reply is read, inline pieces join, question is orange', () => {
   const obs = observe(claudeTurns(), 'claude');
   assert.equal(obs.valid, true); assert.equal(obs.completed, true);
-  assert.equal(obs.assistant.text, 'Druk op Ctrl+O.\nWil je dat ik het voor je doe?');
-  assert.equal(obs.question.endsWith('Wil je dat ik het voor je doe?'), true);
+  assert.equal(obs.assistant.text, 'Press Ctrl+O.\nShould I do it for you?');
+  assert.equal(obs.question.endsWith('Should I do it for you?'), true);
   assert.equal(observe(claudeTurns('user'), 'claude').assistant, null);
 });
 test('unidentified composer, passwords and a different provider are rejected', () => {
@@ -71,25 +73,25 @@ test('unidentified composer, passwords and a different provider are rejected', (
 });
 test('observed busy, stable completion, question and a later answer follow the traffic light states', () => {
   const session = new Session('chatgpt', target);
-  assert.equal(session.accept(observe(snapshot({ names: ['Ik denk na.'], stop: true, copy: false }), 'chatgpt'), 1000).state, 'running');
+  assert.equal(session.accept(observe(snapshot({ names: ['I am thinking.'], stop: true, copy: false }), 'chatgpt'), 1000).state, 'running');
   const end = observe(snapshot(), 'chatgpt');
   assert.equal(session.accept(end, 3600).state, 'running');
   assert.equal(session.accept(end, 6200).state, 'question'); assert.equal(session.notification, 'question');
   assert.equal(session.public().canReply, true);
-  session.accept(observe(snapshot({ names: ['Groen wordt toegepast.'], stop: true, copy: false }), 'chatgpt'), 8000);
-  session.accept(observe(snapshot({ names: ['Groen is toegepast.'] }), 'chatgpt'), 10600);
-  const done = session.accept(observe(snapshot({ names: ['Groen is toegepast.'] }), 'chatgpt'), 13200);
+  session.accept(observe(snapshot({ names: ['Applying green.'], stop: true, copy: false }), 'chatgpt'), 8000);
+  session.accept(observe(snapshot({ names: ['Green has been applied.'] }), 'chatgpt'), 10600);
+  const done = session.accept(observe(snapshot({ names: ['Green has been applied.'] }), 'chatgpt'), 13200);
   assert.equal(done.state, 'done'); assert.equal(session.notification, 'done'); assert.equal(done.elapsed, 5);
-  session.accept(observe(snapshot({ names: ['Groen is toegepast.'] }), 'chatgpt'), 20000);
+  session.accept(observe(snapshot({ names: ['Green has been applied.'] }), 'chatgpt'), 20000);
   assert.equal(session.notification, null); assert.equal(session.public().elapsed, 5);
   assert.equal('percent' in done, false);
 });
 test('closed/hidden window, changed conversation and incomplete tree never become green', () => {
-  for (const unavailable of [observe({ ok: false, error: 'Gesloten' }, 'chatgpt'), observe(snapshot({ extra: { truncated: true } }), 'chatgpt')]) {
+  for (const unavailable of [observe({ ok: false, error: 'Closed' }, 'chatgpt'), observe(snapshot({ extra: { truncated: true } }), 'chatgpt')]) {
     const session = new Session('chatgpt', target);
     session.accept(observe(snapshot({ stop: true }), 'chatgpt'), 1000);
     assert.equal(session.accept(unavailable, 3600).state, 'unavailable'); assert.equal(session.notification, null);
-    assert.notEqual(session.accept(observe(snapshot({ names: ['Klaar.'] }), 'chatgpt'), 6200).state, 'done');
+    assert.notEqual(session.accept(observe(snapshot({ names: ['Done.'] }), 'chatgpt'), 6200).state, 'done');
   }
   const session = new Session('chatgpt', target); session.accept(observe(snapshot({ stop: true }), 'chatgpt'), 1000);
   // another chat: Robo follows it, but it never turns green by itself
@@ -106,17 +108,17 @@ test('long generation still waits for final response controls; a timeout is unav
 });
 test('a short response between polls becomes green only after final controls and a stable changed reply', () => {
   const session = new Session('chatgpt', target);
-  session.accept(observe(snapshot({ names: ['Oud antwoord.'] }), 'chatgpt'), 1000);
-  assert.equal(session.accept(observe(snapshot({ names: ['Nieuw antwoord.'] }), 'chatgpt'), 3600).state, 'running');
+  session.accept(observe(snapshot({ names: ['Old reply.'] }), 'chatgpt'), 1000);
+  assert.equal(session.accept(observe(snapshot({ names: ['New reply.'] }), 'chatgpt'), 3600).state, 'running');
   assert.equal(session.notification, null);
-  assert.equal(session.accept(observe(snapshot({ names: ['Nieuw antwoord.'] }), 'chatgpt'), 6200).state, 'done');
+  assert.equal(session.accept(observe(snapshot({ names: ['New reply.'] }), 'chatgpt'), 6200).state, 'done');
   assert.equal(session.notification, 'done');
-  session.accept({ valid: false, detail: 'Niet leesbaar' }, 8800);
-  session.accept(observe(snapshot({ names: ['Nog een antwoord.'] }), 'chatgpt'), 11400);
-  assert.notEqual(session.accept(observe(snapshot({ names: ['Nog een antwoord.'] }), 'chatgpt'), 14000).state, 'done');
+  session.accept({ valid: false, detail: 'Not readable' }, 8800);
+  session.accept(observe(snapshot({ names: ['Another reply.'] }), 'chatgpt'), 11400);
+  assert.notEqual(session.accept(observe(snapshot({ names: ['Another reply.'] }), 'chatgpt'), 14000).state, 'done');
 });
 test('explicit stopped and failure messages are red', () => {
-  assert.equal(new Session('chatgpt', target).accept(observe(snapshot({ names: ['Genereren gestopt'] }), 'chatgpt')).state, 'stopped');
+  assert.equal(new Session('chatgpt', target).accept(observe(snapshot({ names: ['Stopped generating'] }), 'chatgpt')).state, 'stopped');
   assert.equal(new Session('chatgpt', target).accept(observe(snapshot({ names: ['Something went wrong'] }), 'chatgpt')).state, 'error');
 });
 test('Claude adapter recognizes a named response group and does not read sibling user text', () => {
@@ -147,19 +149,19 @@ test('real handlers: connect, stale question denial, explicit guarded reply, con
     commands.push([method, args]);
     if (method === 'windows') return { ok: true, windows: [target] };
     if (method === 'read') { reads++; return current; }
-    if (method === 'reply') { current = snapshot({ stop: true, copy: false, names: ['Ik werk verder.'] }); return { ok: true }; }
+    if (method === 'reply') { current = snapshot({ stop: true, copy: false, names: ['Continuing work.'] }); return { ok: true }; }
     return { ok: true };
   }, close() {} };
   const h = backend(worker);
   try {
     await h.call('windows'); assert.equal((await h.call('connect', { provider: 'chatgpt', targetId: target.id })).ok, true);
     const q = h.bridge.view().providers[0]; assert.equal(q.state, 'question'); assert.equal(h.notices.length, 0);
-    assert.equal((await h.call('reply', { provider: 'chatgpt', questionId: 'stale', text: 'Groen' })).ok, false);
+    assert.equal((await h.call('reply', { provider: 'chatgpt', questionId: 'stale', text: 'Green' })).ok, false);
     assert.equal(commands.filter(([m]) => m === 'reply').length, 0);
-    const result = await h.call('reply', { provider: 'chatgpt', questionId: q.questionId, text: 'Groen' });
+    const result = await h.call('reply', { provider: 'chatgpt', questionId: q.questionId, text: 'Green' });
     assert.equal(result.confirmed, true); assert.equal(h.bridge.view().providers[0].state, 'running');
-    const command = commands.find(([m]) => m === 'reply')[1]; assert.equal(command.text, 'Groen'); assert.equal(command.composerId, 'n4'); assert.equal(command.guards[0].name, 'Welke kleur wil je gebruiken?');
-    current = snapshot({ names: ['Het is groen.'] }); await h.bridge.poll(); await h.bridge.poll();
+    const command = commands.find(([m]) => m === 'reply')[1]; assert.equal(command.text, 'Green'); assert.equal(command.composerId, 'n4'); assert.equal(command.guards[0].name, 'Which color do you want to use?');
+    current = snapshot({ names: ['It is green.'] }); await h.bridge.poll(); await h.bridge.poll();
     assert.equal(h.bridge.view().providers[0].state, 'done'); assert.equal(h.notices.length, 1);
     await h.bridge.poll(); assert.equal(h.notices.length, 1);
     await h.call('disconnect', { provider: 'chatgpt' }); assert.equal(h.bridge.view().providers[0].connected, false);
@@ -172,18 +174,18 @@ test('foreign IPC windows cannot inspect or send; changed native question never 
   try {
     const denied = await h.handlers.get('ai-monitor:windows')({ sender: { getURL: () => 'https://example.com/' } }); assert.equal(denied.ok, false);
     await h.call('windows'); await h.call('connect', { provider: 'chatgpt', targetId: target.id }); const id = h.bridge.view().providers[0].questionId;
-    current = snapshot({ names: ['Welke maat wil je?'] });
-    assert.equal((await h.call('reply', { provider: 'chatgpt', questionId: id, text: 'Groen' })).ok, false); assert.equal(replies, 0);
+    current = snapshot({ names: ['Which size do you want?'] });
+    assert.equal((await h.call('reply', { provider: 'chatgpt', questionId: id, text: 'Green' })).ok, false); assert.equal(replies, 0);
   } finally { h.cleanup(); }
 });
 test('native worker uses shell=false, parses split UTF-8 JSONL and cannot restart after close', async () => {
   let child, args;
   const worker = new NativeWorker({ platform: 'win32', spawn(executable, argv, options) {
     args = { executable, argv, options }; child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.stdin = new EventEmitter(); child.kill = () => {};
-    child.stdin.write = (line, cb) => { const request = JSON.parse(line); const data = Buffer.from(JSON.stringify({ id: request.id, result: { ok: true, text: 'vraag 👻' } }) + '\n');
+    child.stdin.write = (line, cb) => { const request = JSON.parse(line); const data = Buffer.from(JSON.stringify({ id: request.id, result: { ok: true, text: 'question 👻' } }) + '\n');
       setImmediate(() => { child.stdout.emit('data', data.subarray(0, data.length - 4)); child.stdout.emit('data', data.subarray(data.length - 4)); }); cb?.(); };
     return child;
   } });
-  assert.equal((await worker.request('read', {})).text, 'vraag 👻'); assert.equal(args.options.shell, false); assert.ok(args.argv.includes('-Mta'));
-  worker.close(); await assert.rejects(worker.request('windows'), /sluit af/);
+  assert.equal((await worker.request('read', {})).text, 'question 👻'); assert.equal(args.options.shell, false); assert.ok(args.argv.includes('-Mta'));
+  worker.close(); await assert.rejects(worker.request('windows'), /shutting down/);
 });

@@ -1,6 +1,6 @@
 'use strict';
-// Robo's chat in the island (like Coucou): drop Robo on something on your screen and the island opens here,
-// with what he looked at in a little pill on top ("● Chrome · Wat is een API?"). Ask, and ask on: the
+// Robo's chat in the island: drop Robo on something on your screen and the island opens here,
+// with what he looked at in a little pill on top ("● Chrome · What is an API?"). Ask, and ask on: the
 // conversation stays until you start a new one. Without anything picked it is just a chat with Robo.
 // Robo sits bottom left (drawn on the canvas behind this page), the questions are pills on the right,
 // his answers plain text on the left. The answers come from the AI in Settings → AI (buddy-main.cjs).
@@ -92,80 +92,55 @@
   // context: what Robo looked at ({ app, title, word, picture }) or null; messages: { who: 'me' | 'ai', ... }
   let waitingFix = false, waitingType = '';
   let context = null, messages = [], waiting = false, visible = false, holdUntil = 0, zoom = false, readFrom = false, toEnd = false;
-  // Which AI answers: the ones connected in LumaDock → Verbindingen (Claude Code → Claude, Codex → Codex).
+  // Which AI answers: the ones connected in LumaDock → Connections (Claude Code → Claude, Codex → Codex).
   // { agents: [{ id, name }], current } — null until asked. Two connected: a little switch in the top bar.
   let aiState = null;
   const AI_DOT = { claudecode: '#d97757', codex: '#3b82f6' };
   const refreshAi = () => api.buddyAi?.().then(n => { if (JSON.stringify(n) !== JSON.stringify(aiState)) { aiState = n; render(); } }).catch(() => {});
-  // Dutch or English, like the rest of the island (Instellingen → Taal)
-  const WORDS = {
-    nl: { chips: [['explain', '💡 Leg uit'], ['spelling', '✏️ Klopt mijn spelling?'], ['translate', '🌍 Vertaal'], ['summary', '📝 Vat samen']],
-      seen: 'Dit heeft Robo gezien', part: 'Dit stukje scherm', forget: 'Niet meer naar kijken', which: 'Welke AI antwoordt', gives: 'Deze AI geeft de antwoorden',
-      connect: 'Verbind Claude Code of Codex', fresh: 'Nieuw gesprek', sent: 'Dit heeft Robo gezien en naar de AI gestuurd · klik om te sluiten',
-      login: 'Log in met ChatGPT', openCx: 'Open Verbindingen', clean: 'Ik zie geen fouten. Netjes! 🎉', toWord: '✓ Zet in Word (als wijzigingen)',
-      more: 'Ga verder…', about: 'Vraag iets over wat hier staat…', any: 'Vraag me alles…', label: 'Je vraag aan Robo', send: 'Versturen',
-      wrong: 'Er ging iets mis.', browser: 'Kijk in je browser…', loggedIn: 'Gelukt! Stel je vraag nog een keer. 🎉', noLogin: 'Inloggen lukte niet.', fixChip: '🛠️ Los het op', fixMore: '🛠️ Los het voor me op', fixed: p => `Opgelost in ${p}`, fixing: p => `Robo zoekt de fix in ${p}…`, thinking: 'Even kijken…',
-      mayI: f => `Mag ik ${f} aanpassen?`, yes: '✓ Ja, pas het aan', no: 'Nee', saidYes: 'Ja, doe maar', saidNo: 'Nee, laat maar', noChange: 'Oké, ik verander niks.', typing: f => `Robo typt in ${f}…`, line: n => `regel ${n}`,
-      inWord: 'Bezig in Word…', applied: (a, t) => `${a} van de ${t} verbeteringen staan in Word, als wijzigingen. Klik in Word op Accepteren of Weigeren.`, failed: 'Dat lukte niet.' },
-    en: { chips: [['explain', '💡 Explain'], ['spelling', '✏️ Check my spelling'], ['translate', '🌍 Translate'], ['summary', '📝 Summarize']],
-      seen: 'This is what Robo saw', part: 'This part of the screen', forget: 'Stop looking at this', which: 'Which AI answers', gives: 'This AI gives the answers',
-      connect: 'Connect Claude Code or Codex', fresh: 'New chat', sent: 'Robo saw this and sent it to the AI · click to close',
-      login: 'Sign in with ChatGPT', openCx: 'Open Connections', clean: 'No mistakes. Nice! 🎉', toWord: '✓ Put in Word (as changes)',
-      more: 'Continue…', about: 'Ask about what is here…', any: 'Ask me anything…', label: 'Your question for Robo', send: 'Send',
-      wrong: 'Something went wrong.', browser: 'Check your browser…', loggedIn: 'Done! Ask your question again. 🎉', noLogin: 'Signing in did not work.', fixChip: '🛠️ Fix it', fixMore: '🛠️ Fix it for me', fixed: p => `Fixed in ${p}`, fixing: p => `Robo is finding the fix in ${p}…`, thinking: 'Taking a look…',
-      mayI: f => `May I change ${f}?`, yes: '✓ Yes, fix it', no: 'No', saidYes: 'Yes, go ahead', saidNo: 'No, leave it', noChange: 'Okay, I won\'t change anything.', typing: f => `Robo is typing in ${f}…`, line: n => `line ${n}`,
-      inWord: 'Working in Word…', applied: (a, t) => `${a} of the ${t} fixes are in Word, as changes. Click Accept or Reject in Word.`, failed: 'That did not work.' },
-    tr: { chips: [['explain', '💡 Açıkla'], ['spelling', '✏️ Yazımı kontrol et'], ['translate', '🌍 Çevir'], ['summary', '📝 Özetle']],
-      seen: 'Robo\'nun gördüğü ekran', part: 'Ekranın bu kısmı', forget: 'Buna bakmayı bırak', which: 'Hangi YZ yanıtlasın', gives: 'Yanıtları bu YZ veriyor',
-      connect: 'Claude Code veya Codex bağla', fresh: 'Yeni sohbet', sent: 'Robo bunu gördü ve yapay zekaya gönderdi · kapatmak için tıklayın',
-      login: 'ChatGPT ile giriş yap', openCx: 'Bağlantıları Aç', clean: 'Hiçbir hata görünmüyor. Harika! 🎉', toWord: '✓ Word\'e uygula (değişiklik olarak)',
-      more: 'Devam et…', about: 'Buradaki içerik hakkında bir şey sorun…', any: 'Bana istediğinizi sorun…', label: 'Robo\'ya sorunuz', send: 'Gönder',
-      wrong: 'Bir şeyler ters gitti.', browser: 'Tarayıcınıza bakın…', loggedIn: 'Başarılı! Sorunuzu tekrar sorun. 🎉', noLogin: 'Giriş yapılamadı.', fixChip: '🛠️ Düzelt', fixMore: '🛠️ Benim için düzelt', fixed: p => `${p} içinde düzeltildi`, fixing: p => `Robo ${p} içinde çözümü arıyor…`, thinking: 'İnceleniyor…',
-      mayI: f => `${f} dosyasını değiştirebilir miyim?`, yes: '✓ Evet, düzelt', no: 'Hayır', saidYes: 'Evet, uygula', saidNo: 'Hayır, kalsın', noChange: 'Tamam, hiçbir şeyi değiştirmiyorum.', typing: f => `Robo ${f} dosyasına yazıyor…`, line: n => `satır ${n}`,
-      inWord: 'Word\'de çalışıyor…', applied: (a, t) => `${t} düzeltmeden ${a} tanesi Word'e değişiklik olarak eklendi.`, failed: 'Bu işlem başarısız oldu.' }
-  };
-  const L = () => WORDS[window.__lumadockPrefs?.().lang === 'tr' ? 'tr' : 'en'];
+  const ct = (key, params) => (window.__lumadockT ? window.__lumadockT('buddy.chat.' + key, params) : key);
+  const CHIP_IDS = ['explain', 'spelling', 'translate', 'summary'];
 
   function render() {
     const keep = root.querySelector('input')?.value || '', focused = document.activeElement === root.querySelector('input'), wasTop = root.querySelector('.cr-msgs')?.scrollTop || 0;
-    const photo = context?.picture ? `<img src="${esc(context.picture)}" data-do="zoom" alt="" title="${L().seen}">` : '';
-    const pill = context ? `<div class="cr-ctx"><i></i>${photo}<span>${esc(context.app || L().part)}</span><button type="button" data-do="forget" title="${L().forget}">✕</button></div>` : '';
+    const photo = context?.picture ? `<img src="${esc(context.picture)}" data-do="zoom" alt="" title="${esc(ct('seen'))}">` : '';
+    const pill = context ? `<div class="cr-ctx"><i></i>${photo}<span>${esc(context.app || ct('part'))}</span><button type="button" data-do="forget" title="${esc(ct('forget'))}">✕</button></div>` : '';
     const agents = aiState?.agents || [];
     const via = !aiState ? '' : agents.length > 1
-      ? `<div class="cr-pick" title="${L().which}">${agents.map(a => `<button type="button" data-ai="${a.id}" class="${a.id === aiState.current ? 'on' : ''}" style="--c:${AI_DOT[a.id]}"><i></i>${esc(a.name)}</button>`).join('')}</div>`
-      : agents.length ? `<span class="cr-via" title="${L().gives}">via ${esc(agents[0].name)}</span>`
-      : `<button type="button" class="cr-via off" data-do="setup">${L().connect}</button>`;
-    const ctx = `<div class="cr-top">${pill}${via}${messages.length ? `<button type="button" class="cr-new" data-do="new">${L().fresh}</button>` : ''}</div>`;
-    const shot = zoom && context?.picture ? `<div class="cr-shot" data-do="zoom"><img src="${esc(context.picture)}" alt=""><small>${L().sent}</small></div>` : '';
+      ? `<div class="cr-pick" title="${esc(ct('which'))}">${agents.map(a => `<button type="button" data-ai="${a.id}" class="${a.id === aiState.current ? 'on' : ''}" style="--c:${AI_DOT[a.id]}"><i></i>${esc(a.name)}</button>`).join('')}</div>`
+      : agents.length ? `<span class="cr-via" title="${esc(ct('gives'))}">via ${esc(agents[0].name)}</span>`
+      : `<button type="button" class="cr-via off" data-do="setup">${esc(ct('connect'))}</button>`;
+    const ctx = `<div class="cr-top">${pill}${via}${messages.length ? `<button type="button" class="cr-new" data-do="new">${esc(ct('fresh'))}</button>` : ''}</div>`;
+    const shot = zoom && context?.picture ? `<div class="cr-shot" data-do="zoom"><img src="${esc(context.picture)}" alt=""><small>${esc(ct('sent'))}</small></div>` : '';
     const lastAnswer = [...messages].reverse().find(m => m.who === 'ai' && !m.error);
     const msgs = messages.map(m => {
       const fresh = m.fresh ? ' cr-in' : ''; m.fresh = false;
       if (m.who === 'me') return `<div class="cr-me${fresh}">${esc(m.text)}</div>`;
       if (m.error) {
-        const fix = m.fix === 'login' ? `<button type="button" class="cr-fix" data-do="login">${L().login}</button>`
-          : m.fix === 'connect' ? `<button type="button" class="cr-fix" data-do="setup">${L().openCx}</button>` : '';
+        const fix = m.fix === 'login' ? `<button type="button" class="cr-fix" data-do="login">${esc(ct('login'))}</button>`
+          : m.fix === 'connect' ? `<button type="button" class="cr-fix" data-do="setup">${esc(ct('openCx'))}</button>` : '';
         return `<div class="cr-ai cr-err">${esc(m.error)}${fix ? '<br>' + fix : ''}</div>`;
       }
       let html = md(m.text || '');
       if (m.fixes) {
-        html += m.fixes.length ? `<ul class="cr-fixes">${m.fixes.map(f => `<li>p. ${esc(f.page ?? '?')} · <del>${esc(f.find)}</del> → <ins>${esc(f.replace)}</ins>${f.why ? `<small>${esc(f.why)}</small>` : ''}</li>`).join('')}</ul>` : `<div>${L().clean}</div>`;
-        if (m.fixes.length && !m.applied) html += `<button type="button" class="cr-act" data-do="apply">${L().toWord}</button>`;
+        html += m.fixes.length ? `<ul class="cr-fixes">${m.fixes.map(f => `<li>p. ${esc(f.page ?? '?')} · <del>${esc(f.find)}</del> → <ins>${esc(f.replace)}</ins>${f.why ? `<small>${esc(f.why)}</small>` : ''}</li>`).join('')}</ul>` : `<div>${ct('clean')}</div>`;
+        if (m.fixes.length && !m.applied) html += `<button type="button" class="cr-act" data-do="apply">${esc(ct('toWord'))}</button>`;
         if (m.applied) html += `<div style="margin-top:6px;color:#9be37a">${esc(m.applied)}</div>`;
       }
-      const diff = list => `<div class="cr-diff">${list.map(c => `<div class="cr-file">${esc(c.file)} · ${esc(L().line(c.line))}</div><pre class="cr-del">- ${esc(c.find)}</pre><pre class="cr-add">+ ${esc(c.replace)}</pre>`).join('')}</div>`;
+      const diff = list => `<div class="cr-diff">${list.map(c => `<div class="cr-file">${esc(c.file)} · ${esc(ct('line', { line: c.line }))}</div><pre class="cr-del">- ${esc(c.find)}</pre><pre class="cr-add">+ ${esc(c.replace)}</pre>`).join('')}</div>`;
       if (m.plan) {
         html += diff(m.plan.changes);
-        if (!m.decided) html += `<div class="cr-ask">${esc(L().mayI([...new Set(m.plan.changes.map(c => c.file.split('/').pop()))].join(', ')))}</div><div class="cr-yn"><button type="button" class="cr-act" data-do="fix-yes">${L().yes}</button><button type="button" class="cr-no" data-do="fix-no">${L().no}</button></div>`;
+        if (!m.decided) html += `<div class="cr-ask">${esc(ct('mayI', { files: [...new Set(m.plan.changes.map(c => c.file.split('/').pop()))].join(', ') }))}</div><div class="cr-yn"><button type="button" class="cr-act" data-do="fix-yes">${esc(ct('yes'))}</button><button type="button" class="cr-no" data-do="fix-no">${esc(ct('no'))}</button></div>`;
       }
-      if (m.fixed) html = `<div class="cr-done">✓ ${esc(L().fixed(m.project || ''))}</div>` + html + (m.changes?.length ? diff(m.changes) : '');
-      if (m === lastAnswer && context?.project && !m.fixed && !m.fixes && !m.plan && !waiting) html += `<button type="button" class="cr-act" data-kind="fix">${L().fixMore}</button>`;
+      if (m.fixed) html = `<div class="cr-done">✓ ${esc(ct('fixed', { project: m.project || '' }))}</div>` + html + (m.changes?.length ? diff(m.changes) : '');
+      if (m === lastAnswer && context?.project && !m.fixed && !m.fixes && !m.plan && !waiting) html += `<button type="button" class="cr-act" data-kind="fix">${ct('chips.fixMore')}</button>`;
       return `<div class="cr-ai${fresh}">${html}</div>`;
-    }).join('') + (waiting ? `<div class="cr-wait"><i></i><i></i><i></i><span>${esc(waitingType ? L().typing(waitingType) : waitingFix ? L().fixing(context?.project || '') : L().thinking)}</span></div>` : '');
-    const chipList = context?.project ? [L().chips[0], ['fix', L().fixChip], ...L().chips.slice(1, 3)] : L().chips;
+    }).join('') + (waiting ? `<div class="cr-wait"><i></i><i></i><i></i><span>${esc(waitingType ? ct('typing', { file: waitingType }) : waitingFix ? ct('fixing', { project: context?.project || '' }) : ct('thinking'))}</span></div>` : '');
+    const chipsArr = CHIP_IDS.map(k => [k, ct('chips.' + k)]);
+    const chipList = context?.project ? [chipsArr[0], ['fix', ct('chips.fix')], ...chipsArr.slice(1, 3)] : chipsArr;
     const chips = !messages.length && !waiting ? `<div class="cr-chips">${chipList.map(([k, label]) => `<button type="button" data-kind="${k}" class="${k === 'fix' ? 'cr-hot' : ''}">${label}</button>`).join('')}</div>` : '';
-    const placeholder = messages.length ? L().more : context ? L().about : L().any;
+    const placeholder = messages.length ? ct('more') : context ? ct('about') : ct('any');
     root.innerHTML = `${ctx}${shot}<div class="cr-msgs">${msgs}</div>${chips}
-      <div class="cr-input"><input type="text" maxlength="2000" placeholder="${placeholder}" aria-label="${L().label}"><button type="button" data-do="send" ${waiting ? 'disabled' : ''} aria-label="${L().send}">↑</button></div>`;
+      <div class="cr-input"><input type="text" maxlength="2000" placeholder="${esc(placeholder)}" aria-label="${esc(ct('label'))}"><button type="button" data-do="send" ${waiting ? 'disabled' : ''} aria-label="${esc(ct('send'))}">↑</button></div>`;
     const input = root.querySelector('input'); input.value = keep; if (focused) input.focus();
     // a new answer: show it from its start (with your question above it), not its end
     const list = root.querySelector('.cr-msgs'), mine = [...list.querySelectorAll('.cr-me')].pop();
@@ -173,19 +148,21 @@
     else if (readFrom && mine) list.scrollTop = Math.max(0, mine.offsetTop - 4); else list.scrollTop = waiting ? list.scrollHeight : wasTop;
     readFrom = false; toEnd = false;
   }
+  window.__lumadockI18n?.onChange?.(() => { if (visible) render(); });
 
   async function ask(kind, text) {
     if (waiting) return;
-    const label = text || (kind === 'fix' ? L().fixChip : L().chips.find(([k]) => k === kind)?.[1])?.replace(/^\S+\s/, '') || '';
+    const label = text || ct('chips.' + kind)?.replace(/^\S+\s/, '') || '';
     const history = messages.filter(m => !m.error).map(m => ({ who: m.who, text: String(m.text || '').slice(0, 2000) })).slice(-8);
     messages.push({ who: 'me', text: label, fresh: true }); waiting = true; waitingFix = kind === 'fix'; render();
     window.__lumadockChime?.('send');
     window.__lumadockFeel?.('focus', 60000);
     let r;
-    try { r = await api.buddyAsk(kind, text, history, window.__lumadockPrefs?.().lang === 'tr' ? 'tr' : 'en'); } catch (e) { r = { ok: false, error: String(e?.message || e) }; }
+    const curLang = window.__lumadockLang ? window.__lumadockLang() : 'en';
+    try { r = await api.buddyAsk(kind, text, history, curLang); } catch (e) { r = { ok: false, error: String(e?.message || e) }; }
     waiting = false; readFrom = true; holdUntil = performance.now() + 10000; shineUntil = performance.now() + 4000; // stay open a moment so you see the answer
     if (r?.ok && r.plan) { toEnd = true; holdUntil = performance.now() + 30000; } // waiting for your yes
-    messages.push(r?.ok ? { who: 'ai', text: r.answer || '', fixes: r.word ? r.fixes || [] : null, fixed: !!r.fixed, project: r.project || '', plan: r.plan || null, fresh: true } : { who: 'ai', error: r?.error || L().wrong, fix: r?.fix || '', fresh: true });
+    messages.push(r?.ok ? { who: 'ai', text: r.answer || '', fixes: r.word ? r.fixes || [] : null, fixed: !!r.fixed, project: r.project || '', plan: r.plan || null, fresh: true } : { who: 'ai', error: r?.error || ct('wrong'), fix: r?.fix || '', fresh: true });
     waitingFix = false;
     if (r?.ok && r.fixed) { window.__lumadockCelebrate?.('fix', 70); window.__lumadockFeel?.('heart', 2600); } // a fix landed: fanfare, confetti, a jump
     else { window.__lumadockChime?.(r?.ok ? 'reply' : 'error'); window.__lumadockFeel?.(r?.ok ? 'heart' : 'sad', 1800); }
@@ -203,28 +180,28 @@
     if (act === 'setup') api.settingsOpen?.('connect');
     if (b.dataset.ai) { aiState = await api.buddyUseAi?.(b.dataset.ai) || aiState; render(); }
     if (act === 'login') {
-      b.disabled = true; b.textContent = L().browser;
+      b.disabled = true; b.textContent = ct('browser');
       const r = await api.buddyLogin?.();
-      messages.push(r?.ok ? { who: 'ai', text: L().loggedIn } : { who: 'ai', error: r?.error || L().noLogin });
+      messages.push(r?.ok ? { who: 'ai', text: ct('loggedIn') } : { who: 'ai', error: r?.error || ct('noLogin') });
       render();
     }
     if (act === 'fix-yes' || act === 'fix-no') {
       const m = [...messages].reverse().find(x => x.plan && !x.decided); if (!m || waiting) return;
       m.decided = true;
-      if (act === 'fix-no') { api.buddyCancelFix?.(); messages.push({ who: 'me', text: L().saidNo, fresh: true }, { who: 'ai', text: L().noChange, fresh: true }); window.__lumadockChime?.('reply'); render(); return; }
-      messages.push({ who: 'me', text: L().saidYes, fresh: true }); waiting = true; waitingType = m.plan.changes[0]?.file.split('/').pop() || ''; render();
+      if (act === 'fix-no') { api.buddyCancelFix?.(); messages.push({ who: 'me', text: ct('saidNo'), fresh: true }, { who: 'ai', text: ct('noChange'), fresh: true }); window.__lumadockChime?.('reply'); render(); return; }
+      messages.push({ who: 'me', text: ct('saidYes'), fresh: true }); waiting = true; waitingType = m.plan.changes[0]?.file.split('/').pop() || ''; render();
       window.__lumadockChime?.('send'); window.__lumadockFeel?.('focus', 60000);
       let r; try { r = await api.buddyApplyFix(); } catch (err) { r = { ok: false, error: String(err?.message || err) }; }
       waiting = false; waitingType = ''; readFrom = true; holdUntil = performance.now() + 12000; shineUntil = performance.now() + 4000;
-      messages.push(r?.ok ? { who: 'ai', text: r.answer || '', fixed: true, project: r.project || '', changes: r.changes || [], fresh: true } : { who: 'ai', error: r?.error || L().wrong, fresh: true });
+      messages.push(r?.ok ? { who: 'ai', text: r.answer || '', fixed: true, project: r.project || '', changes: r.changes || [], fresh: true } : { who: 'ai', error: r?.error || ct('wrong'), fresh: true });
       if (r?.ok) { window.__lumadockCelebrate?.('fix', 70); window.__lumadockFeel?.('heart', 2600); } else { window.__lumadockChime?.('error'); window.__lumadockFeel?.('sad', 1800); }
       render(); return;
     }
     if (act === 'apply') {
-      b.disabled = true; b.textContent = L().inWord;
+      b.disabled = true; b.textContent = ct('inWord');
       const r = await api.buddyApply();
       const m = [...messages].reverse().find(x => x.fixes);
-      if (m) m.applied = r?.ok ? L().applied(r.applied, r.total) : r?.error || L().failed;
+      if (m) m.applied = r?.ok ? ct('applied', { applied: r.applied, total: r.total }) : r?.error || ct('failed');
       render();
     }
   });

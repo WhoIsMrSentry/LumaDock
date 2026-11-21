@@ -1,5 +1,7 @@
 'use strict';
 
+const { t, getLanguage } = require('../shared/i18n.cjs');
+
 /** Spotify Client ID must be supplied locally via Settings or LUMADOCK_SPOTIFY_CLIENT_ID (never hardcoded in git). */
 const DEFAULT_SPOTIFY_CLIENT_ID = '';
 
@@ -97,7 +99,7 @@ function classifySpotifyPlaylistsError(error, cachedItems = []) {
   const status = Number(error?.status || (/403/.test(msg) ? 403 : /401/.test(msg) ? 401 : 0));
   const isScopeErr = /insufficient\s+client\s+scope|\bscope\b/i.test(msg);
   if (status === 401 || isScopeErr) {
-    return { ok: false, needsReauth: true, playlists: [], error: msg || 'Spotify oturumu yenilenmeli.' };
+    return { ok: false, needsReauth: true, playlists: [], error: msg || t('spotify.errors.sessionNeedsRefresh') };
   }
   if (status === 403) {
     return {
@@ -105,22 +107,23 @@ function classifySpotifyPlaylistsError(error, cachedItems = []) {
       needsReauth: false,
       devModeError: true,
       playlists: [],
-      error: `Spotify 403 (Geliştirici Modu / hesap izni): ${msg || 'Forbidden'}. Bağlantılar'dan kendi Spotify Client ID'nizi girebilirsiniz.`
+      error: t('spotify.errors.devModeForbidden', { msg: msg || 'Forbidden' })
     };
   }
   return {
     ok: false,
     playlists: Array.isArray(cachedItems) ? cachedItems : [],
-    error: msg || 'Playlistler alınamadı.'
+    error: msg || t('spotify.couldNotLoadPlaylists')
   };
 }
 
 /** Render UTF-8 Spotify OAuth callback HTML with explicit charset meta tag. */
 function renderSpotifyCallbackHtml(ok, detail = '') {
   const esc = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const title = ok ? 'Spotify bağlandı ✓' : 'Spotify bağlantısı başarısız';
-  const body = ok ? "Bu sekmeyi kapatıp LumaDock'a dönebilirsiniz." : esc(detail || 'Lütfen LumaDock üzerinden tekrar deneyin.');
-  return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>LumaDock — Spotify</title></head><body style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#0b0e0b;color:#fff;padding:50px;text-align:center;"><h2>${title}</h2><p style="color:#a7b4a5">${body}</p></body></html>`;
+  const lang = getLanguage();
+  const title = ok ? t('spotify.callbackTitleSuccess', null, lang) : t('spotify.callbackTitleFail', null, lang);
+  const body = ok ? t('spotify.callbackBodySuccess', null, lang) : esc(detail || t('spotify.callbackBodyFail', null, lang));
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><title>LumaDock — Spotify</title></head><body style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#0b0e0b;color:#fff;padding:50px;text-align:center;"><h2>${title}</h2><p style="color:#a7b4a5">${body}</p></body></html>`;
 }
 
 /** Extract and validate a Spotify playlist ID from an open.spotify.com URL or spotify:playlist URI. */

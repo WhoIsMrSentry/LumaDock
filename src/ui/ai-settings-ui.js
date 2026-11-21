@@ -5,8 +5,9 @@
 
   UI.SETTINGS_H = 300;
 
-  const isTr = () => window.__lumadockPrefs?.().lang === 'tr';
-  const T = (nl, en, tr) => (isTr() ? tr : (en || nl));
+  const gt = (key, params) => (window.__lumadockT ? window.__lumadockT(key, params) : key);
+  const st = (key, params) => gt('settings.' + key, params);
+  const ap = (key, params) => gt('settings.aiPanel.' + key, params);
 
   const api = window.lumadock;
   const root = document.createElement('div');
@@ -17,12 +18,12 @@
     <div class="tc-settings-shell">
       <div class="tc-page-head">
         <div>
-          <p class="tc-page-title">${T('Instellingen', 'Settings', 'Ayarlar')}</p>
-          <p class="tc-page-sub">${T('Maak LumaDock helemaal van jou', 'Make LumaDock completely yours', 'LumaDock\'u tamamen kendinize göre özelleştirin')}</p>
+          <p class="tc-page-title" data-i18n="settings.settings">Settings</p>
+          <p class="tc-page-sub" data-i18n="settings.settingsSubtitle">Make LumaDock completely yours</p>
         </div>
         <div class="tc-tabs" role="tablist">
-          <button type="button" role="tab" data-tab="general">${T('Algemeen', 'General', 'Genel')}</button>
-          <button type="button" role="tab" data-tab="karakter">${T('Karakter', 'Character', 'Karakter')}</button>
+          <button type="button" role="tab" data-tab="general" data-i18n="settings.general">General</button>
+          <button type="button" role="tab" data-tab="character" data-i18n="settings.characterTab">Character</button>
         </div>
       </div>
 
@@ -30,6 +31,7 @@
            class="tc-settings-content"></div>
     </div>
   `;
+  window.__lumadockBindI18n?.(root);
 
   document.body.appendChild(root);
 
@@ -319,9 +321,9 @@
   document.head.appendChild(style);
 
   // The AI tab (ChatGPT/Codex for Project) is hidden: LumaDock now follows Claude Code instead.
-  // Two tabs: Algemeen (the island) and Karakter (a locker with LumaDock himself).
-  let tab =
-    localStorage.getItem('lumadock:settings-tab') === 'karakter' ? 'karakter' : 'general';
+  // Two tabs: General (the island) and Character (a locker with LumaDock himself).
+  const storedTab = localStorage.getItem('lumadock:settings-tab');
+  let tab = (storedTab === 'character' || storedTab === 'karakter') ? 'character' : 'general';
 
   let settings = null;
   let busy = false;
@@ -361,7 +363,7 @@
     if (!result?.ok) {
       throw new Error(
         result?.error ||
-        'AI-instellingen konden niet worden opgeslagen.'
+        ap('saveError')
       );
     }
 
@@ -394,7 +396,7 @@
 
       if (changed) announce();
     } catch (issue) {
-      error = issue.message || 'Dit verzoek is mislukt.';
+      error = issue.message || ap('requestFailed');
     } finally {
       busy = false;
       loggingIn = false;
@@ -440,18 +442,18 @@
   function keyFields(type) {
     return `
       <label class="tc-ai-field">
-        ${type === 'lumadock' ? 'Tijdelijke ontwikkelkey' : 'API-key'}
+        ${escape(type === 'lumadock' ? ap('tempKey') : ap('apiKey'))}
 
         <input id="tc-ai-key"
                type="password"
                autocomplete="off"
                spellcheck="false"
-               placeholder="Nieuwe key; bestaande key wordt niet getoond">
+               placeholder="${escape(ap('newKeyPlaceholder'))}">
       </label>
 
       <div class="tc-ai-actions">
-        ${button('Key opslaan', `key-${type}`, true)}
-        ${button('Key verwijderen', `clear-${type}`)}
+        ${button(escape(ap('saveKey')), `key-${type}`, true)}
+        ${button(escape(ap('clearKey')), `clear-${type}`)}
       </div>
     `;
   }
@@ -464,27 +466,27 @@
 
       if (!account.installed) {
         return `
-          <strong>${T('ChatGPT koppelen', 'Connect ChatGPT', 'ChatGPT Bağla')}</strong>
+          <strong>${escape(ap('connectChatGpt'))}</strong>
 
-          <p>${T('Installeer Codex één keer in je projectmap:', 'Install Codex once in your project folder:', 'Codex\'i proje klasörünüze bir kez yükleyin:')}</p>
+          <p>${escape(ap('installCodexStep'))}</p>
 
           <p>
             <code>npm.cmd install @openai/codex --save</code>
           </p>
 
           <p>
-            ${T('Start LumaDock daarna opnieuw en klik op Inloggen met ChatGPT.', 'Then restart LumaDock and click Sign in with ChatGPT.', 'Ardından LumaDock\'u yeniden başlatıp ChatGPT ile Giriş Yap\'a tıklayın.')}
+            ${escape(ap('restartChatGptStep'))}
           </p>
         `;
       }
 
       return `
         <strong>
-          ${
+          ${escape(
             account.ready
-              ? T('Verbonden met ChatGPT', 'Connected to ChatGPT', 'ChatGPT\'ye Bağlı')
-              : T('Gebruik je ChatGPT-account', 'Use your ChatGPT account', 'ChatGPT hesabınızı kullanın')
-          }
+              ? ap('connectedChatGpt')
+              : ap('useChatGptAccount')
+          )}
         </strong>
 
         <p>
@@ -495,11 +497,11 @@
                     ? ` · ${escape(account.plan)}`
                     : ''
                 }`
-              : T('Log in via de officiële pagina in je browser en kies je werkruimte.', 'Sign in via the official page in your browser and choose your workspace.', 'Tarayıcınızdaki resmi sayfadan giriş yapın ve çalışma alanınızı seçin.')
+              : escape(ap('chatGptBrowserHint'))
           }
 
           <br>
-          ${T('Gebruikt je bestaande Codex-ruimte en bijbehorende limieten. Geen aparte API-key.', 'Uses your existing Codex space and associated limits. No separate API key.', 'Mevcut Codex alanınızı ve limitlerinizi kullanır. Ayrı bir API anahtarı gerekmez.')}
+          ${escape(ap('chatGptCodexLimitHint'))}
         </p>
 
         ${
@@ -511,7 +513,7 @@
         <div class="tc-ai-actions">
           ${
             button(
-              account.ready ? T('Ander account', 'Other account', 'Farklı hesap') : T('Inloggen met ChatGPT', 'Sign in with ChatGPT', 'ChatGPT ile Giriş Yap'),
+              escape(account.ready ? ap('otherAccount') : st('login')),
               'login',
               true
             )
@@ -519,8 +521,8 @@
 
           ${
             account.ready
-              ? button(T('Verbinding testen', 'Test connection', 'Bağlantıyı test et'), 'test') +
-                button(T('Uitloggen', 'Log out', 'Çıkış yap'), 'logout')
+              ? button(escape(ap('testConnection')), 'test') +
+                button(escape(ap('logOut')), 'logout')
               : ''
           }
         </div>
@@ -529,13 +531,13 @@
           loggingIn
             ? `
               <p class="tc-ai-notice">
-                ${T('Rond het inloggen af in je browser.', 'Complete the sign-in in your browser.', 'Giriş işlemini tarayıcınızda tamamlayın.')}
+                ${escape(ap('completeBrowserLogin'))}
               </p>
 
               <button type="button"
                       class="tc-ai-button"
                       data-action="cancel">
-                ${T('Login annuleren', 'Cancel sign-in', 'Girişi İptal Et')}
+                ${escape(ap('cancelLogin'))}
               </button>
             `
             : ''
@@ -550,14 +552,14 @@
       const baseUrl = settings.openai?.baseUrl || 'https://api.openai.com/v1';
 
       return `
-        <strong>OpenAI / ${isTr() ? 'Özel API (Ollama / Gemini)' : 'Custom OpenAI API'}</strong>
+        <strong>OpenAI / ${escape(ap('customOpenAiApi'))}</strong>
 
         <p>
-          ${
+          ${escape(
             settings.openai?.hasKey
-              ? (isTr() ? 'API anahtarınız güvenle kaydedildi.' : 'Your API key is safely encrypted.')
-              : (isTr() ? 'OpenAI, Ollama, OpenRouter veya OpenAI uyumlu URL girin.' : 'Enter your OpenAI key or custom OpenAI-compatible Base URL (Ollama, OpenRouter).')
-          }
+              ? ap('keyEncrypted')
+              : ap('enterOpenAiUrl')
+          )}
         </p>
 
         ${keyFields('openai')}
@@ -580,12 +582,12 @@
               `).join('')
             }
           </select>
-          <input id="tc-ai-custom-model" type="text" value="${customModel.replace(/"/g, '&quot;')}" placeholder="${isTr() ? 'Veya özel model (ör. llama3.2)' : 'Or custom model (e.g. llama3.2)'}">
+          <input id="tc-ai-custom-model" type="text" value="${customModel.replace(/"/g, '&quot;')}" placeholder="${escape(ap('customModelPh'))}">
         </label>
 
         <div class="tc-ai-actions">
-          ${button(isTr() ? 'Ayarları Kaydet' : 'Save Model & URL', 'model')}
-          ${button(isTr() ? 'Bağlantıyı Test Et' : 'Test Connection', 'test')}
+          ${button(escape(ap('saveModelUrl')), 'model')}
+          ${button(escape(ap('testConnection')), 'test')}
         </div>
       `;
     }
@@ -595,25 +597,23 @@
         <strong>LumaDock AI</strong>
 
         <p>
-          De verbinding via je LumaDock-account bouwen we later.
-          Deze ontwikkelversie gebruikt tijdelijk een ontwikkelkey.
+          ${escape(ap('devAccountHint'))}
         </p>
 
         ${
           settings.lumadock?.ready
-            ? button('Verbinding testen', 'test')
+            ? button(escape(ap('testConnection')), 'test')
             : ''
         }
 
         <details>
-          <summary>Ontwikkelinstellingen</summary>
+          <summary>${escape(ap('devSettings'))}</summary>
 
           ${
             settings.lumadock?.environment
               ? `
                 <p>
-                  Er is een key via de ontwikkelomgeving ingesteld.
-                  Die blijft leidend.
+                  ${escape(ap('envKeyActive'))}
                 </p>
               `
               : ''
@@ -624,12 +624,12 @@
       `;
     }
 
-    return '<p>Kies de AI die je assistent moet gebruiken.</p>';
+    return `<p>${escape(ap('chooseAiPrompt'))}</p>`;
   }
 
-  const sleepRow = () => `<div class="tc-setting-row tc-demo" data-demo="sleep"><div><strong>${isTr() ? 'Uyku Efekti' : 'Sleep Effect'}</strong><small>${isTr() ? 'Bir süre hiçbir şey olmadığında uyku moduna geçer' : 'He falls asleep when nothing happens for a while'}</small></div><button type="button" data-action="sleep" class="tc-toggle ${sleepEnabled ? 'on' : ''}" aria-pressed="${sleepEnabled}">${sleepEnabled ? (isTr() ? 'Açık' : 'On') : (isTr() ? 'Kapalı' : 'Off')}</button></div>`;
+  const sleepRow = () => `<div class="tc-setting-row tc-demo" data-demo="sleep"><div><strong>${escape(gt('fun.sleepEffect'))}</strong><small>${escape(gt('fun.sleepEffectSub'))}</small></div><button type="button" data-action="sleep" class="tc-toggle ${sleepEnabled ? 'on' : ''}" aria-pressed="${sleepEnabled}">${escape(sleepEnabled ? gt('common.on') : gt('common.off'))}</button></div>`;
   // The settings app (settings-app.html) shows these same lists in its own window (settings-bridge-ui.js).
-  window.__lumadockSettingsHtml = which => which === 'karakter' ? window.__lumadockSettingsCharacter?.(sleepRow()) || '' : window.__lumadockSettingsExtra?.() || '';
+  window.__lumadockSettingsHtml = which => (which === 'character' || which === 'karakter') ? window.__lumadockSettingsCharacter?.(sleepRow()) || '' : window.__lumadockSettingsExtra?.() || '';
   // Picking an option rebuilds the list: keep it scrolled exactly where you were.
   let renderedTab = null;
   function render() {
@@ -653,12 +653,12 @@
       );
     }
 
-    content.classList.toggle('tc-locker-mode', tab === 'karakter');
-    if (tab === 'karakter') {
+    content.classList.toggle('tc-locker-mode', tab === 'character');
+    if (tab === 'character') {
       const info = window.__lumadockLocker?.() || { done: 0, badges: 0, total: 0 };
-      content.innerHTML = `<div class="tc-locker"><div class="tc-locker-stage" id="tc-locker-stage"><b>${escape(info.name || 'LumaDock')}</b><small>${info.done} taken klaar · ${info.badges}/${info.total} prestaties</small></div><div class="tc-locker-list">${window.__lumadockSettingsCharacter?.(sleepRow()) || ''}</div></div>`;
+      content.innerHTML = `<div class="tc-locker"><div class="tc-locker-stage" id="tc-locker-stage"><b>${escape(info.name || 'LumaDock')}</b><small>${escape(ap('statsRow', { done: info.done, badges: info.badges, total: info.total }))}</small></div><div class="tc-locker-list">${window.__lumadockSettingsCharacter?.(sleepRow()) || ''}</div></div>`;
     } else if (tab === 'general') {
-      // Sound volume is set with the speaker slider in the header (icons-ui.js). Sleep lives in the Karakter tab.
+      // Sound volume is set with the speaker slider in the header (icons-ui.js). Sleep lives in the Character tab.
       content.innerHTML = `        ${window.__lumadockSettingsExtra?.() || ''}
       `;
     } else {
@@ -668,8 +668,8 @@
             card(
               'lumadock',
               'LumaDock AI',
-              'Via je LumaDock-account',
-              'Aanbevolen'
+              escape(ap('viaLumaDock')),
+              escape(ap('recommended'))
             )
           }
 
@@ -677,26 +677,26 @@
             card(
               'chatgpt',
               'ChatGPT',
-              T('Gebruik je ChatGPT-account', 'Use your ChatGPT account', 'ChatGPT hesabınızı kullanın'),
-              settings?.chatgpt?.ready ? T('Verbonden', 'Connected', 'Bağlandı') : T('Inloggen', 'Sign in', 'Giriş Yap')
+              escape(ap('useChatGptAccount')),
+              escape(settings?.chatgpt?.ready ? st('cxOn') : gt('common.signIn'))
             )
           }
 
           ${
             card(
               'openai',
-              'Eigen OpenAI',
-              'Je eigen API-key',
-              settings?.openai?.ready ? 'Ingesteld' : 'Instellen'
+              escape(ap('ownOpenAi')),
+              escape(ap('ownApiKey')),
+              escape(settings?.openai?.ready ? ap('configured') : ap('configure'))
             )
           }
 
           ${
             card(
               'local',
-              'Lokale AI',
-              'Bijvoorbeeld Ollama',
-              'Later',
+              escape(ap('localAi')),
+              escape(ap('ollamaExample')),
+              escape(ap('later')),
               true
             )
           }
@@ -733,7 +733,7 @@
   root.addEventListener('click', event => {
     const target = event.target.closest('button');
     // A block (setting row) with an example: clicking anywhere on it shows it on LumaDock.
-    // Only the Aan/Uit button itself changes the setting.
+    // Only the toggle button itself changes the setting.
     const block = event.target.closest('.tc-setting-row');
     if (block?.dataset.demo) window.__lumadockDemo?.(block.dataset.demo);
 
@@ -801,17 +801,17 @@
 
       action(
         () => api.aiSettingsChatGPTLogin(),
-        T('ChatGPT is verbonden. Je kunt terug naar Project.', 'ChatGPT is connected. You can return to Project.', 'ChatGPT bağlandı. Projeye geri dönebilirsiniz.')
+        ap('chatGptConnectedMsg')
       );
     } else if (name === 'logout') {
       action(
         () => api.aiSettingsChatGPTLogout(),
-        T('Je bent uitgelogd.', 'You have been logged out.', 'Çıkış yapıldı.')
+        ap('loggedOutMsg')
       );
     } else if (name === 'test') {
       action(
         () => api.aiSettingsTest(),
-        T('Verbinding gelukt.', 'Connection successful.', 'Bağlantı başarılı.'),
+        ap('connectionOkMsg'),
         false
       );
     } else if (name?.startsWith('key-')) {
@@ -819,7 +819,7 @@
       const key = input?.value.trim();
 
       if (!key) {
-        error = 'Vul eerst een key in.';
+        error = ap('enterKeyFirst');
         render();
         return;
       }
@@ -828,12 +828,12 @@
 
       action(
         () => api.aiSettingsSetKey(name.slice(4), key),
-        'Key veilig opgeslagen.'
+        ap('keySavedMsg')
       );
     } else if (name?.startsWith('clear-')) {
       action(
         () => api.aiSettingsClearKey(name.slice(6)),
-        'Key verwijderd.'
+        ap('keyRemovedMsg')
       );
     } else if (name === 'model') {
       const customM = (root.querySelector('#tc-ai-custom-model')?.value || '').trim();
@@ -848,7 +848,7 @@
           }
           return api.aiSettingsSetModel(model);
         },
-        isTr() ? 'Model ve URL kaydedildi.' : 'Model & URL saved.'
+        ap('modelUrlSavedMsg')
       );
     }
   });
@@ -876,10 +876,10 @@
     render();
   });
 
-  // Algemeen: no LumaDock. Karakter: LumaDock stands in his locker on a lit-up stage (drawn on the canvas
+  // General: no LumaDock. Character: LumaDock stands in his locker on a lit-up stage (drawn on the canvas
   // behind the see-through stage box), so every colour or outfit you pick shows on him right away.
   drawSettings = () => {
-    if (tab !== 'karakter') return;
+    if (tab !== 'character') return;
     const stage = root.querySelector('#tc-locker-stage'); if (!stage) return;
     const r = stage.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2 - 4;
     ctx.save(); ctx.beginPath(); ctx.roundRect(r.left, r.top, r.width, r.height, 18); ctx.clip();
@@ -969,6 +969,7 @@
   `;
   document.head.appendChild(look);
 
+  window.__lumadockI18n?.onChange?.(() => { window.__lumadockBindI18n?.(root); if (visible) render(); });
   render();
   requestAnimationFrame(loop);
 })();

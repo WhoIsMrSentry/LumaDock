@@ -9,74 +9,70 @@
   };
 
   // ---------- preferences (Settings → General) ----------
-  const DEFAULTS = { lang: 'en', speed: 'snel', focusMin: 25, focusSec: 1500, eye: 'mint', body: 'wolk', palette: 'klassiek', faces: true, blink: true,
+  const DEFAULTS = { lang: 'en', speed: 'fast', focusMin: 25, focusSec: 1500, eye: 'mint', body: 'cloud', palette: 'classic', faces: true, blink: true,
     dance: true, confetti: true, chimes: true, notify: true, startup: true, outfit: 'auto', sleepMin: 10, warnAt: 80,
-    pack: 'klassiek', seasonal: true, hunger: true, volumeHud: true, batteryWarn: true, appAnim: true, fullscreenHide: false, displayIndex: -1,
+    pack: 'classic', seasonal: true, hunger: true, volumeHud: true, batteryWarn: true, appAnim: true, fullscreenHide: false, displayIndex: -1,
     testMode: false, name: 'LumaDock', lightBusy: '#ff9a1f', lightDone: '#22e05a', lightError: '#ff3b3b' };
   const savedPrefs = store.get('lumadock:prefs', {});
-  if (!savedPrefs.newLook) { savedPrefs.body = 'wolk'; savedPrefs.newLook = true; store.set('lumadock:prefs', savedPrefs); }
+  if (!savedPrefs.newLook) { savedPrefs.body = 'cloud'; savedPrefs.newLook = true; store.set('lumadock:prefs', savedPrefs); }
   if (!['en', 'tr'].includes(savedPrefs.lang)) savedPrefs.lang = 'en';
   const prefs = { ...DEFAULTS, ...savedPrefs };
   if (!['en', 'tr'].includes(prefs.lang)) prefs.lang = 'en';
-  if (savedPrefs.lightBusy === undefined && savedPrefs.palette && savedPrefs.palette !== 'klassiek') {
-    const old = { zacht: ['#ffc27a', '#8ef0a8', '#ff8a8a'], kleurenblind: ['#ffb000', '#3d9bff', '#ff5ac8'] }[savedPrefs.palette];
+  const t = (key, params) => (window.__lumadockT ? window.__lumadockT(key, params, prefs.lang) : key);
+  const loc = () => (window.__lumadockLocale ? window.__lumadockLocale(prefs.lang) : (prefs.lang === 'tr' ? 'tr-TR' : 'en-US'));
+  if (savedPrefs.lightBusy === undefined && savedPrefs.palette && savedPrefs.palette !== 'classic') {
+    const old = { soft: ['#ffc27a', '#8ef0a8', '#ff8a8a'], highContrast: ['#ffb000', '#3d9bff', '#ff5ac8'] }[savedPrefs.palette];
     if (old) [prefs.lightBusy, prefs.lightDone, prefs.lightError] = old;
   }
-  const isTr = () => prefs.lang === 'tr';
-  const L = (en, tr) => (isTr() ? tr : en);
   const petName = () => String(prefs.name || '').trim() || 'LumaDock';
-  if (!['snel', 'normaal'].includes(prefs.speed)) prefs.speed = 'normaal';
+  if (!['fast', 'normal'].includes(prefs.speed)) prefs.speed = 'normal';
   let drafting = false;
-  const save = () => { if (drafting) return; store.set('lumadock:prefs', prefs); apply(); };
+  const save = () => {
+    if (drafting) return;
+    store.set('lumadock:prefs', prefs);
+    if (window.__lumadockI18n && window.__lumadockLang?.() !== prefs.lang) {
+      window.__lumadockI18n.setLang(prefs.lang);
+    }
+    apply();
+  };
+  window.__lumadockI18n?.onChange?.(next => {
+    if (!drafting && prefs.lang !== next) {
+      prefs.lang = next;
+      store.set('lumadock:prefs', prefs);
+      apply();
+    }
+  });
 
   // Cyber-Bot OLED Visor eye colours & Mecha chassis palettes
   const EYES = {
     mint: '#00e5ff',
-    wit: '#f0f8ff',
-    blauw: '#38f8b2',
-    roze: '#ff5ca8',
-    paars: '#b87aff',
-    geel: '#ffd23f'
+    white: '#f0f8ff',
+    teal: '#38f8b2',
+    pink: '#ff5ca8',
+    purple: '#b87aff',
+    gold: '#ffd23f'
   };
-  const EYE_LABELS = {
-    mint: ['Cyber Cyan', 'Siber Camgöbeği'],
-    wit: ['Pure Ice', 'Saf Buz'],
-    blauw: ['Neon Mint', 'Neon Nane'],
-    roze: ['Laser Pink', 'Lazer Pembe'],
-    paars: ['Ultraviolet', 'Ultraviyole'],
-    geel: ['Solar Gold', 'Solar Altın']
-  };
+  if (!EYES[prefs.eye]) prefs.eye = DEFAULTS.eye;
   const BODIES = {
-    wolk: ['#f2f7ff', '#b8cce4'],
-    munt: ['#e8fff8', '#9ce6d0'],
-    lucht: ['#e6f4ff', '#9ec5f8'],
-    roos: ['#fff0f6', '#f2b6d2'],
-    klassiek: ['#334458', '#1b2634'],
-    nacht: ['#1d2432', '#0d121b'],
-    blauw: ['#234b85', '#11274a'],
-    paars: ['#4d3382', '#241642'],
-    roze: ['#822970', '#3d1135'],
-    goud: ['#a87e2b', '#4d370d']
+    cloud: ['#f2f7ff', '#b8cce4'],
+    mint: ['#e8fff8', '#9ce6d0'],
+    ice: ['#e6f4ff', '#9ec5f8'],
+    rose: ['#fff0f6', '#f2b6d2'],
+    classic: ['#334458', '#1b2634'],
+    night: ['#1d2432', '#0d121b'],
+    cobalt: ['#234b85', '#11274a'],
+    purple: ['#4d3382', '#241642'],
+    magenta: ['#822970', '#3d1135'],
+    gold: ['#a87e2b', '#4d370d']
   };
-  const BODY_LABELS = {
-    wolk: ['Arctic Mecha', 'Arktik Meka'],
-    munt: ['Cyber Mint', 'Siber Nane'],
-    lucht: ['Holo Ice', 'Holo Buz'],
-    roos: ['Rose Quartz', 'Pembe Kuvars'],
-    klassiek: ['Titanium', 'Titanyum'],
-    nacht: ['Obsidian', 'Obsidyen'],
-    blauw: ['Cobalt', 'Kobalt'],
-    paars: ['Quantum', 'Kuantum'],
-    roze: ['Nebula', 'Nebula'],
-    goud: ['Solar Gold', 'Solar Altın']
-  };
-  const SPEEDS = { snel: { t: 0.5, peek: 140, musicPeek: 900, home: 300, view: 1500, mon: 600 }, normaal: { t: 0.8, peek: 260, musicPeek: 1100, home: 400, view: 2200, mon: 800 } };
+  if (!BODIES[prefs.body]) prefs.body = DEFAULTS.body;
+  const SPEEDS = { fast: { t: 0.5, peek: 140, musicPeek: 900, home: 300, view: 1500, mon: 600 }, normal: { t: 0.8, peek: 260, musicPeek: 1100, home: 400, view: 2200, mon: 800 } };
 
   // All body colours use the sleek Cyber-Bot chassis ('blob' renderer in mascot.html)
   window.__lumadockLook = () => ({
     eye: EYES[prefs.eye] || EYES.mint,
-    shell1: BODIES[prefs.body]?.[0] || BODIES.wolk[0],
-    shell2: BODIES[prefs.body]?.[1] || BODIES.wolk[1],
+    shell1: BODIES[prefs.body]?.[0] || BODIES.cloud[0],
+    shell2: BODIES[prefs.body]?.[1] || BODIES.cloud[1],
     style: 'blob'
   });
   window.__lumadockPalette = () => ({ busy: prefs.lightBusy, question: prefs.lightBusy, done: prefs.lightDone, error: prefs.lightError });
@@ -106,14 +102,15 @@
 
   // ---------- sounds: the same melodies in different sound packs ----------
   const PACKS = {
-    klassiek: { wave: 'sine', vol: 1, mul: 1, len: 1, labelEn: 'Classic', labelTr: 'Klasik' },
-    '8bit': { wave: 'square', vol: 0.45, mul: 1, len: 0.8, labelEn: '8-bit', labelTr: '8-bit' },
-    zacht: { wave: 'sine', vol: 0.55, mul: 0.75, len: 1.4, labelEn: 'Soft', labelTr: 'Yumuşak' },
-    belletjes: { wave: 'triangle', vol: 0.9, mul: 2, len: 1.8, labelEn: 'Chimes', labelTr: 'Çanlar' }
+    classic: { wave: 'sine', vol: 1, mul: 1, len: 1 },
+    '8bit': { wave: 'square', vol: 0.45, mul: 1, len: 0.8 },
+    soft: { wave: 'sine', vol: 0.55, mul: 0.75, len: 1.4 },
+    chimes: { wave: 'triangle', vol: 0.9, mul: 2, len: 1.8 }
   };
+  if (!PACKS[prefs.pack]) prefs.pack = DEFAULTS.pack;
   let audio = null;
   function synth(from, to, dur, vol, delay = 0) {
-    const pack = PACKS[prefs.pack] || PACKS.klassiek;
+    const pack = PACKS[prefs.pack] || PACKS.classic;
     try {
       audio ||= new AudioContext();
       const t = audio.currentTime + delay, osc = audio.createOscillator(), gain = audio.createGain();
@@ -144,13 +141,13 @@
 
   // ---------- Cyber Wardrobe outfits: unlocked by finishing tasks ----------
   const OUTFITS = [
-    { at: 5, id: 'hat', nameEn: 'Neon Halo', nameTr: 'Neon Hale' },
-    { at: 10, id: 'shades', nameEn: 'Cyber Visor', nameTr: 'Siber Vizör' },
-    { at: 15, id: 'headphones', nameEn: 'Holo Headset', nameTr: 'Holo Kulaklık' },
-    { at: 20, id: 'horns', nameEn: 'Mecha Horns', nameTr: 'Meka Boynuz' },
-    { at: 30, id: 'crown', nameEn: 'Cyber Crown', nameTr: 'Siber Taç' }
+    { at: 5, id: 'hat' },
+    { at: 10, id: 'shades' },
+    { at: 15, id: 'headphones' },
+    { at: 20, id: 'horns' },
+    { at: 30, id: 'crown' }
   ];
-  const outfitName = o => L(o.nameEn, o.nameTr);
+  const outfitName = o => t('fun.outfits.' + o.id);
   let doneCount = store.get('lumadock:done-count', 0);
   const unlocked = id => doneCount >= (OUTFITS.find(o => o.id === id)?.at ?? Infinity) || (!!OUTFITS.find(o => o.id === id) && !window.__lumadockLicense?.().locked.includes('outfits'));
   function season() {
@@ -161,9 +158,10 @@
     if (m === 10 && day >= 24) return 'witch';
     return null;
   }
-  const outfit = () => prefs.outfit === 'geen' ? null
+  const outfit = () => prefs.outfit === 'none' ? null
     : prefs.outfit !== 'auto' && unlocked(prefs.outfit) ? prefs.outfit
     : season() || [...OUTFITS].reverse().find(o => unlocked(o.id))?.id || null;
+  if (!['auto', 'none', ...OUTFITS.map(o => o.id)].includes(prefs.outfit)) prefs.outfit = DEFAULTS.outfit;
   window.__lumadockOutfitOn = () => { const o = outfit(); return Boolean(o && o !== 'shades' && o !== 'headphones'); };
   window.__lumadockCurrentOutfit = () => outfit();
   window.__lumadockOutfits = { count: () => doneCount, next: () => OUTFITS.find(o => doneCount < o.at) || null };
@@ -174,8 +172,8 @@
     const fresh = OUTFITS.find(o => o.at === doneCount);
     if (fresh) {
       say(
-        L('LumaDock unlocked new gear!', 'LumaDock yeni bir ekipman açtı!'),
-        L(`${doneCount} tasks done: you earned ${fresh.nameEn}.`, `${doneCount} görev tamamlandı: ${fresh.nameTr} kazandınız.`)
+        t('fun.gearUnlockedTitle'),
+        t('fun.gearUnlockedBody', { count: doneCount, name: outfitName(fresh) })
       );
       chime('party'); confetti(); feel('heart', 2000);
     }
@@ -188,18 +186,18 @@
 
   // ---------- achievements ----------
   const BADGES = [
-    { id: 'first', icon: '🌱', nameEn: 'First Task', nameTr: 'İlk Görev', howEn: 'Finish a coding task', howTr: 'Bir yapay zeka görevini tamamla' },
-    { id: 'ten', icon: '🔟', nameEn: 'Ten Tasks', nameTr: 'On Görev', howEn: '10 tasks done', howTr: '10 görev tamamlandı' },
-    { id: 'fifty', icon: '🏅', nameEn: 'Fifty Tasks', nameTr: 'Elli Görev', howEn: '50 tasks done', howTr: '50 görev tamamlandı' },
-    { id: 'helper', icon: '💬', nameEn: 'Helpful', nameTr: 'Yardımsever', howEn: 'Reply 10 times from the island', howTr: 'Adadan 10 kez yanıt ver' },
-    { id: 'owl', icon: '🦉', nameEn: 'Night Owl', nameTr: 'Gece Kuşu', howEn: 'A task finished after midnight', howTr: 'Gece yarısından sonra görev bitir' },
-    { id: 'bird', icon: '🐦', nameEn: 'Early Bird', nameTr: 'Erkenci Kuş', howEn: 'A task finished before 7 AM', howTr: 'Sabah 07:00 öncesi görev bitir' },
-    { id: 'marathon', icon: '🏃', nameEn: 'Long Haul', nameTr: 'Maratoncu', howEn: 'A task over 15 minutes', howTr: '15 dakikadan uzun bir görev' },
-    { id: 'focus', icon: '🎯', nameEn: 'Focus Master', nameTr: 'Odak Ustası', howEn: '5 focus sessions finished', howTr: '5 odak oturumu tamamla' },
-    { id: 'dj', icon: '🎧', nameEn: 'Cyber DJ', nameTr: 'Siber DJ', howEn: 'Control Spotify 10 times from the island', howTr: 'Spotify\'ı adadan 10 kez kontrol et' },
-    { id: 'tray', icon: '📥', nameEn: 'Collector', nameTr: 'Koleksiyoncu', howEn: '5 files in the tray', howTr: 'Çekmecede 5 dosya biriktir' },
-    { id: 'mirror', icon: '🪞', nameEn: 'Looking Sharp', nameTr: 'Ayna Kontrolü', howEn: 'Used the quick mirror', howTr: 'Hızlı aynayı kullan' },
-    { id: 'fashion', icon: '👑', nameEn: 'Cyber Icon', nameTr: 'Stil İkonu', howEn: 'All wardrobe gear earned', howTr: 'Tüm gardırop ekipmanlarını kazan' }
+    { id: 'first', icon: '🌱' },
+    { id: 'ten', icon: '🔟' },
+    { id: 'fifty', icon: '🏅' },
+    { id: 'helper', icon: '💬' },
+    { id: 'owl', icon: '🦉' },
+    { id: 'bird', icon: '🐦' },
+    { id: 'marathon', icon: '🏃' },
+    { id: 'focus', icon: '🎯' },
+    { id: 'dj', icon: '🎧' },
+    { id: 'tray', icon: '📥' },
+    { id: 'mirror', icon: '🪞' },
+    { id: 'fashion', icon: '👑' }
   ];
   const badges = new Set(store.get('lumadock:badges', []));
   const counters = store.get('lumadock:counters', {});
@@ -207,7 +205,7 @@
     if (badges.has(id)) return;
     const b = BADGES.find(x => x.id === id); if (!b) return;
     badges.add(id); store.set('lumadock:badges', [...badges]);
-    say(`${b.icon} ${L('Achievement', 'Başarım')}: ${L(b.nameEn, b.nameTr)}`, L(b.howEn, b.howTr));
+    say(`${b.icon} ${t('fun.badges.achievementLabel')}: ${t(`fun.badges.${id}.name`)}`, t(`fun.badges.${id}.how`));
     chime('badge'); confetti(50); jump(); feel('heart', 1500);
   }
   function bump(name, goal, id) { counters[name] = (counters[name] || 0) + 1; store.set('lumadock:counters', counters); if (counters[name] >= goal) earn(id); }
@@ -231,7 +229,7 @@
   }
   const hungry = () => prefs.hunger && hunger() < 30;
   window.__lumadockHunger = () => (prefs.hunger ? hunger() : null);
-  window.__lumadockHomeTitle = () => (hungry() ? L("I'm hungry… finish a task 🍪", 'Acıktım… bir görev tamamla 🍪') : '');
+  window.__lumadockHomeTitle = () => (hungry() ? t('fun.hungryTitle') : '');
   if (Date.now() - food.at > 600000) { food.at = Date.now(); store.set('lumadock:food', food); }
 
   // ---------- focus timer ----------
@@ -413,7 +411,7 @@
     jump(); chime('pop');
     if (pokes.length >= 6) {
       dizzyUntil = t + 2600; pokes = []; feel('dizzy', 2600); chime('error');
-      pokeMessage = L('Ouch! Too many taps… need a sec 😵', 'Ah! Çok fazla dokundun… başım döndü 😵'); pokeMessageUntil = t + 2600;
+      pokeMessage = t('fun.pokeDizzy'); pokeMessageUntil = t + 2600;
       if (mode === 'rest') setMode('compact', false);
     } else if (pokes.length >= 3) { angry = 1; feel('angry', 900); }
     else feel('surprised', 400);
@@ -438,10 +436,10 @@
       lastState = state;
     }
     const detail = status?.detail || '';
-    if (detail !== lastDetail && /Toegestaan|antwoord is verstuurd|Allowed|answer was sent/.test(detail)) { feel('heart', 1400); chime('pop'); bump('helper', 10, 'helper'); }
+    if (detail !== lastDetail && /Allowed|answer was sent|İzin verildi|Yanıtınız gönderildi/i.test(detail)) { feel('heart', 1400); chime('pop'); bump('helper', 10, 'helper'); }
     lastDetail = detail;
     if (wasFocus && !focus.active()) {
-      say(L('Focus complete!', 'Odak tamamlandı!'), L(`${clock(focusLength)} focused. Take a short break.`, `${clock(focusLength)} odaklandınız. Kısa bir mola verin.`));
+      say(t('notifications.focusCompleteTitle'), t('notifications.focusCompleteBody', { duration: clock(focusLength) }));
       chime('party'); confetti(); jump(); feel('happy', 2000);
       bump('focus', 5, 'focus'); feed(10);
       window.__lumadockSettleSize?.();
@@ -457,10 +455,10 @@
     const key = `${usage.resetsAt || 'x'}:${level}`;
     if (!level || store.get('lumadock:limit-warned', '') === key) return;
     store.set('lumadock:limit-warned', key);
-    const at = usage.resetsAt ? new Date(usage.resetsAt * 1000).toLocaleTimeString(isTr() ? 'tr-TR' : 'en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+    const at = usage.resetsAt ? new Date(usage.resetsAt * 1000).toLocaleTimeString(loc(), { hour: '2-digit', minute: '2-digit' }) : '';
     say(
-      L(`You've used ${usage.used}% of your Claude limit`, `Claude limitinizin %${usage.used} kadarını kullandınız`),
-      at ? L(`It resets at ${at}.`, `Saat ${at} itibarıyla yenilenecek.`) : L('Take it easy for a bit.', 'Biraz dinlenebilirsiniz.')
+      t('notifications.buddyLimitTitle', { used: usage.used }),
+      at ? t('notifications.buddyLimitReset', { time: at }) : t('notifications.buddyLimitRest')
     );
     chime('warn'); feel('surprised', 1500);
   }
@@ -728,10 +726,10 @@
   const esc = s => String(s).replace(/[&<>"]/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[x]));
   const row = (title, help, control, demo = '') => `<div class="tc-setting-row${demo ? ' tc-demo' : ''}"${demo ? ` data-demo="${demo}"` : ''}><div><strong>${title}</strong><small>${help}</small></div>${control}</div>`;
   const chips = (key, options) => `<div class="tc-chips">${options.map(([value, label, locked]) =>
-    `<button type="button" class="tc-chip ${prefs[key] === value ? 'on' : ''}" data-pref="${key}" data-value="${esc(value)}" ${locked ? `disabled title="${L('Not earned yet', 'Henüz kazanılmadı')}"` : ''}>${locked ? '🔒 ' : ''}${label}</button>`).join('')}</div>`;
-  const toggle = key => `<button type="button" class="tc-toggle ${prefs[key] ? 'on' : ''}" data-pref="${key}" data-toggle="1" aria-pressed="${prefs[key]}">${prefs[key] ? L('On', 'Açık') : L('Off', 'Kapalı')}</button>`;
-  const swatches = (key, colours, labelsMap) => `<div class="tc-chips">${Object.entries(colours).map(([name, c]) => {
-    const label = labelsMap?.[name] ? L(labelsMap[name][0], labelsMap[name][1]) : name;
+    `<button type="button" class="tc-chip ${prefs[key] === value ? 'on' : ''}" data-pref="${key}" data-value="${esc(value)}" ${locked ? `disabled title="${esc(t('fun.notEarnedYet'))}"` : ''}>${locked ? '🔒 ' : ''}${label}</button>`).join('')}</div>`;
+  const toggle = key => `<button type="button" class="tc-toggle ${prefs[key] ? 'on' : ''}" data-pref="${key}" data-toggle="1" aria-pressed="${prefs[key]}">${prefs[key] ? t('common.on') : t('common.off')}</button>`;
+  const swatches = (key, colours, group) => `<div class="tc-chips">${Object.entries(colours).map(([name, c]) => {
+    const label = t(`fun.${group}.${name}`);
     return `<button type="button" class="tc-swatch ${prefs[key] === name ? 'on' : ''}" style="background:${Array.isArray(c) ? `linear-gradient(135deg,${c[0]},${c[1]})` : c}" data-pref="${key}" data-value="${name}" title="${esc(label)}" aria-label="${esc(label)}"></button>`;
   }).join('')}</div>`;
   const preview = p => `<span class="tc-preview">${[p.busy, p.done, p.error].map(c => `<i style="background:${c};box-shadow:0 0 6px ${c}"></i>`).join('')}</span>`;
@@ -742,98 +740,75 @@
     lightError: ['#ff3b3b', '#ff8a8a', '#e11d48', '#ff6b00', '#ff5ac8', '#b04bff']
   };
   const LIGHT_PRESETS = {
-    klassiek: ['#ff9a1f', '#22e05a', '#ff3b3b', 'Classic', 'Klasik'],
-    zacht: ['#ffc27a', '#8ef0a8', '#ff8a8a', 'Soft', 'Yumuşak'],
-    kleurenblind: ['#ffb000', '#3d9bff', '#ff5ac8', 'High Contrast', 'Yüksek Kontrast']
+    classic: ['#ff9a1f', '#22e05a', '#ff3b3b'],
+    soft: ['#ffc27a', '#8ef0a8', '#ff8a8a'],
+    highContrast: ['#ffb000', '#3d9bff', '#ff5ac8']
   };
-  const lightsBlock = () => `<div class="tc-setting-row tc-demo tc-lights" data-demo="lights"><div class="tc-lights-head"><div><strong>${L('Status Visor Colours', 'Durum Vizör Renkleri')}</strong><small>${L('Pick the eye colour for each AI status. Click to test.', 'Her yapay zeka durumu için göz rengini seçin. Test için tıklayın.')}</small></div>
-    <div class="tc-chips">${Object.entries(LIGHT_PRESETS).map(([k, [b, d, e, enL, trL]]) => `<button type="button" class="tc-chip ${prefs.lightBusy === b && prefs.lightDone === d && prefs.lightError === e ? 'on' : ''}" data-lightpreset="${k}">${preview({ busy: b, done: d, error: e })}${L(enL, trL)}</button>`).join('')}</div></div>
-    ${[['lightBusy', L('Busy or question', 'Meşgul veya soru')], ['lightDone', L('Done', 'Tamamlandı')], ['lightError', L('Error', 'Hata')]].map(([key, label]) => `<div class="tc-light-line"><span><i style="background:${prefs[key]};box-shadow:0 0 8px ${prefs[key]}"></i>${label}</span><div class="tc-chips">${LIGHT_OPTIONS[key].map(c => `<button type="button" class="tc-swatch ${prefs[key] === c ? 'on' : ''}" style="background:${c}" data-pref="${key}" data-value="${c}" aria-label="${label}: ${c}"></button>`).join('')}</div></div>`).join('')}</div>`;
+  const lightsBlock = () => `<div class="tc-setting-row tc-demo tc-lights" data-demo="lights"><div class="tc-lights-head"><div><strong>${t('fun.lightsTitle')}</strong><small>${t('fun.lightsSub')}</small></div>
+    <div class="tc-chips">${Object.entries(LIGHT_PRESETS).map(([k, [b, d, e]]) => `<button type="button" class="tc-chip ${prefs.lightBusy === b && prefs.lightDone === d && prefs.lightError === e ? 'on' : ''}" data-lightpreset="${k}">${preview({ busy: b, done: d, error: e })}${esc(t('fun.lightPresets.' + k))}</button>`).join('')}</div></div>
+    ${[['lightBusy', t('fun.lightBusy')], ['lightDone', t('fun.lightDone')], ['lightError', t('fun.lightError')]].map(([key, label]) => `<div class="tc-light-line"><span><i style="background:${prefs[key]};box-shadow:0 0 8px ${prefs[key]}"></i>${esc(label)}</span><div class="tc-chips">${LIGHT_OPTIONS[key].map(c => `<button type="button" class="tc-swatch ${prefs[key] === c ? 'on' : ''}" style="background:${c}" data-pref="${key}" data-value="${c}" aria-label="${esc(label)}: ${c}"></button>`).join('')}</div></div>`).join('')}</div>`;
 
   const ALL_MOODS = ['happy', 'focus', 'curious', 'surprised', 'angry', 'cool', 'wink', 'heart', 'sad', 'dizzy', 'sleep'];
-  const MOOD_DEMO = () => [
-    ['all', L('▶️ Play All', '▶️ Tümünü Oynat')],
-    ['happy', L('😊 Happy', '😊 Mutlu')],
-    ['focus', L('🎯 Focused', '🎯 Odaklı')],
-    ['curious', L('🤨 Curious', '🤨 Meraklı')],
-    ['surprised', L('✨ Surprised', '✨ Şaşkın')],
-    ['angry', L('😠 Glare', '😠 Kızgın')],
-    ['cool', L('😎 Cool', '😎 Havalı')],
-    ['wink', L('😉 Wink', '😉 Göz Kırpma')],
-    ['heart', L('😍 Lovely', '😍 Sevgi Dolu')],
-    ['sad', L('😢 Sad', '😢 Üzgün')],
-    ['dizzy', L('😵 Dizzy', '😵 Baş Dönmesi')],
-    ['sleep', L('😴 Standby', '😴 Uyku Modu')]
-  ];
+  const MOOD_DEMO = () => ['all', ...ALL_MOODS].map(m => [m, t('fun.moods.' + m)]);
 
   window.__lumadockSettingsCharacter = (sleepRow = '') => [
-    `<div class="tc-group" data-icon="🏷️" style="--g:#5ad1c4">${L('Name', 'İsim')}</div>`,
-    row(L('What is his name?', 'Onun adı ne?'), L('Shown in the greeting and status cards', 'Karşılama ve durum kartlarında görünür'), `<div class="tc-step"><input class="tc-input tc-name" id="tc-in-petname" maxlength="18" placeholder="LumaDock" value="${esc(prefs.name || '')}"><button type="button" class="tc-chip on" data-setname="1">${L('Save', 'Kaydet')}</button></div>`),
-    `<div class="tc-group" data-icon="🎨" style="--g:#ff86c2">${L('Appearance', 'Görünüm')}</div>`,
-    row(L('Visor Eye Colour', 'Vizör Göz Rengi'), L('Default OLED eye glow when idle', 'Boştayken varsayılan OLED göz parıltısı'), swatches('eye', EYES, EYE_LABELS), 'look'),
-    row(L('Chassis Finish', 'Gövde Kaplaması'), L('Choose your Cyber-Bot shell colour', 'Siber-Bot gövde rengini seçin'), swatches('body', BODIES, BODY_LABELS), 'look'),
+    `<div class="tc-group" data-icon="🏷️" style="--g:#5ad1c4">${t('fun.groups.name')}</div>`,
+    row(t('fun.fields.petName'), t('fun.fields.petNameSub'), `<div class="tc-step"><input class="tc-input tc-name" id="tc-in-petname" maxlength="18" placeholder="LumaDock" value="${esc(prefs.name || '')}"><button type="button" class="tc-chip on" data-setname="1">${t('common.save')}</button></div>`),
+    `<div class="tc-group" data-icon="🎨" style="--g:#ff86c2">${t('fun.groups.appearance')}</div>`,
+    row(t('fun.fields.eyes'), t('fun.fields.eyesSub'), swatches('eye', EYES, 'eyes'), 'look'),
+    row(t('fun.fields.body'), t('fun.fields.bodySub'), swatches('body', BODIES, 'bodies'), 'look'),
     lightsBlock(),
-    row(L('Wardrobe Gear', 'Gardırop Ekipmanı'), L(`${doneCount} tasks done. Earn more gear by finishing tasks.`, `${doneCount} görev tamamlandı. Görevleri bitirerek yeni ekipmanlar açın.`),
-      chips('outfit', [['auto', L('Best', 'En İyi')], ['geen', L('None', 'Yok')], ...OUTFITS.map(o => [o.id, outfitName(o), !unlocked(o.id)])]), 'look'),
-    row(L('Seasonal Gear', 'Mevsimsel Ekipmanlar'), L('Festive hats on holidays and special dates', 'Yılbaşı ve özel günlerde otomatik kutlama şapkaları'), toggle('seasonal'), 'look'),
-    `<div class="tc-group" data-icon="🤖" style="--g:#7fb2ff">${L('Behaviour · click a row to preview', 'Davranış · önizlemek için bir satıra tıklayın')}</div>`,
-    row(L('Visor Expressions', 'Yüz İfadeleri'), L('Dynamic OLED visor eyes for every mood', 'Her duruma özel dinamik OLED vizör ifadeleri'), toggle('faces'), 'faces'),
-    row(L('Preview Expressions', 'İfadeleri Dene'), L('Click any expression to test it on the visor', 'Vizörde görmek için bir ifadeye tıklayın'), `<div class="tc-chips">${MOOD_DEMO().map(([m, label]) => `<button type="button" class="tc-chip" data-mood="${m}">${label}</button>`).join('')}</div>`),
-    row(L('Blinking', 'Göz Kırpma'), L('Natural OLED eyelid blinks and occasional winks', 'Doğal OLED göz kırpma ve ara sıra selam verme'), toggle('blink'), 'blink'),
-    row(L('Dance to Music', 'Müzikle Dans Et'), L('Moves to the beat while Spotify is playing', 'Spotify çalarken ritme göre hareket eder'), toggle('dance'), 'dance'),
+    row(t('fun.fields.wardrobe'), t('fun.fields.wardrobeSub', { count: doneCount }),
+      chips('outfit', [['auto', t('common.best')], ['none', t('common.none')], ...OUTFITS.map(o => [o.id, outfitName(o), !unlocked(o.id)])]), 'look'),
+    row(t('fun.fields.seasonal'), t('fun.fields.seasonalSub'), toggle('seasonal'), 'look'),
+    `<div class="tc-group" data-icon="🤖" style="--g:#7fb2ff">${t('fun.groups.behaviour')}</div>`,
+    row(t('fun.fields.faces'), t('fun.fields.facesSub'), toggle('faces'), 'faces'),
+    row(t('fun.fields.moodDemo'), t('fun.fields.moodDemoSub'), `<div class="tc-chips">${MOOD_DEMO().map(([m, label]) => `<button type="button" class="tc-chip" data-mood="${m}">${esc(label)}</button>`).join('')}</div>`),
+    row(t('fun.fields.blink'), t('fun.fields.blinkSub'), toggle('blink'), 'blink'),
+    row(t('fun.fields.dance'), t('fun.fields.danceSub'), toggle('dance'), 'dance'),
     sleepRow,
-    row(L('Standby After', 'Uyku Modu Süresi'), L('Enters sleep mode when idle (Sleep effect must be on)', 'Boşta kaldığında uyku moduna geçer (Uyku efekti açık olmalı)'), chips('sleepMin', [[5, L('5 min', '5 dk')], [10, L('10 min', '10 dk')], [30, L('30 min', '30 dk')]]), 'sleep'),
-    row(L('Startup Animation', 'Başlangıç Animasyonu'), L('Waves and chirps when LumaDock launches', 'LumaDock açıldığında el sallar ve selam verir'), toggle('startup'), 'hello'),
-    row(L('Energy & Hunger', 'Enerji & Açlık'), prefs.hunger ? L(`${petName()} is ${window.__lumadockHunger?.() ?? 0}% charged. Every finished task recharges 🍪`, `${petName()} %${window.__lumadockHunger?.() ?? 0} dolu. Her tamamlanan görev enerji verir 🍪`) : L('Gets hungry when no tasks are finished for a while', 'Uzun süre görev tamamlanmadığında acıkır'), toggle('hunger'), 'hunger'),
-    `<div class="tc-group" data-icon="🏆" style="--g:#ffc93c">${L('Achievements', 'Başarımlar')} · ${badges.size}/${BADGES.length}</div>`,
-    `<div class="tc-badges">${BADGES.map(b => `<div class="tc-badge ${badges.has(b.id) ? 'on' : ''}" title="${esc(L(b.howEn, b.howTr))}"><span>${badges.has(b.id) ? b.icon : '🔒'}</span><b>${esc(L(b.nameEn, b.nameTr))}</b><small>${esc(L(b.howEn, b.howTr))}</small></div>`).join('')}</div>`,
+    row(t('fun.fields.standbyAfter'), t('fun.fields.standbyAfterSub'), chips('sleepMin', [[5, t('fun.minutesShort', { n: 5 })], [10, t('fun.minutesShort', { n: 10 })], [30, t('fun.minutesShort', { n: 30 })]]), 'sleep'),
+    row(t('fun.fields.startup'), t('fun.fields.startupSub'), toggle('startup'), 'hello'),
+    row(t('fun.fields.hunger'), prefs.hunger ? t('fun.fields.hungerOnSub', { name: petName(), pct: window.__lumadockHunger?.() ?? 0 }) : t('fun.fields.hungerOffSub'), toggle('hunger'), 'hunger'),
+    `<div class="tc-group" data-icon="🏆" style="--g:#ffc93c">${t('fun.groups.achievements')} · ${badges.size}/${BADGES.length}</div>`,
+    `<div class="tc-badges">${BADGES.map(b => `<div class="tc-badge ${badges.has(b.id) ? 'on' : ''}" title="${esc(t(`fun.badges.${b.id}.how`))}"><span>${badges.has(b.id) ? b.icon : '🔒'}</span><b>${esc(t(`fun.badges.${b.id}.name`))}</b><small>${esc(t(`fun.badges.${b.id}.how`))}</small></div>`).join('')}</div>`,
   ].join('');
 
   window.__lumadockLocker = () => ({ name: petName(), done: doneCount, badges: badges.size, total: BADGES.length });
 
   // Settings → General
-  const TESTS = () => [
-    ['hello', L('👋 Start up', '👋 Başlangıç')],
-    ['bye', L('😴 Shut down', '😴 Kapanış')],
-    ['busy', L('🟠 AI working', '🟠 YZ çalışıyor')],
-    ['question', L('❓ AI asks', '❓ YZ soruyor')],
-    ['done', L('🟢 AI done', '🟢 YZ tamamlandı')],
-    ['error', L('🔴 AI error', '🔴 YZ hatası')],
-    ['music', L('🎵 Demo music', '🎵 Demo müzik')],
-    ['focus', L('⏱️ Focus 1 min', '⏱️ Odak 1 dk')],
-    ['clear', L('🧹 Stop all', '🧹 Tümünü durdur')]
-  ];
+  const TESTS = () => ['hello', 'bye', 'busy', 'question', 'done', 'error', 'music', 'focus', 'clear'].map(k => [k, t('fun.tests.' + k)]);
   window.__lumadockSettingsExtra = () => [
-    `<div class="tc-group" data-icon="🌍" style="--g:#7fb2ff">${L('Language', 'Dil')}</div>`,
-    row(L('Language · Dil', 'Dil · Language'), L('Interface language for the island and settings', 'Ada ve ayarlar penceresinin arayüz dili'), chips('lang', [['en', 'English'], ['tr', 'Türkçe']])),
-    `<div class="tc-group" data-icon="🧪" style="--g:#b98cff">${L('Testing', 'Test Modu')}</div>`,
-    row(L('Test Mode', 'Test Modu'), L('Try all island states and animations without an active AI session', 'Aktif yapay zeka veya müzik olmadan tüm durumları deneyin'), toggle('testMode')),
-    prefs.testMode ? `<div class="tc-tests">${TESTS().map(([k, label]) => `<button type="button" class="tc-chip" data-test="${k}">${label}</button>`).join('')}</div>` : '',
-    `<div class="tc-group" data-icon="✨" style="--g:#ffb35c">${L('Animations', 'Animasyonlar')}</div>`,
-    row(L('Speed', 'Hız'), L('How fast the island expands, collapses and reacts', 'Adanın açılma, kapanma ve tepki verme hızı'), chips('speed', [['snel', L('Fast', 'Hızlı')], ['normaal', L('Normal', 'Normal')]])),
-    row(L('App Transitions', 'Uygulama Geçişleri'), L('Smooth blur and bounce transitions when switching views', 'Ekranlar arasında yumuşak geçiş animasyonları'), toggle('appAnim')),
-    row(L('Confetti', 'Konfeti'), L('Celebrate long tasks, completed focus sessions and new gear', 'Uzun görevler, biten odak oturumları ve yeni ekipmanlarda kutlama'), toggle('confetti'), 'confetti'),
-    `<div class="tc-group" data-icon="🔔" style="--g:#ff6b6b">${L('Focus & Notifications', 'Odak & Bildirimler')}</div>`,
-    row(L('Status Chimes', 'Durum Sesleri'), L('Audio cues when tasks finish, ask a question or fail', 'Görev bittiğinde, soru sorduğunda veya hata verdiğinde ses çal'), toggle('chimes'), 'chimes'),
-    row(L('Windows Notifications', 'Windows Bildirimleri'), L('Desktop notifications for completed tasks, questions and focus', 'Tamamlanan görev, soru, odak ve limit için masaüstü bildirimi'), toggle('notify')),
-    row(L('Usage Limit Warning', 'Limit Uyarısı'), L('Warn when your 5-hour AI usage reaches this threshold', '5 saatlik kullanım limitiniz bu seviyeye ulaştığında uyar'), chips('warnAt', [[70, '70%'], [80, '80%'], [90, '90%'], [0, L('Never', 'Asla')]])),
-    row(L('Sound Pack', 'Ses Paketi'), L('Choose how the synth chimes sound (click to preview)', 'Durum seslerinin tonunu seçin (dinlemek için tıklayın)'), chips('pack', Object.entries(PACKS).map(([k, p]) => [k, L(p.labelEn, p.labelTr)]))),
-    `<div class="tc-group" data-icon="🏝️" style="--g:#c6e994">${L('Island Extras', 'Ada Ekstraları')}</div>`,
-    row(L('Weather', 'Hava Durumu'), extrasCfg.city ? L(`Current: ${esc(extrasCfg.city)}`, `Şu an: ${esc(extrasCfg.city)}`) : L('Enter your city to show live weather on the home screen', 'Ana ekranda hava durumunu görmek için şehrinizi yazın'),
-      `<div class="tc-step"><input class="tc-input" id="tc-in-city" maxlength="80" placeholder="${L('e.g. Istanbul', 'Örn. İstanbul')}" value="${esc(extrasCfg.city || '')}"><button type="button" class="tc-chip" data-pref="city" data-save="1">${L('Save', 'Kaydet')}</button></div>`),
-    row(L('Calendar', 'Takvim'), extrasCfg.calendarUrl ? L('Connected: your next event is shown on the home screen', 'Bağlı: sıradaki etkinliğiniz ana ekranda gösterilir') : L('Paste a private iCal (.ics) URL to show upcoming events', 'Yaklaşan etkinlikleri görmek için gizli iCal (.ics) bağlantınızı yapıştırın'),
-      `<div class="tc-step"><input class="tc-input" id="tc-in-calendarUrl" maxlength="2000" placeholder="https://… .ics" value="${esc(extrasCfg.calendarUrl || '')}"><button type="button" class="tc-chip" data-pref="calendarUrl" data-save="1">${L('Save', 'Kaydet')}</button></div>`),
+    `<div class="tc-group" data-icon="🌍" style="--g:#7fb2ff">${t('fun.groups.language')}</div>`,
+    row(t('fun.fields.language'), t('fun.fields.languageSub'), chips('lang', [['en', 'English'], ['tr', 'Türkçe']])),
+    `<div class="tc-group" data-icon="🧪" style="--g:#b98cff">${t('fun.groups.testing')}</div>`,
+    row(t('fun.fields.testMode'), t('fun.fields.testModeSub'), toggle('testMode')),
+    prefs.testMode ? `<div class="tc-tests">${TESTS().map(([k, label]) => `<button type="button" class="tc-chip" data-test="${k}">${esc(label)}</button>`).join('')}</div>` : '',
+    `<div class="tc-group" data-icon="✨" style="--g:#ffb35c">${t('fun.groups.animations')}</div>`,
+    row(t('fun.fields.speed'), t('fun.fields.speedSub'), chips('speed', [['fast', t('fun.fields.speedFast')], ['normal', t('fun.fields.speedNormal')]])),
+    row(t('fun.fields.appAnim'), t('fun.fields.appAnimSub'), toggle('appAnim')),
+    row(t('fun.fields.confetti'), t('fun.fields.confettiSub'), toggle('confetti'), 'confetti'),
+    `<div class="tc-group" data-icon="🔔" style="--g:#ff6b6b">${t('fun.groups.notifications')}</div>`,
+    row(t('fun.fields.chimes'), t('fun.fields.chimesSub'), toggle('chimes'), 'chimes'),
+    row(t('fun.fields.winNotify'), t('fun.fields.winNotifySub'), toggle('notify')),
+    row(t('fun.fields.warnAt'), t('fun.fields.warnAtSub'), chips('warnAt', [[70, '70%'], [80, '80%'], [90, '90%'], [0, t('common.never')]])),
+    row(t('fun.fields.soundPack'), t('fun.fields.soundPackSub'), chips('pack', Object.keys(PACKS).map(k => [k, t('fun.packs.' + k)]))),
+    `<div class="tc-group" data-icon="🏝️" style="--g:#c6e994">${t('fun.groups.extras')}</div>`,
+    row(t('fun.fields.weather'), extrasCfg.city ? t('fun.fields.weatherCurrent', { city: esc(extrasCfg.city) }) : t('fun.fields.weatherEmpty'),
+      `<div class="tc-step"><input class="tc-input" id="tc-in-city" maxlength="80" placeholder="${esc(t('fun.fields.cityPlaceholder'))}" value="${esc(extrasCfg.city || '')}"><button type="button" class="tc-chip" data-pref="city" data-save="1">${t('common.save')}</button></div>`),
+    row(t('fun.fields.calendar'), extrasCfg.calendarUrl ? t('fun.fields.calendarConnected') : t('fun.fields.calendarEmpty'),
+      `<div class="tc-step"><input class="tc-input" id="tc-in-calendarUrl" maxlength="2000" placeholder="https://… .ics" value="${esc(extrasCfg.calendarUrl || '')}"><button type="button" class="tc-chip" data-pref="calendarUrl" data-save="1">${t('common.save')}</button></div>`),
     extrasError ? `<p class="tc-ai-error" role="alert">${esc(extrasError)}</p>` : '',
-    row(L('Volume HUD', 'Ses Çubuğu'), L('Display the volume bar inside the island when adjusting audio', 'Sesi değiştirdiğinizde adada ses seviyesini göster'), toggle('volumeHud')),
-    row(L('Battery Warning', 'Pil Uyarısı'), L('Warn when laptop or Bluetooth device battery is low', 'Bilgisayar veya Bluetooth cihazlarının pili azaldığında uyar'), toggle('batteryWarn')),
-    row(L('Auto-hide in Fullscreen', 'Tam Ekranda Gizle'), L('Automatically hide the island during fullscreen games or videos', 'Tam ekran oyun veya videolarda adayı otomatik gizle'), toggle('fullscreenHide')),
-    row(L('Display Monitor', 'Ekran Monitörü'), L('Choose which screen shows the Dynamic Island', 'Dinamik Ada\'nın hangi ekranda görüneceğini seçin'),
-      chips('displayIndex', [[-1, L('Primary', 'Birincil')], ...displaysList.map((d, i) => [d.index, `${i + 1}: ${d.width}×${d.height}`])])),
-    `<div class="tc-setting-row"><div><strong>${L('Reset Defaults', 'Varsayılanlara Sıfırla')}</strong><small>${L('Restore all preferences to their original settings', 'Tüm tercihleri varsayılan değerlerine döndür')}</small></div><button type="button" class="tc-toggle" data-pref="reset">${L('Reset', 'Sıfırla')}</button></div>`,
+    row(t('fun.fields.volumeHud'), t('fun.fields.volumeHudSub'), toggle('volumeHud')),
+    row(t('fun.fields.batteryWarn'), t('fun.fields.batteryWarnSub'), toggle('batteryWarn')),
+    row(t('fun.fields.fullscreenHide'), t('fun.fields.fullscreenHideSub'), toggle('fullscreenHide')),
+    row(t('fun.fields.displayMonitor'), t('fun.fields.displayMonitorSub'),
+      chips('displayIndex', [[-1, t('common.primary')], ...displaysList.map((d, i) => [d.index, `${i + 1}: ${d.width}×${d.height}`])])),
+    `<div class="tc-setting-row"><div><strong>${t('fun.fields.resetDefaults')}</strong><small>${t('fun.fields.resetDefaultsSub')}</small></div><button type="button" class="tc-toggle" data-pref="reset">${t('common.reset')}</button></div>`,
     `<div class="tc-group" data-icon="⏻" style="--g:#ff8a8a">LumaDock</div>`,
-    row(L('Start with Windows', 'Windows ile Başlat'), L('Launch LumaDock automatically when you sign in to Windows', 'Bilgisayarınızı açtığınızda LumaDock otomatik başlasın'), `<button type="button" class="tc-toggle ${loginOn ? 'on' : ''}" data-login="1" aria-pressed="${loginOn}">${loginOn ? L('On', 'Açık') : L('Off', 'Kapalı')}</button>`),
-    row(L('Restart LumaDock', 'Yeniden Başlat'), L('Close LumaDock and relaunch immediately', 'LumaDock\'u kapatıp hemen yeniden başlatır'), `<button type="button" class="tc-chip" data-restart="1">${L('Restart', 'Yeniden Başlat')}</button>`),
-    row(L('Quit LumaDock', 'Çıkış Yap'), L('Close LumaDock completely (also available in the system tray)', 'LumaDock\'u tamamen kapatır (saatin yanındaki simgeden de yapılabilir)'), `<button type="button" class="tc-chip" data-quit="1">${L('Quit', 'Çıkış')}</button>`)
+    row(t('fun.fields.startWithWindows'), t('fun.fields.startWithWindowsSub'), `<button type="button" class="tc-toggle ${loginOn ? 'on' : ''}" data-login="1" aria-pressed="${loginOn}">${loginOn ? t('common.on') : t('common.off')}</button>`),
+    row(t('fun.fields.restartApp'), t('fun.fields.restartAppSub'), `<button type="button" class="tc-chip" data-restart="1">${t('common.restart')}</button>`),
+    row(t('fun.fields.quitApp'), t('fun.fields.quitAppSub'), `<button type="button" class="tc-chip" data-quit="1">${t('common.quit')}</button>`)
   ].join('');
 
   const later = (ms, fn) => setTimeout(fn, ms);
@@ -866,7 +841,7 @@
     const gr = g.createLinearGradient(0, 0, 200, 200); gr.addColorStop(0, '#00e5ff'); gr.addColorStop(1, '#3d1a8e'); g.fillStyle = gr; g.fillRect(0, 0, 200, 200);
     g.fillStyle = '#ffd23f'; g.beginPath(); g.arc(100, 100, 46, 0, Math.PI * 2); g.fill();
     albumImage = new Image(); albumImage.src = c.toDataURL(); window.__lumadockAlbumColour = '#00e5ff';
-    spotifyConnected = true; spotifyState = { is_playing: true, progress_ms: 0, duration_ms: 210000, track: { name: L('Cyber Synth Demo', 'Siber Synth Demo'), artist: 'LumaDock', id: 'test' } }; spotifySyncAt = performance.now();
+    spotifyConnected = true; spotifyState = { is_playing: true, progress_ms: 0, duration_ms: 210000, track: { name: t('fun.demoTrack'), artist: 'LumaDock', id: 'test' } }; spotifySyncAt = performance.now();
     fakeMusicUntil = now() + 30000; window.__lumadockSettleSize?.();
     setTimeout(() => { if (now() >= fakeMusicUntil) stopFakeMusic(); }, 30100);
   }

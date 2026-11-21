@@ -4,6 +4,7 @@
 // The settings code itself stays in the island: this window asks it for the lists and passes clicks on.
 const { app, BrowserWindow, ipcMain, net, shell, dialog } = require('electron');
 const path = require('node:path');
+const { t, setLanguage } = require('../shared/i18n.cjs');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const handleIpc = (ch, fn) => ipcMain?.handle?.(ch, fn);
@@ -18,10 +19,10 @@ const fromApp = e => win && !win.isDestroyed() && e.sender === win.webContents;
 const fromIsland = e => /mascot\.html/.test(e.senderFrame?.url || '');
 const faceWanted = on => island()?.webContents.executeJavaScript(`window.__lumadockFaceForSettings = ${on ? 'true' : 'false'}`).catch(() => {});
 
-let theme = 'dark', appLang = 'en';
-const lang = () => appLang;
-const TABS = ['home', 'connect', 'apps', 'news', 'karakter', 'wardrobe', 'general', 'ai'];
+let theme = 'dark';
+const TABS = ['home', 'connect', 'apps', 'news', 'character', 'wardrobe', 'general', 'ai'];
 function open(tab) {
+  if (tab === 'karakter') tab = 'character';
   tab = TABS.includes(tab) ? tab : '';
   if (win && !win.isDestroyed()) {
     if (win.isMinimized()) win.restore();
@@ -52,11 +53,14 @@ function open(tab) {
   win.on('close', e => {
     if (!dirty || closing) return;
     e.preventDefault();
-    const isTr = lang() === 'tr', isEn = lang() === 'en';
-    const buttons = isTr ? ['Kaydet', 'Kaydetme', 'İptal'] : (isEn ? ['Save', 'Don\'t save', 'Cancel'] : ['Opslaan', 'Niet opslaan', 'Annuleren']);
-    const message = isTr ? 'Henüz kaydedilmemiş değişiklikleriniz var.' : (isEn ? 'You have changes that are not saved yet.' : 'Je hebt wijzigingen die nog niet zijn opgeslagen.');
-    const detail = isTr ? 'Kapatmadan önce kaydetmek istiyor musunuz?' : (isEn ? 'Save them before closing?' : 'Wil je ze opslaan voordat je sluit?');
-    dialog.showMessageBox(win, { type: 'question', title: 'LumaDock', noLink: true, defaultId: 0, cancelId: 2,
+    const buttons = [
+      t('settings.unsavedDialog.save'),
+      t('settings.unsavedDialog.dontSave'),
+      t('settings.unsavedDialog.cancel')
+    ];
+    const message = t('settings.unsavedDialog.message');
+    const detail = t('settings.unsavedDialog.detail');
+    dialog.showMessageBox(win, { type: 'question', title: t('common.appName'), noLink: true, defaultId: 0, cancelId: 2,
       buttons, message, detail })
       .then(async ({ response }) => {
         if (response === 2 || !win) return;
@@ -75,7 +79,7 @@ function open(tab) {
 // Ask the island: a list, or a click on one of its options (it answers with the fresh list).
 async function relay(req) {
   const isl = island();
-  if (!isl) return { ok: false, error: lang() === 'tr' ? 'LumaDock henüz başlatılıyor.' : (lang() === 'en' ? 'LumaDock is still starting up.' : 'LumaDock is nog aan het opstarten.') };
+  if (!isl) return { ok: false, error: t('settings.wait') };
   try { return { ok: true, ...(await isl.webContents.executeJavaScript(`window.__lumadockRemoteSettings(${JSON.stringify(req)})`)) }; }
   catch (error) { const msg = error instanceof Error ? error.message : String(error); return { ok: false, error: msg.slice(0, 200) }; }
 }
@@ -83,7 +87,7 @@ const clean = req => ({
   kind: ['click', 'apps', 'app', 'save', 'discard'].includes(req?.kind) ? req.kind : 'list',
   id: typeof req?.id === 'string' ? req.id.slice(0, 20) : undefined,
   on: req?.on === true,
-  which: req?.which === 'karakter' ? 'karakter' : 'general',
+  which: (req?.which === 'character' || req?.which === 'karakter') ? 'character' : 'general',
   index: Number.isInteger(req?.index) ? req.index : undefined,
   row: Number.isInteger(req?.row) ? req.row : undefined,
   values: Object.fromEntries(Object.entries(req?.values || {}).filter(([k, v]) => /^tc-in-[\w-]+$/.test(k) && typeof v === 'string').map(([k, v]) => [k, v.slice(0, 2000)]))
@@ -93,7 +97,10 @@ onIpc('settings-app:open', (e, tab) => { if (fromIsland(e)) open(tab); });
 handleIpc('settings-app:get', async (e, req) => {
   if (!fromApp(e)) return null;
   const r = await relay(clean(req));
-  if (r?.info) { dirty = !!r.info.dirty; appLang = ['en', 'tr'].includes(r.info.lang) ? r.info.lang : 'en'; }
+  if (r?.info) {
+    dirty = !!r.info.dirty;
+    if (r.info.lang === 'en' || r.info.lang === 'tr') setLanguage(r.info.lang, { persist: false });
+  }
   return r;
 });
 onIpc('settings-app:dirty', (e, on) => { if (fromApp(e)) dirty = !!on; }); // the AI choice is a draft in the app itself
@@ -108,7 +115,7 @@ onIpc('settings-app:frame', (e, url) => { // the app's own Robo, drawn by the is
 app?.on?.('lumadock-open-settings', () => open()); // tray menu, or the Start menu shortcut while LumaDock runs
 if (app && process.argv.includes('--settings')) app.whenReady().then(() => setTimeout(() => open(), 1200)); // started from the Start menu shortcut
 
-// Home and Verbindingen: your name, what your AI did, and which AIs LumaDock follows (ai-monitor-main.cjs).
+// Home and Connections: your name, what your AI did, and which AIs LumaDock follows (ai-monitor-main.cjs).
 const os = require('node:os'), fs = require('node:fs');
 const userName = () => { const n = String(os.userInfo().username || '').replace(/[._-]+/g, ' ').trim(); return n ? n[0].toUpperCase() + n.slice(1) : ''; };
 async function connections() {
@@ -126,7 +133,7 @@ async function connections() {
   ] };
 }
 async function connect(id, on) {
-  const h = app.lumadockMonitor?.handlers; if (!h) throw new Error(lang() === 'tr' ? 'LumaDock henüz başlatılıyor.' : (lang() === 'en' ? 'LumaDock is still starting up.' : 'LumaDock is nog aan het opstarten.'));
+  const h = app.lumadockMonitor?.handlers; if (!h) throw new Error(t('settings.wait'));
   if (id === 'webMonitor') await h['ai-monitor:set-chat-soon']({ enabled: !on });
   else if (['claudecode', 'codex', 'gemini', 'cursor'].includes(id)) await h[on ? 'ai-monitor:hooks-install' : 'ai-monitor:hooks-uninstall']({ agent: id === 'claudecode' ? 'claude' : id });
   else if (id === 'claude' || id === 'chatgpt') { const r = await h['ai-monitor:auto-set']({ provider: id, on }); if (on && !r.found) return { ...(await connections()), waiting: id }; }
@@ -361,7 +368,7 @@ onIpc('settings-app:open-url', (e, url) => { if (fromApp(e) && isAllowedExternal
 
 module.exports = { open, isAllowedExternalUrl, compareVersions };
 
-// tests: SETTINGS_DEBUG=<folder> opens the app on Home and Verbindingen and saves pictures (never touches Claude Code or Codex files)
+// tests: SETTINGS_DEBUG=<folder> opens the app on Home and Connections and saves pictures (never touches Claude Code or Codex files)
 if (process.env.SETTINGS_DEBUG) app.whenReady().then(() => setTimeout(async () => {
   const fs = require('node:fs'), wait = ms => new Promise(r => setTimeout(r, ms));
   const shot = async name => { const img = await win.webContents.capturePage(); fs.writeFileSync(path.join(process.env.SETTINGS_DEBUG, name + '.png'), img.toPNG()); console.log('SETTINGS shot', name); };
@@ -406,9 +413,9 @@ if (process.env.VIDEO_REC) app.whenReady().then(() => setTimeout(async () => {
   mark('connect'); await click('nav button[data-tab="connect"]'); await wait(1600);
   await click('[data-cx="chatgpt"]'); await wait(1300); await click('[data-cx="claude"]'); await wait(2200);
   mark('wardrobe'); await click('nav button[data-tab="wardrobe"]'); await wait(1400);
-  await click('.paint[data-value="roos"]'); await wait(1100); await click('.outfit[data-value="hat"]'); await wait(1100);
+  await click('.paint[data-value="rose"]'); await wait(1100); await click('.outfit[data-value="hat"]'); await wait(1100);
   await click('.outfit[data-value="shades"]'); await wait(1100); await click('.outfit[data-value="crown"]'); await wait(1100);
-  await click('.paint[data-value="lucht"]'); await wait(1300);
+  await click('.paint[data-value="ice"]'); await wait(1300);
   mark('theme'); await click('nav button[data-tab="home"]'); await wait(1200); await js(`setTheme('light'); 1`); await wait(2000); await js(`setTheme('dark'); 1`); await wait(1500);
   mark('end'); rec = false; await wait(400);
   fs.writeFileSync(path.join(out, 'app.json'), JSON.stringify({ marks, frames }));

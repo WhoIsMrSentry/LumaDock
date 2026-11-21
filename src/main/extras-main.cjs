@@ -12,21 +12,16 @@ const BLANK_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC
 
 function setup(electron) {
   const { app, ipcMain, shell, nativeImage, BrowserWindow } = electron;
+  const i18n = require('../shared/i18n.cjs');
   const file = name => path.join(app.getPath('userData'), name);
   const readJson = (name, fallback) => { try { return JSON.parse(fs.readFileSync(file(name), 'utf8')); } catch { return fallback; } };
   const writeJson = (name, value) => { try { fs.writeFileSync(file(name), JSON.stringify(value)); } catch {} };
-  const langOf = () => {
-    const cfg = readJson('extras.json', {});
-    if (cfg.lang === 'tr' || cfg.lang === 'en') return cfg.lang;
-    return app.getLocale?.()?.startsWith('tr') ? 'tr' : 'en';
-  };
-  const msg = (en, tr) => (langOf() === 'tr' ? tr : en);
   const trusted = event => {
     try { return path.resolve(fileURLToPath(event.sender.getURL())).toLowerCase() === path.join(__dirname, '..', '..', 'mascot.html').toLowerCase(); }
     catch { return false; }
   };
   const handle = (channel, fn) => ipcMain.handle(channel, async (event, payload) => {
-    if (!trusted(event)) return { ok: false, error: msg('Access denied.', 'Erişim reddedildi.') };
+    if (!trusted(event)) return { ok: false, error: i18n.t('common.accessDenied') };
     try { return { ok: true, ...(await fn(payload, event)) }; } catch (error) { return { ok: false, error: error.message }; }
   });
   const send = (channel, data) => { for (const win of BrowserWindow.getAllWindows()) if (!win.isDestroyed() && trusted({ sender: win.webContents })) win.webContents.send(channel, data); };
@@ -49,7 +44,7 @@ function setup(electron) {
   });
   handle('extras:tray-remove', async payload => { tray = tray.filter(p => p !== payload?.path); writeJson('tray.json', tray); return trayView(); });
   handle('extras:tray-open', async payload => {
-    if (!tray.includes(payload?.path)) throw new Error(msg('This file is not in your tray.', 'Bu dosya çekmecede değil.'));
+    if (!tray.includes(payload?.path)) throw new Error(i18n.t('extras.fileNotInTray'));
     const problem = await shell.openPath(payload.path); if (problem) throw new Error(problem); return {};
   });
   ipcMain.on('extras:tray-drag', (event, p) => {
@@ -63,11 +58,18 @@ function setup(electron) {
     if (payload && typeof payload === 'object') {
       if (typeof payload.calendarUrl === 'string') {
         const url = payload.calendarUrl.trim().replace(/^webcal:/i, 'https:');
-        if (url && !/^https:\/\//i.test(url)) throw new Error(msg('Paste an https or webcal calendar URL.', 'Lütfen https veya webcal takvim bağlantısı yapıştırın.'));
+        if (url && !/^https:\/\//i.test(url)) throw new Error(i18n.t('extras.invalidCalendarUrl'));
         config.calendarUrl = url; calendarCache = null;
       }
       if (typeof payload.city === 'string') { config.city = payload.city.trim().slice(0, 80); weatherCache = null; }
-      if (payload.lang === 'tr' || payload.lang === 'en') { config.lang = payload.lang; weatherCache = null; }
+      if (payload.lang === 'tr' || payload.lang === 'en') {
+        config.lang = payload.lang;
+        weatherCache = null;
+        i18n.setLanguage(payload.lang, { persist: false });
+        for (const win of BrowserWindow.getAllWindows()) {
+          if (!win.isDestroyed()) win.webContents.send('i18n:lang-changed', payload.lang);
+        }
+      }
       writeJson('extras.json', config);
     }
     return { config };
@@ -79,7 +81,7 @@ function setup(electron) {
     if (!config.calendarUrl) return { next: null };
     if (!calendarCache || Date.now() - calendarCache.at > 10 * 60000) {
       const res = await fetch(config.calendarUrl, { signal: AbortSignal.timeout(10000) });
-      if (!res.ok) throw new Error(msg(`Calendar unreachable (${res.status}).`, `Takvime ulaşılamadı (${res.status}).`));
+      if (!res.ok) throw new Error(i18n.t('extras.calendarUnreachable', { status: res.status }));
       calendarCache = { at: Date.now(), events: parseIcs(await res.text()) };
     }
     const now = Date.now();
@@ -95,7 +97,7 @@ function setup(electron) {
     const lang = config.lang === 'tr' ? 'tr' : 'en';
     if (!weatherCache || Date.now() - weatherCache.at > 15 * 60000 || weatherCache.lang !== lang) {
       const geo = await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&language=${lang}&name=` + encodeURIComponent(config.city), { signal: AbortSignal.timeout(8000) })).json();
-      const place = geo?.results?.[0]; if (!place) throw new Error(msg('City not found.', 'Şehir bulunamadı.'));
+      const place = geo?.results?.[0]; if (!place) throw new Error(i18n.t('extras.cityNotFound'));
       const data = await (await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,weather_code,is_day`, { signal: AbortSignal.timeout(8000) })).json();
       weatherCache = { at: Date.now(), lang, weather: { place: place.name, temp: Math.round(data.current.temperature_2m), code: data.current.weather_code, day: data.current.is_day === 1 } };
     }
@@ -244,7 +246,7 @@ Get-PnpDevice -Class Bluetooth -Status OK -ErrorAction SilentlyContinue | ForEac
     const target = fs.realpathSync(String(payload?.path || ''));
     const rel = path.relative(dir, target);
     if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
-      throw new Error(msg('File is outside Downloads.', 'Dosya İndirilenler klasörü dışında.'));
+      throw new Error(i18n.t('extras.fileOutsideDownloads'));
     }
     const err = await shell.openPath(target);
     if (err) throw new Error(err);
@@ -263,7 +265,7 @@ Get-PnpDevice -Class Bluetooth -Status OK -ErrorAction SilentlyContinue | ForEac
   }
   handle('extras:clips-get', async () => clipsView());
   handle('extras:clips-copy', async payload => {
-    const text = clips[Number(payload?.index)]; if (typeof text !== 'string') throw new Error(msg('Not found.', 'Bulunamadı.'));
+    const text = clips[Number(payload?.index)]; if (typeof text !== 'string') throw new Error(i18n.t('common.notFound'));
     electron.clipboard.writeText(text); lastClip = text; clips = [text, ...clips.filter(c => c !== text)]; return clipsView();
   });
   handle('extras:clips-clear', async () => { clips = []; return clipsView(); });

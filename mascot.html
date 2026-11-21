@@ -38,9 +38,8 @@ canvas {
 /* =========================================================
    PROJECT QUERY INPUT
 
-   Dit is expres een echte HTML-input.
-   Daardoor kan de gebruiker normaal typen, selecteren,
-   backspace gebruiken, Ctrl+A, enz.
+   Intentionally uses a native HTML input so the user can
+   type, select, backspace, Ctrl+A, etc. normally.
 ========================================================= */
 
 #project-query {
@@ -102,13 +101,17 @@ canvas {
   type="text"
   autocomplete="off"
   spellcheck="false"
-  placeholder="Wat wil je vinden in dit project?"
+  placeholder="What do you want to find in this project?"
+  data-i18n-placeholder="project.queryPlaceholder"
 >
 
 
+<script src="./src/ui/i18n-ui.js"></script>
 <script>
 
 'use strict';
+
+const __t = (key, params) => window.__lumadockT?.(key, params) ?? key;
 
 
 const canvas =
@@ -1574,8 +1577,8 @@ function drawGhost(
 
 
   /*
-    Kleur van het lijfje: te kiezen in
-    Instellingen (lumadock-fun.js).
+    Chassis finish color: configured in
+    Settings (lumadock-fun.js).
   */
 
   const look =
@@ -1604,9 +1607,9 @@ function drawGhost(
 
 
   /*
-    De ogen zijn het stoplicht (ai-monitor-ui.js):
-    oranje knippert = bezig, oranje = vraag,
-    groen = klaar, rood = fout.
+    Eyes act as the traffic light (ai-monitor-ui.js):
+    blinking amber = busy, amber = question,
+    green = ready, red = error.
   */
 
   const status =
@@ -1694,7 +1697,7 @@ function drawGhost(
   );
 
 
-  // "Wolk" look: a bright white, soft rounded blob with dark eyes (the eyes take the traffic-light colour),
+  // "Cloud" look: a bright white, soft rounded blob with dark eyes (the eyes take the traffic-light colour),
   // and a small status dot. Pops on the black island.
   if (look.style === 'blob') {
     drawBlob(look, status, eye, eyeAlpha, fx);
@@ -2787,7 +2790,7 @@ function drawHome(
 
 
   text(
-    'Waar kan ik mee helpen?',
+    __t('home.whereCanIHelp'),
     textX,
     content.y +
     48,
@@ -2821,7 +2824,7 @@ function drawHome(
     3,
     132,
     '◷',
-    'Vandaag',
+    __t('home.today'),
     'todayApp'
   );
 
@@ -2832,7 +2835,7 @@ function drawHome(
     45,
     132,
     '✦',
-    'Assistent',
+    __t('home.assistant'),
     'assistantApp'
   );
 
@@ -2913,7 +2916,7 @@ function drawApps(
     52,
     width,
     '◷',
-    'Vandaag',
+    __t('home.today'),
     'todayApp'
   );
 
@@ -2924,7 +2927,7 @@ function drawApps(
     94,
     width,
     '✦',
-    'Assistent',
+    __t('home.assistant'),
     'assistantApp'
   );
 
@@ -2977,12 +2980,12 @@ async function loadProject() {
     ) {
       projectError =
         projectState.error ||
-        'Project kon niet geladen worden.';
+        __t('project.errors.loadFailed');
     }
 
   } catch {
     projectError =
-      'Project kon niet geladen worden.';
+      __t('project.errors.loadFailed');
   }
 
 
@@ -3033,12 +3036,12 @@ async function chooseProject() {
     ) {
       projectError =
         result?.error ||
-        'Project kon niet geopend worden.';
+        __t('project.errors.folderOpenFailed');
     }
 
   } catch {
     projectError =
-      'Project kon niet geopend worden.';
+      __t('project.errors.folderOpenFailed');
   }
 
 
@@ -3071,12 +3074,12 @@ async function rescanProject() {
     ) {
       projectError =
         result?.error ||
-        'Project kon niet opnieuw gescand worden.';
+        __t('project.errors.rescanFailed');
     }
 
   } catch {
     projectError =
-      'Project kon niet opnieuw gescand worden.';
+      __t('project.errors.rescanFailed');
   }
 
 
@@ -3099,7 +3102,7 @@ async function performProjectSearch() {
     !query
   ) {
     projectSearchError =
-      'Typ eerst wat je wilt zoeken.';
+      __t('project.errors.typeSearchFirst');
 
     return;
   }
@@ -3138,7 +3141,7 @@ async function performProjectSearch() {
     ) {
       projectSearchError =
         result?.error ||
-        'Zoeken mislukt.';
+        __t('project.errors.searchFailed');
 
     } else {
       projectSearchResults =
@@ -3155,13 +3158,13 @@ async function performProjectSearch() {
         0
       ) {
         projectSearchError =
-          'Ik vond hier nog geen relevante code voor.';
+          __t('project.errors.noRelevantResults');
       }
     }
 
   } catch {
     projectSearchError =
-      'Zoeken in het project is mislukt.';
+      __t('project.errors.searchError');
   }
 
 
@@ -3219,7 +3222,7 @@ async function openProjectResult(
     ) {
       projectSearchError =
         read?.error ||
-        'Bestand kon niet gelezen worden.';
+        __t('project.errors.fileReadError');
 
     } else {
       projectReadData =
@@ -3228,7 +3231,7 @@ async function openProjectResult(
 
   } catch {
     projectSearchError =
-      'Bestand kon niet gelezen worden.';
+      __t('project.errors.fileReadError');
   }
 
 
@@ -3348,7 +3351,7 @@ function drawProject(
       content.y +
       72,
       125,
-      'Andere map',
+      __t('project.otherFolderBtn'),
       'projectChoose',
       true
     );
@@ -3363,7 +3366,7 @@ function drawProject(
       ?.selected
   ) {
     text(
-      'Nog geen project gekozen',
+      __t('project.noFolderChosen'),
       startX,
       content.y +
       50,
@@ -3374,7 +3377,7 @@ function drawProject(
 
 
     text(
-      'LumaDock leest alleen de map die jij kiest.',
+      __t('project.chooseHint'),
       startX,
       content.y +
       70,
@@ -3388,7 +3391,7 @@ function drawProject(
       content.y +
       92,
       135,
-      'Kies projectmap',
+      __t('project.chooseFolderBtn'),
       'projectChoose',
       true
     );
@@ -3404,7 +3407,7 @@ function drawProject(
     text(
       projectSelectedResult
         ?.file ||
-      'Bestand openen...',
+      __t('project.openingFile'),
 
       startX,
       content.y +
@@ -3416,7 +3419,7 @@ function drawProject(
 
 
     text(
-      'Echte lokale code ophalen...',
+      __t('project.loadingLocalCode'),
       startX,
       content.y +
       70,
@@ -3458,7 +3461,7 @@ function drawProject(
 
 
   text(
-    `${projectState.technology || 'Project'} · ${projectState.textFileCount || 0} leesbare bestanden`,
+    __t('project.readableFiles', { tech: projectState.technology || 'Project', count: projectState.textFileCount || 0 }),
     startX,
     content.y +
     60,
@@ -3505,7 +3508,7 @@ function drawProject(
     content.y +
     74,
     searchButtonWidth,
-    'Zoeken',
+    __t('project.searchBtn'),
     'projectSearch',
     true
   );
@@ -3515,7 +3518,7 @@ function drawProject(
     projectSearchLoading
   ) {
     text(
-      'Code doorzoeken...',
+      __t('project.searchingCode'),
       startX,
       content.y +
       127,
@@ -3554,7 +3557,7 @@ function drawProject(
     0
   ) {
     text(
-      'Bijvoorbeeld:',
+      __t('project.examples'),
       startX,
       content.y +
       128,
@@ -3564,7 +3567,7 @@ function drawProject(
 
 
     text(
-      '"waar zit de Spotify wave?"',
+      __t('project.exampleWave'),
       startX,
       content.y +
       145,
@@ -3574,7 +3577,7 @@ function drawProject(
 
 
     text(
-      '"welk bestand regelt de instellingen?"',
+      __t('project.exampleSettings'),
       startX,
       content.y +
       162,
@@ -3588,7 +3591,7 @@ function drawProject(
 
 
   text(
-    `${projectSearchResults.length} relevante resultaten gevonden`,
+    __t('project.resultsCount', { count: projectSearchResults.length }),
     startX,
     content.y +
     126,
@@ -3701,7 +3704,7 @@ function drawProjectResultRow(
     match
   ) {
     text(
-      `regel ${match.line}`,
+      __t('project.lineAt', { line: match.line }),
       x +
       width -
       10,
@@ -3763,7 +3766,7 @@ function drawProjectCode(
 
 
   text(
-    `regels ${data.startLine}-${data.endLine} van ${data.totalLines}`,
+    __t('project.linesRange', { start: data.startLine, end: data.endLine, total: data.totalLines }),
     startX,
     content.y +
     62,
@@ -3912,7 +3915,7 @@ function drawProjectCode(
 
 
   text(
-    'Dit is rechtstreeks uit je lokale project gelezen.',
+    __t('project.readLocallyNote'),
     startX,
     codeY +
     codeHeight +
@@ -3941,7 +3944,7 @@ function drawSettings(
 
 
   text(
-    'Instellingen',
+    __t('common.settings'),
     content.x +
     95,
     content.y +
@@ -3953,7 +3956,7 @@ function drawSettings(
 
 
   text(
-    'Geluidseffecten',
+    __t('fun.soundEffects'),
     content.x +
     95,
     content.y +
@@ -3966,9 +3969,9 @@ function drawSettings(
   text(
     soundEnabled
       ?
-        'Aan'
+        __t('common.on')
       :
-        'Uit',
+        __t('common.off'),
 
     content.x +
     400,
@@ -4150,7 +4153,7 @@ window.lumadock?.onMediaStateChanged?.(data => {
   if (data.active && (data.cleanTitle || data.title)) {
     spotifyConnected = true;
     const trackName = data.cleanTitle || data.title;
-    const trackArtist = data.cleanArtist || data.artist || 'Müzik';
+    const trackArtist = data.cleanArtist || data.artist || __t('spotify.fallbackArtist');
     const incomingPos = Number(data.position || 0);
     const sameTrack = Boolean(spotifyState?.track?.name && trackName && spotifyState.track.name === trackName);
     let finalPos = incomingPos;
@@ -4206,7 +4209,7 @@ function drawSpotify(
   text(
     spotifyState.track
       ?.name ||
-      ((localStorage.getItem('lumadock:prefs') || '').includes('"lang":"tr"') ? 'Müzik çalmıyor' : 'No music playing'),
+      __t('spotify.nothingPlayingTitle'),
 
     content.x +
     110,
@@ -4221,7 +4224,7 @@ function drawSpotify(
   text(
     spotifyState.track
       ?.artist ||
-      ((localStorage.getItem('lumadock:prefs') || '').includes('"lang":"tr"') ? 'Spotify\'da müzik başlatın' : 'Start music in Spotify'),
+      __t('spotify.nothingPlayingPrompt'),
 
     content.x +
     110,
@@ -4629,8 +4632,8 @@ function updateHover(
     'expanded'
   ) {
     /*
-      Elk scherm klapt in als je er niet mee bezig bent.
-      Niet terwijl je typt: dan blijft hij open.
+      Every screen collapses when you are idle on it.
+      Not while you are typing: it stays open then.
     */
 
     if (
@@ -4694,9 +4697,9 @@ function isTyping() {
 
 function collapseIdle() {
   /*
-    Zelfde als Escape: terug naar home en klein.
-    island-window-ui.js zet het scherm terug
-    als je de island weer aanklikt.
+    Same as Escape: back to home and compact.
+    island-window-ui.js restores the screen
+    when you click the island again.
   */
 
   if (
@@ -4907,8 +4910,8 @@ function drawExpanded(
   ) {
     drawPrompt(
       content,
-      'Assistent',
-      'AI-interface komt hier.'
+      __t('home.assistant'),
+      __t('home.assistantPlaceholder')
     );
   }
 
@@ -5598,7 +5601,6 @@ try {
 } catch {}
 
 </script>
-<script src="./src/ui/i18n-ui.js"></script>
 <script src="./src/ui/project-mode-ui.js"></script>
 <script src="./src/ui/pages-ui.js"></script>
 <script src="./src/ui/icons-ui.js"></script>

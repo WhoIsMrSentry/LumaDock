@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const { fileURLToPath } = require('node:url');
 const { PROVIDERS, observe, Session } = require('./ai-monitor-model.cjs');
 const { createHub } = require('./claude-code-hooks.cjs');
+const { t, getLanguage, onLanguageChange } = require('../shared/i18n.cjs');
 
 class NativeWorker {
   constructor(options = {}) { this.spawn = options.spawn || spawn; this.platform = options.platform || process.platform; this.queue = Promise.resolve(); this.serial = 0; }
@@ -14,9 +15,9 @@ class NativeWorker {
     this.queue = job.catch(() => {}); return job;
   }
   start() {
-    if (this.closed) throw new Error('LumaDock sluit af.');
+    if (this.closed) throw new Error(t('monitor.errors.workerClosed'));
     if (this.child) return;
-    if (this.platform !== 'win32') throw new Error('Deze koppeling gebruikt Windows.');
+    if (this.platform !== 'win32') throw new Error(t('monitor.errors.workerPlatform'));
     const executable = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
     const child = this.spawn(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Mta', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, '..', 'native', 'windows-ai-access.ps1')],
       { windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -24,7 +25,7 @@ class NativeWorker {
     child.stdout.on('data', data => {
       if (this.child !== child) return;
       this.buffer += this.decoder.write(data);
-      if (this.buffer.length > 2000000) { this.fail(new Error('Windows gaf te veel vensterinformatie terug.'), child); return; }
+      if (this.buffer.length > 2000000) { this.fail(new Error(t('monitor.errors.workerTooMuchData')), child); return; }
       let end;
       while ((end = this.buffer.indexOf('\n')) >= 0) {
         const line = this.buffer.slice(0, end).replace(/^\uFEFF/, '').trim(); this.buffer = this.buffer.slice(end + 1);
@@ -34,24 +35,24 @@ class NativeWorker {
           if (this.pending?.id === value.id) {
             const pending = this.pending; this.pending = null; clearTimeout(pending.timer); pending.resolve(value.result);
           }
-        } catch { this.fail(new Error('Windows gaf onleesbare informatie terug.'), child); return; }
+        } catch { this.fail(new Error(t('monitor.errors.workerBadData')), child); return; }
       }
     });
     child.stderr.on('data', data => { if (this.child === child) this.stderr = (this.stderr + data.toString()).slice(-1200); });
-    child.on('error', () => this.fail(new Error('De Windows-koppeling kon niet starten. Controleer of PowerShell beschikbaar is.'), child));
+    child.on('error', () => this.fail(new Error(t('monitor.errors.workerStartFailed')), child));
     child.on('exit', () => {
-      if (this.child === child && this.stderr) console.warn('[LumaDock monitor] Windows-startfout:', this.stderr);
-      this.fail(new Error('De Windows-koppeling is gestopt. Bekijk [LumaDock monitor] in de terminal voor de oorzaak.'), child);
+      if (this.child === child && this.stderr) console.warn('[LumaDock monitor] Windows startup error:', this.stderr);
+      this.fail(new Error(t('monitor.errors.workerStopped')), child);
     });
-    child.stdin.on('error', () => this.fail(new Error('De Windows-verbinding werd onderbroken.'), child));
+    child.stdin.on('error', () => this.fail(new Error(t('monitor.errors.workerPipeBroken')), child));
   }
   async perform(method, args) {
     this.start(); const id = ++this.serial;
     return new Promise((resolve, reject) => {
       const child = this.child;
       const timer = setTimeout(() => this.fail(new Error(method === 'reply'
-        ? 'Verzending niet bevestigd. Controleer het gesprek voordat je opnieuw verstuurt.'
-        : 'Het venster reageert niet op Windows. Open het gesprek en probeer opnieuw.'), child), 16000);
+        ? t('monitor.errors.workerTimeoutReply')
+        : t('monitor.errors.workerTimeoutRead')), child), 16000);
       this.pending = { id, resolve, reject, timer };
       child.stdin.write(JSON.stringify({ id, method, ...args }) + '\n', error => { if (error) this.fail(error, child); });
     });
@@ -62,7 +63,7 @@ class NativeWorker {
     if (this.pending) { clearTimeout(this.pending.timer); this.pending.reject(error); this.pending = null; }
     try { child.kill(); } catch {}
   }
-  close() { this.closed = true; if (this.child) this.fail(new Error('LumaDock sluit af.'), this.child); }
+  close() { this.closed = true; if (this.child) this.fail(new Error(t('monitor.errors.workerClosed')), this.child); }
 }
 
 // Bring the terminal (or VS Code) that runs Claude Code to the front: walk up from a process that
@@ -141,7 +142,7 @@ function setup(electron, options = {}) {
     userData: app.getPath('userData'), onChange: () => emit(), onFinish: session => notifyHook(session), resolvePid: windowPidOf });
   const view = () => ({ ok: true, available: process.platform === 'win32' || Boolean(options.worker), chatSoon,
     providers: [...Object.keys(PROVIDERS).map(provider => (!chatSoon && sessions.get(provider)?.public()) ||
-      { provider, name: PROVIDERS[provider].name, state: 'disconnected', connected: false, soon: chatSoon, detail: chatSoon ? 'Binnenkort' : 'Verbind jouw gesprek', question: '', elapsed: 0, canReply: false }),
+      { provider, name: PROVIDERS[provider].name, state: 'disconnected', connected: false, soon: chatSoon, detail: t(chatSoon ? 'monitor.soon' : 'monitor.connectChat'), question: '', elapsed: 0, canReply: false }),
     ...(hub ? [hub.view('claude'), hub.view('codex'), hub.view('gemini'), hub.view('cursor')] : [])],
     // the last jobs across coding agents, so a quiet page still shows what they did for you
     history: (hub?.history?.() || []).slice(0, 12).map(h => ({ at: h.at, agent: h.agent, project: h.project, prompt: String(h.prompt || '').slice(0, 300), result: h.result, files: h.files, seconds: h.seconds, tokens: h.tokens, costUsd: h.costUsd })) });
@@ -150,6 +151,7 @@ function setup(electron, options = {}) {
       if (!win.isDestroyed() && trusted({ sender: win.webContents })) win.webContents.send('ai-monitor:state', view());
     }
   };
+  onLanguageChange(() => emit());
   function save() {
     try {
       const entries = [...sessions.values()].map(s => ({ provider: s.provider, target: s.target, contextKey: s.contextKey }));
@@ -170,18 +172,25 @@ function setup(electron, options = {}) {
     notifications.add(key); if (notifications.size > 150) notifications.delete(notifications.values().next().value);
     if (!Notification?.isSupported()) return;
     const question = session.notification === 'question';
-    const notification = new Notification({ title: PROVIDERS[session.provider].name + (question ? ' heeft een vraag' : ' is klaar'),
-      body: question ? 'Klik op de island om de vraag te lezen en te antwoorden.' : 'Het antwoord staat klaar. Klik om de status te bekijken.', silent: false });
+    const notification = new Notification({
+      title: t(question ? 'notifications.providerQuestion' : 'notifications.providerDone', { name: PROVIDERS[session.provider].name }),
+      body: t(question ? 'notifications.clickToReadQuestion' : 'notifications.clickToViewStatus'),
+      silent: false
+    });
     liveNotifications.add(notification);
     notification.on('close', () => liveNotifications.delete(notification));
     notification.on('failed', () => liveNotifications.delete(notification));
     notification.on('click', () => { bring(session.provider); liveNotifications.delete(notification); });
     notification.show();
   }
-  let notifyEnabled = true; // Settings → Windows-meldingen
+  let notifyEnabled = true; // Settings → Windows Notifications
   function notifyHook(session) {
     if (!notifyEnabled || !Notification?.isSupported()) return;
-    const titles = { question: session.permission ? 'Claude Code wil toestemming' : 'Claude Code heeft een vraag', done: 'Claude Code is klaar', error: 'Claude Code: fout' };
+    const titles = {
+      question: t(session.permission ? 'notifications.hookPermTitle' : 'notifications.hookQuestionTitle'),
+      done: t('notifications.hookDoneTitle'),
+      error: t('notifications.hookErrorTitle')
+    };
     if (!titles[session.state]) return;
     const notification = new Notification({ title: titles[session.state], body: (session.project ? session.project + ': ' : '') + (session.question || session.detail).slice(0, 180), silent: false });
     liveNotifications.add(notification);
@@ -218,7 +227,7 @@ function setup(electron, options = {}) {
     try { return await scanPromise; } finally { scanPromise = null; }
   }
   // ---- Claude and ChatGPT without choosing a window: LumaDock finds the conversation by itself ----
-  // Turned on per AI in LumaDock → Verbindingen. Every few seconds, while it is on and not connected,
+  // Turned on per AI in LumaDock → Connections. Every few seconds, while it is on and not connected,
   // the open windows are checked and the first one that really shows that conversation is followed.
   const autoPath = () => path.join(app.getPath('userData'), 'ai-monitor-auto.json');
   let auto = { claude: false, chatgpt: false, chatSoon: true }, autoBusy = false;
@@ -260,7 +269,7 @@ function setup(electron, options = {}) {
   }
 
   function providerOf(payload) {
-    if (!payload || !Object.hasOwn(PROVIDERS, payload.provider)) throw new Error('ChatGPT veya Claude seçin.');
+    if (!payload || !Object.hasOwn(PROVIDERS, payload.provider)) throw new Error(t('monitor.errors.selectChatGptOrClaude'));
     return payload.provider;
   }
   const HOOK_OPS = {
@@ -284,10 +293,10 @@ function setup(electron, options = {}) {
       return view();
     },
     'ai-monitor:connect': async payload => {
-      if (chatSoon) throw new Error('Browser AI monitoring is turned off. Enable it in Settings → Connections.');
+      if (chatSoon) throw new Error(t('monitor.errors.monitoringDisabled'));
       const provider = providerOf(payload), target = found.get(payload.targetId);
-      if (!target) throw new Error('Refresh the window list and choose a window.');
-      if (answering.has(provider)) throw new Error('Please wait until the reply check finishes.');
+      if (!target) throw new Error(t('monitor.errors.refreshAndChooseWindow'));
+      if (answering.has(provider)) throw new Error(t('monitor.errors.waitReplyCheck'));
       const result = await worker.request('read', { target }), obs = observe(result, provider);
       if (!obs.valid) return { ok: false, error: obs.detail, login: obs.login };
       const session = new Session(provider, target); session.accept(obs); sessions.set(provider, session); notifications.clear(); save(); emit();
@@ -295,82 +304,83 @@ function setup(electron, options = {}) {
     },
     // agent: 'claude', 'codex', 'gemini', or 'cursor'
     'ai-monitor:hooks-install': async payload => {
-      if (!hub) throw new Error('Not available.');
+      if (!hub) throw new Error(t('monitor.errors.notAvailable'));
       const op = HOOK_OPS[payload?.agent || 'claude']?.[0] || 'install';
       hub[op]();
       return view();
     },
     'ai-monitor:hooks-uninstall': async payload => {
-      if (!hub) throw new Error('Not available.');
+      if (!hub) throw new Error(t('monitor.errors.notAvailable'));
       const op = HOOK_OPS[payload?.agent || 'claude']?.[1] || 'uninstall';
       hub[op]();
       return view();
     },
     'ai-monitor:hooks-answer': async payload => {
-      if (!hub) throw new Error('Not available.');
+      if (!hub) throw new Error(t('monitor.errors.notAvailable'));
       hub.answerQuestions(String(payload?.sessionId || ''), payload?.answers || {}); return view();
     },
     'ai-monitor:hooks-plan': async payload => {
-      if (!hub) throw new Error('Not available.');
+      if (!hub) throw new Error(t('monitor.errors.notAvailable'));
       hub.decidePlan(String(payload?.sessionId || ''), Boolean(payload?.approve), payload?.feedback); return view();
     },
     'ai-monitor:hooks-jump': async payload => {
       const pid = hub?.pidOf(String(payload?.sessionId || ''));
-      if (!pid) throw new Error('LumaDock does not know which window belongs to this session yet.');
+      if (!pid) throw new Error(t('monitor.errors.noWindowForSession'));
       const focused = await focusWindowOf(pid);
-      if (focused === 'blocked') throw new Error('Windows blocked window activation. Click the terminal in your taskbar.');
-      if (focused !== true) { hub?.forgetWindow?.(String(payload?.sessionId || '')); throw new Error('Terminal window not found. Is it still open?'); }
+      if (focused === 'blocked') throw new Error(t('monitor.errors.activationBlocked'));
+      if (focused !== true) { hub?.forgetWindow?.(String(payload?.sessionId || '')); throw new Error(t('monitor.errors.terminalNotFound')); }
       return view();
     },
     'ai-monitor:set-notify':async payload => { notifyEnabled = Boolean(payload?.enabled); return view(); },
     // Test mode (Settings → General → Testing): fake Claude Code events, so you can see every state.
     'ai-monitor:hooks-test': async payload => {
-      if (!hub) throw new Error('Not available.');
-      const tr = payload?.command === 'tr';
+      if (!hub) throw new Error(t('monitor.errors.notAvailable'));
+      const demoLang = payload?.command === 'tr' ? 'tr' : getLanguage();
+      const mt = k => t(k, null, demoLang);
       const id = 'lumadock-test', base = { session_id: id, cwd: 'C:\\Test\\webshop' };
       const send = events => events.forEach(e => hub.apply({ ...base, ...e }));
       const tool = (name, input) => [{ hook_event_name: 'PreToolUse', tool_name: name, tool_input: input }, { hook_event_name: 'PostToolUse', tool_name: name }];
       const scenes = {
-        busy: () => send([{ hook_event_name: 'UserPromptSubmit', prompt: tr ? 'Ana sayfadaki butonu mavi yap' : 'Make the button on the homepage blue' }, ...tool('Read', { file_path: 'C:\\Test\\index.html' }),
+        busy: () => send([{ hook_event_name: 'UserPromptSubmit', prompt: mt('monitor.demo.busyPrompt') }, ...tool('Read', { file_path: 'C:\\Test\\index.html' }),
           { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: 'C:\\Test\\button.css' } }]),
-        question: () => send([{ hook_event_name: 'UserPromptSubmit', prompt: tr ? 'Butonu daha şık hale getir' : 'Make the button look nicer' }, ...tool('Read', { file_path: 'C:\\Test\\button.css' }),
-          { hook_event_name: 'Stop', last_assistant_message: tr ? 'Butonu mavi veya yeşil yapabilirim. Hangi rengi istersiniz?' : 'I can make the button blue or green. Which colour do you want?' }]),
-        done: () => send([{ hook_event_name: 'UserPromptSubmit', prompt: tr ? 'Ana sayfadaki butonu mavi yap' : 'Make the button on the homepage blue' }, ...tool('Read', { file_path: 'C:\\Test\\index.html' }),
+        question: () => send([{ hook_event_name: 'UserPromptSubmit', prompt: mt('monitor.demo.questionPrompt') }, ...tool('Read', { file_path: 'C:\\Test\\button.css' }),
+          { hook_event_name: 'Stop', last_assistant_message: mt('monitor.demo.questionAsk') }]),
+        done: () => send([{ hook_event_name: 'UserPromptSubmit', prompt: mt('monitor.demo.busyPrompt') }, ...tool('Read', { file_path: 'C:\\Test\\index.html' }),
           ...tool('Edit', { file_path: 'C:\\Test\\button.css' }), ...tool('Bash', { command: 'npm test' }),
-          { hook_event_name: 'Stop', last_assistant_message: tr ? 'Tamamlandı! Buton artık mavi ve üzerine gelince parlıyor. Tüm testler geçti.' : 'Done! The button is blue now and lights up when you hover it. All tests pass.' }]),
-        error: () => send([{ hook_event_name: 'UserPromptSubmit', prompt: tr ? 'Web sitesini yayına al' : 'Put the website online' }, { hook_event_name: 'StopFailure', error_type: 'rate_limit' }]),
+          { hook_event_name: 'Stop', last_assistant_message: mt('monitor.demo.doneAnswer') }]),
+        error: () => send([{ hook_event_name: 'UserPromptSubmit', prompt: mt('monitor.demo.errorPrompt') }, { hook_event_name: 'StopFailure', error_type: 'rate_limit' }]),
         clear: () => send([{ hook_event_name: 'SessionEnd' }]),
         // richer demo scenes (for videos): real-looking code, terminal output and a permission request
-        'demo-busy': () => send([{ hook_event_name: 'UserPromptSubmit', prompt: tr ? 'KDV hesaplamasını düzelt' : 'Fix the VAT calculation' }, ...tool('Read', { file_path: 'C:\\Test\\src\\checkout.ts' }),
+        'demo-busy': () => send([{ hook_event_name: 'UserPromptSubmit', prompt: mt('monitor.demo.demoVatPrompt') }, ...tool('Read', { file_path: 'C:\\Test\\src\\checkout.ts' }),
           { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: 'C:\\Test\\src\\checkout.ts', old_string: 'const VAT = 0.19\nreturn sum * (1 + VAT)', new_string: 'const VAT = 0.21\nreturn Math.round(sum * (1 + VAT) * 100) / 100' } }]),
         'demo-done': () => send([{ hook_event_name: 'PostToolUse', tool_name: 'Edit' }, { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'npm test' } },
           { hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_response: { stdout: '> webshop@1.0.0 test\nPASS  tests/checkout.test.ts\nTests:  48 passed, 48 total' } },
-          { hook_event_name: 'Stop', last_assistant_message: tr ? 'Tamamlandı! KDV hesaplaması düzeltildi ve yuvarlama doğrulandı. 48 testin tamamı geçti.' : 'Done! VAT is now 21% and rounds correctly. All 48 tests pass.' }]),
+          { hook_event_name: 'Stop', last_assistant_message: mt('monitor.demo.demoVatAnswer') }]),
         // step by step (videos / testing): a prompt, one edit per call, and running into the limit
-        prompt: () => send([{ hook_event_name: 'UserPromptSubmit', prompt: String(payload?.command || 'Fix the last bug').slice(0, 200) }]),
+        prompt: () => send([{ hook_event_name: 'UserPromptSubmit', prompt: String(payload?.command || mt('monitor.demo.defaultFixPrompt')).slice(0, 200) }]),
         edit: () => send([{ hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join('C:\\Test\\webshop\\src', path.basename(String(payload?.command || 'app.ts'))), old_string: 'const total = 0', new_string: 'const total = sum(items)' } }]),
         read: () => send(tool('Read', { file_path: path.join('C:\\Test\\webshop\\src', path.basename(String(payload?.command || 'app.ts'))) })),
         bash: () => send([{ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: String(payload?.command || 'npm test').slice(0, 200) } }]),
-        stop: () => send([{ hook_event_name: 'PostToolUse', tool_name: 'Bash' }, { hook_event_name: 'Stop', last_assistant_message: String(payload?.command || 'Done!').slice(0, 300) }]),
+        stop: () => send([{ hook_event_name: 'PostToolUse', tool_name: 'Bash' }, { hook_event_name: 'Stop', last_assistant_message: String(payload?.command || t('status.done', null, demoLang) + '!').slice(0, 300) }]),
         limit: () => send([{ hook_event_name: 'StopFailure', error_type: 'rate_limit' }]),
         usage: () => hub.applyUsage({ five_hour: { used: Number(payload?.command) || 0, resets_at: Math.floor(Date.now() / 1000) + 3600 } }), // command = percent
         'demo-perm': () => { const res = { writeHead() { return this; }, end() {}, on() {} }; hub.apply({ ...base, hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: String(payload?.command || 'npm install stripe').slice(0, 200) } }, res); }, // command: pick what the demo asks
         // a multiple-choice question and a plan to approve, answered from the island (videos / testing)
-        'demo-ask': () => { const res = { writeHead() { return this; }, end() {}, on() {} }; hub.apply({ ...base, hook_event_name: 'PermissionRequest', tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'Which colour should the button be?', header: 'Colour',
-          multiSelect: false, options: [{ label: 'Blue', description: 'Calm, matches the logo' }, { label: 'Green', description: 'Stands out more' }, { label: 'Orange', description: 'Warm and friendly' }] }] } }, res); },
-        'demo-plan': () => { const res = { writeHead() { return this; }, end() {}, on() {} }; hub.apply({ ...base, hook_event_name: 'PermissionRequest', tool_name: 'ExitPlanMode', tool_input: { plan: String(payload?.command || '## Dark mode\n1. Add a theme switch to the header\n2. Save the choice in localStorage\n3. Use CSS variables for every colour\n4. Test both themes').slice(0, 4000) } }, res); }
+        'demo-ask': () => { const res = { writeHead() { return this; }, end() {}, on() {} }; hub.apply({ ...base, hook_event_name: 'PermissionRequest', tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: mt('monitor.demo.askColorQ'), header: mt('monitor.demo.askColorHeader'),
+          multiSelect: false, options: [{ label: mt('monitor.demo.optBlue'), description: mt('monitor.demo.optBlueDesc') }, { label: mt('monitor.demo.optGreen'), description: mt('monitor.demo.optGreenDesc') }, { label: mt('monitor.demo.optOrange'), description: mt('monitor.demo.optOrangeDesc') }] }] } }, res); },
+        'demo-plan': () => { const res = { writeHead() { return this; }, end() {}, on() {} }; hub.apply({ ...base, hook_event_name: 'PermissionRequest', tool_name: 'ExitPlanMode', tool_input: { plan: String(payload?.command || mt('monitor.demo.planDefault')).slice(0, 4000) } }, res); }
       };
-      if (!scenes[payload?.kind]) throw new Error('Unknown test scene.');
+      if (!scenes[payload?.kind]) throw new Error(t('monitor.errors.unknownTestScene'));
       scenes[payload.kind](); return view();
     },
-    'ai-monitor:hooks-model': async payload => { if (!hub) throw new Error('Not available.'); hub.setModel(String(payload?.model || '')); return view(); },
+    'ai-monitor:hooks-model': async payload => { if (!hub) throw new Error(t('monitor.errors.notAvailable')); hub.setModel(String(payload?.model || '')); return view(); },
     'ai-monitor:hooks-reply':async payload => {
-      if (!hub) throw new Error('Not available.');
+      if (!hub) throw new Error(t('monitor.errors.notAvailable'));
       hub.reply(String(payload?.sessionId || ''), payload?.text); return view();
     },
-    'ai-monitor:hooks-seen':async () => { if (!hub) throw new Error('Not available.'); hub.seen(); return view(); },
+    'ai-monitor:hooks-seen':async () => { if (!hub) throw new Error(t('monitor.errors.notAvailable')); hub.seen(); return view(); },
     'ai-monitor:hooks-decide': async payload => {
-      if (!hub) throw new Error('Not available.');
+      if (!hub) throw new Error(t('monitor.errors.notAvailable'));
       hub.decide(String(payload?.sessionId || ''), payload?.behavior); return view();
     },
     'ai-monitor:auto-get': async () => ({ ok: true, auto: chatSoon ? { claude: false, chatgpt: false } : { ...auto } }),
@@ -383,7 +393,7 @@ function setup(electron, options = {}) {
     },
     'ai-monitor:disconnect': async payload => {
       const provider = providerOf(payload);
-      if (answering.has(provider)) throw new Error('Wait until the reply check finishes.');
+      if (answering.has(provider)) throw new Error(t('monitor.errors.waitReplyCheck'));
       sessions.delete(provider); notifications.clear(); save(); emit(); return view();
     },
     'ai-monitor:open-source': async payload => {
@@ -393,23 +403,23 @@ function setup(electron, options = {}) {
     },
     'ai-monitor:reply': async payload => {
       const provider = providerOf(payload), session = sessions.get(provider);
-      if (answering.has(provider)) throw new Error('Your reply is already being verified.');
+      if (answering.has(provider)) throw new Error(t('monitor.errors.alreadyVerifying'));
       if (!session || session.state !== 'question' || !session.questionId || session.questionId !== payload.questionId)
-        throw new Error('This question is no longer active.');
+        throw new Error(t('monitor.errors.staleQuestion'));
       const text = typeof payload.text === 'string' ? payload.text.trim() : '';
-      if (!text || text.length > 5000) throw new Error('Enter a reply of at most 5000 characters.');
+      if (!text || text.length > 5000) throw new Error(t('monitor.errors.answerLength'));
       answering.add(provider);
       try {
         const fresh = await worker.request('read', { target: session.target });
         const obs = observe(fresh, provider);
         if (!obs.valid || obs.stop || !obs.completed || !obs.question || !obs.composer ||
             obs.contextKey !== session.contextKey || obs.assistant?.fingerprint !== payload.questionId)
-          throw new Error('The conversation or question changed. Nothing was sent.');
-        session.state = 'sending'; session.detail = 'Sending reply'; emit();
+          throw new Error(t('monitor.errors.chatChangedNothingSent'));
+        session.state = 'sending'; session._setDetail ? session._setDetail('monitor.session.sendingReply') : (session.detail = t('monitor.session.sendingReply')); emit();
         const result = await worker.request('reply', { target: session.target, contextKey: session.contextKey,
           composerId: obs.composer.id, guards: obs.assistant.guards,
           timeline: fresh.nodes.filter(n => n.type === 'Text' && n.index < obs.composer.index).map(n => ({ id: n.id, name: n.name })), text });
-        if (!result?.ok) throw new Error(result?.error || 'Could not send the reply.');
+        if (!result?.ok) throw new Error(result?.error || t('monitor.errors.replySendFailed'));
         // Do not retry an uncertain send: a user could otherwise receive duplicate prompts.
         const until = Date.now() + 12000;
         while (Date.now() < until) {
@@ -419,15 +429,15 @@ function setup(electron, options = {}) {
           }
           await new Promise(resolve => setTimeout(resolve, 700));
         }
-        throw new Error('Delivery not confirmed. Check the conversation before sending again.');
+        throw new Error(t('monitor.errors.workerTimeoutReply'));
       } catch (error) {
-        session.state = 'error'; session.detail = error.message; session.run = null; emit();
+        session.state = 'error'; session._setRawDetail ? session._setRawDetail(error.message) : (session.detail = error.message); session.run = null; emit();
         return { ok: false, error: error.message, uncertain: true };
       } finally { answering.delete(provider); }
     }
   };
   for (const [channel, handler] of Object.entries(handlers)) ipcMain.handle(channel, async (event, payload) => {
-    if (!trusted(event)) return { ok: false, error: 'This window does not have access to the AI monitor.' };
+    if (!trusted(event)) return { ok: false, error: t('monitor.errors.noAccess') };
     try { return await handler(payload); } catch (error) { return { ok: false, error: error.message }; }
   });
   app.whenReady().then(() => {

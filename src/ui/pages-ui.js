@@ -1,7 +1,7 @@
 'use strict';
-// One layout for every big page (Apps, Settings, Claude Code, Lade, Focus, Spotify), so everything lines up:
+// One layout for every big page (Apps, Settings, Claude Code, Tray, Focus, Spotify), so everything lines up:
 // the title and a grey subtitle always at the same height, the content always starting on the same line.
-// LumaDock only appears where he does something (Spotify: dancing, Lade: catching files). The other UI files use window.__lumadockPage.
+// LumaDock only appears where he does something (Spotify: dancing, Tray: catching files). The other UI files use window.__lumadockPage.
 (function pageLayout() {
   const PAGES = ['apps', 'settings', 'spotify', 'monitor', 'assistant', 'tray', 'mirror', 'focus', 'clips', 'note', 'chat'];
   const PAGE = {
@@ -25,7 +25,7 @@
       text(title, x, area.y + PAGE.titleY, 18, '#ffffff', 700, 'left', width);
       if (subtitle) text(subtitle, x, area.y + PAGE.subtitleY, 11, '#9aa596', 400, 'left', width);
     },
-    // Position a DOM panel (Settings, Claude Code, Lade, Spiegel) on the content column.
+    // Position a DOM panel (Settings, Claude Code, Tray, Mirror) on the content column.
     place(el, area) {
       el.style.left = `${area.x + PAGE.contentX}px`; el.style.top = `${area.y}px`;
       el.style.width = `${Math.max(100, area.width - PAGE.contentX * 2)}px`; // same margin left and right

@@ -246,6 +246,8 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  const t = (key, params) => (window.__lumadockT ? window.__lumadockT(key, params) : key);
+  let stoppedPrefix = false;
 
   function focused(value) {
     try {
@@ -283,6 +285,7 @@
     busy = true;
     error = '';
     status = text;
+    stoppedPrefix = false;
     percent = 0;
     waiting = true;
     progressState = 'running';
@@ -310,13 +313,14 @@
     if (ok) {
       percent = 100;
       status = text;
-    } else if (!status.startsWith('Gestopt')) {
-      status = 'Gestopt · ' + status;
+    } else if (!stoppedPrefix) {
+      status = t('project.progress.stopped', { text: status || t('project.progress.runningTask') });
+      stoppedPrefix = true;
     }
   }
 
   function meta() {
-    return `${percent}% van stappen · ${elapsed}s`;
+    return t('project.v2.percentMeta', { percent, elapsed });
   }
 
   function updateProgress() {
@@ -355,7 +359,7 @@
 
       if (!selected?.ok) {
         throw new Error(
-          selected?.error || 'Project kon niet worden geladen.'
+          selected?.error || t('project.errors.loadFailed')
         );
       }
 
@@ -372,7 +376,7 @@
 
       if (!result?.ok) {
         throw new Error(
-          result?.error || 'Projectchat kon niet worden geladen.'
+          result?.error || t('project.errors.chatLoadFailed')
         );
       }
 
@@ -398,7 +402,7 @@
 
       if (!result?.ok) {
         throw new Error(
-          result?.error || 'Projectmap kiezen is mislukt.'
+          result?.error || t('project.errors.chooseFailed')
         );
       }
 
@@ -423,7 +427,7 @@
 
       if (!result?.ok) {
         throw new Error(
-          result?.error || 'VS Code openen is mislukt.'
+          result?.error || t('project.errors.openVsCodeFailed')
         );
       }
     } catch (failure) {
@@ -445,7 +449,7 @@
     const request = draft.trim();
     draft = '';
 
-    begin('Project controleren…');
+    begin(t('project.v2.checkingProject'));
 
     messages.push({
       role: 'user',
@@ -476,15 +480,15 @@
 
       if (!result?.ok) {
         throw new Error(
-          result?.error || 'De opdracht is gestopt.'
+          result?.error || t('project.progress.taskStopped')
         );
       }
 
       ok = true;
 
       done = result.applied
-        ? '✓ Wijzigingen opgeslagen'
-        : '✓ Analyse klaar';
+        ? t('project.v2.doneSaved')
+        : t('project.v2.doneAnalysis');
     } catch (failure) {
       error = failure.message;
     } finally {
@@ -497,7 +501,7 @@
   async function undo() {
     if (busy || !canUndo) return;
 
-    begin('Backups controleren…');
+    begin(t('project.v2.checkingBackups'));
     render();
 
     let ok = false;
@@ -507,7 +511,7 @@
 
       if (!result?.ok) {
         throw new Error(
-          result?.error || 'Terugdraaien is gestopt.'
+          result?.error || t('project.errors.undoStopped')
         );
       }
 
@@ -517,7 +521,7 @@
     } catch (failure) {
       error = failure.message;
     } finally {
-      finish(ok, '✓ Vorige opdracht teruggedraaid');
+      finish(ok, t('project.v2.doneUndone'));
       render();
       scroll();
     }
@@ -542,9 +546,9 @@
       <div class="tc-shell">
         <div class="tc-head">
           <div class="tc-heading">
-            <div class="tc-label">PROJECT · HELE MAP</div>
+            <div class="tc-label">${esc(t('project.v2.kicker'))}</div>
             <div class="tc-title">
-              ${esc(project?.name || 'Project koppelen')}
+              ${esc(project?.name || t('project.v2.connectTitle'))}
             </div>
           </div>
 
@@ -561,14 +565,14 @@
               type="button"
               id="tc-agent-undo"
               ${busy ? 'disabled' : ''}
-            >Ongedaan maken</button>
+            >${esc(t('project.v2.undoBtn'))}</button>
           ` : ''}
 
           <button
             type="button"
             id="tc-agent-choose"
             ${busy ? 'disabled' : ''}
-          >${project ? 'Andere map' : 'Kies map'}</button>
+          >${esc(project ? t('project.v2.changeFolder') : t('project.v2.chooseFolder'))}</button>
         </div>
 
         <div class="tc-messages">
@@ -580,16 +584,16 @@
             `).join('')
             : `
               <div class="tc-empty">
-                <strong>${
+                <strong>${esc(
                   project
-                    ? 'Wat wil je veranderen?'
-                    : 'Koppel je projectmap'
-                }</strong>
-                <div class="tc-muted">${
+                    ? t('project.v2.whatToChange')
+                    : t('project.v2.linkFolderPrompt')
+                )}</strong>
+                <div class="tc-muted">${esc(
                   project
-                    ? 'Beschrijf je idee. LumaDock kiest zelf de juiste bestanden, opent ze in VS Code en voert je opdracht uit.'
-                    : 'Kies één lokale map. Daarna praat je met LumaDock over het hele project.'
-                }</div>
+                    ? t('project.v2.describeIdea')
+                    : t('project.v2.pickLocalFolder')
+                )}</div>
               </div>
             `
           }
@@ -611,13 +615,13 @@
                 role="status"
                 aria-live="polite"
               >${esc(status)}</div>
-              <span class="tc-progress-meta">${meta()}</span>
+              <span class="tc-progress-meta">${esc(meta())}</span>
             </div>
 
             <div
               class="tc-progress-track"
               role="progressbar"
-              aria-label="Voortgang van werkstappen"
+              aria-label="${esc(t('project.v2.progressLabel'))}"
               aria-valuemin="0"
               aria-valuemax="100"
               aria-valuenow="${percent}"
@@ -632,7 +636,7 @@
 
         ${project && !ready ? `
           <button type="button" id="tc-agent-ai">
-            Open Instellingen → AI
+            ${esc(t('project.v2.openAiSettings'))}
           </button>
         ` : ''}
 
@@ -641,7 +645,7 @@
             <textarea
               rows="1"
               maxlength="5000"
-              placeholder="Bijvoorbeeld: maak de Spotify-balk rustiger"
+              placeholder="${esc(t('project.v2.placeholder'))}"
               ${busy ? 'disabled' : ''}
             ></textarea>
 
@@ -650,7 +654,7 @@
               class="tc-primary"
               id="tc-agent-send"
               ${busy ? 'disabled' : ''}
-            >Verstuur</button>
+            >${esc(t('project.v2.send'))}</button>
           </div>
         ` : ''}
       </div>
@@ -692,6 +696,7 @@
   window.lumadock.onProjectAgentProgress(data => {
     if (data.root !== project?.path || !busy) return;
 
+    if (data.stopped) stoppedPrefix = true;
     status = data.text;
 
     if (Number.isFinite(data.percent)) {
@@ -717,6 +722,7 @@
       render();
     }
   );
+  window.__lumadockI18n?.onChange?.(() => { if (visible) render(); });
 
   try {
     drawProject = function (area) {

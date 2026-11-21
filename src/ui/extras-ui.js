@@ -8,6 +8,8 @@
   const say = (title, body) => window.__lumadockSay?.(title, body);
   const badge = id => window.dispatchEvent(new CustomEvent('lumadock:badge', { detail: id }));
   const esc = s => String(s ?? '').replace(/[&<>"']/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]));
+  const t = (key, params) => (window.__lumadockT ? window.__lumadockT(key, params) : key);
+  const loc = () => (window.__lumadockLocale ? window.__lumadockLocale() : 'en-US');
   const VIEWS = ['tray', 'mirror'];
   // (page height and layout come from pages-ui.js)
 
@@ -50,9 +52,9 @@
   window.__lumadockTrayCount = () => trayFiles.length;
   function render() {
     if (currentView === 'tray') {
-      root.innerHTML = `<div class="tc-page-head"><div><p class="tc-page-title">Lade</p><p class="tc-page-sub">${trayFiles.length ? 'Sleep een bestand eruit, of klik om het te openen' : 'Sleep bestanden op de island om ze even te bewaren'}</p></div></div>${
-        trayFiles.length ? `<div class="ex-drop extra"><span class="on">🧺 Laat los, ik vang hem!</span></div><div class="ex-grid">${trayFiles.map((f, i) => `<div class="ex-file" draggable="true" data-i="${i}" title="${esc(f.path)}">${f.icon ? `<img src="${f.icon}" alt="">` : '📄'}<span>${esc(f.name)}</span><button type="button" class="ex-x" data-x="${i}" aria-label="Haal ${esc(f.name)} uit de lade">×</button></div>`).join('')}</div>`
-          : '<div class="ex-drop ex-empty"><span class="off"><svg width="34" height="34" viewBox="0 0 24 24" fill="#000" stroke="#e8eee4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13 7 5h10l3 8v6H4z"/><path d="M4 13h5l1 2h4l1-2h5" fill="none"/></svg><b>Je lade is leeg</b><small>Sleep een bestand op LumaDock om het even te bewaren</small></span><span class="on"><svg width="34" height="34" viewBox="0 0 24 24" fill="#000" stroke="#e8eee4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13 7 5h10l3 8v6H4z"/><path d="M4 13h5l1 2h4l1-2h5" fill="none"/></svg><b>Laat los, ik vang hem!</b></span></div>'
+      root.innerHTML = `<div class="tc-page-head"><div><p class="tc-page-title">${esc(t('trayApp.title'))}</p><p class="tc-page-sub">${esc(trayFiles.length ? t('trayApp.subHasFiles') : t('trayApp.subEmpty'))}</p></div></div>${
+        trayFiles.length ? `<div class="ex-drop extra"><span class="on">🧺 ${esc(t('trayApp.dropRelease'))}</span></div><div class="ex-grid">${trayFiles.map((f, i) => `<div class="ex-file" draggable="true" data-i="${i}" title="${esc(f.path)}">${f.icon ? `<img src="${f.icon}" alt="">` : '📄'}<span>${esc(f.name)}</span><button type="button" class="ex-x" data-x="${i}" aria-label="${esc(t('trayApp.removeLabel', { name: f.name }))}">×</button></div>`).join('')}</div>`
+          : `<div class="ex-drop ex-empty"><span class="off"><svg width="34" height="34" viewBox="0 0 24 24" fill="#000" stroke="#e8eee4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13 7 5h10l3 8v6H4z"/><path d="M4 13h5l1 2h4l1-2h5" fill="none"/></svg><b>${esc(t('trayApp.emptyTitle'))}</b><small>${esc(t('trayApp.emptySub'))}</small></span><span class="on"><svg width="34" height="34" viewBox="0 0 24 24" fill="#000" stroke="#e8eee4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13 7 5h10l3 8v6H4z"/><path d="M4 13h5l1 2h4l1-2h5" fill="none"/></svg><b>${esc(t('trayApp.dropRelease'))}</b></span></div>`
       }${trayError ? `<p class="ex-hint" style="color:#ffaba3">${esc(trayError)}</p>` : ''}`;
       for (const el of root.querySelectorAll('.ex-file')) {
         const f = trayFiles[Number(el.dataset.i)];
@@ -63,12 +65,19 @@
         const r = await api.trayRemove(trayFiles[Number(x.dataset.x)].path); if (r.ok) trayFiles = r.files; render();
       });
     } else if (currentView === 'mirror') {
-      if (!root.querySelector('video')) {
-        root.innerHTML = `<div class="tc-page-head"><div><p class="tc-page-title">Spiegel</p><p class="tc-page-sub">Even checken voor je videogesprek · de camera stopt als je weggaat</p></div></div><video autoplay muted playsinline></video><p class="ex-hint" id="ex-cam"></p>`;
+      const existingVideo = root.querySelector('video');
+      if (!existingVideo) {
+        root.innerHTML = `<div class="tc-page-head"><div><p class="tc-page-title">${esc(t('trayApp.mirrorTitle'))}</p><p class="tc-page-sub">${esc(t('trayApp.mirrorSub'))}</p></div></div><video autoplay muted playsinline></video><p class="ex-hint" id="ex-cam"></p>`;
         startCamera();
+      } else {
+        const titleEl = root.querySelector('.tc-page-title');
+        const subEl = root.querySelector('.tc-page-sub');
+        if (titleEl) titleEl.textContent = t('trayApp.mirrorTitle');
+        if (subEl) subEl.textContent = t('trayApp.mirrorSub');
       }
     } else root.innerHTML = '';
   }
+  window.__lumadockI18n?.onChange?.(() => { if (VIEWS.includes(currentView)) render(); });
 
   // ---------- quick mirror ----------
   let stream = null;
@@ -78,7 +87,7 @@
       if (currentView !== 'mirror') return stopCamera();
       const video = root.querySelector('video'); if (video) video.srcObject = stream;
       badge('mirror');
-    } catch { const p = root.querySelector('#ex-cam'); if (p) p.textContent = 'Geen camera gevonden, of Windows geeft geen toegang (Instellingen → Privacy → Camera).'; }
+    } catch { const p = root.querySelector('#ex-cam'); if (p) p.textContent = t('trayApp.noCameraError'); }
   }
   function stopCamera() { stream?.getTracks().forEach(t => t.stop()); stream = null; }
 
@@ -107,8 +116,8 @@
     ctx.setLineDash([10, 8]); ctx.lineDashOffset = -t / 30; ctx.lineWidth = 2; ctx.strokeStyle = '#c6e994'; ctx.shadowColor = '#c6e994'; ctx.shadowBlur = 12; ctx.stroke();
     ctx.setLineDash([]); ctx.shadowBlur = 0;
     window.__lumadockIcon?.('tray', b.x + b.width / 2, y + 48, 30, '#c6e994');
-    text('Laat los, ik vang hem!', b.x + b.width / 2, y + 92, 18, '#ffffff', 700, 'center');
-    text('Het bestand komt in je lade', b.x + b.width / 2, y + 112, 11, '#9aa596', 400, 'center');
+    text(t('trayApp.dropRelease'), b.x + b.width / 2, y + 92, 18, '#ffffff', 700, 'center');
+    text(t('trayApp.willSaveToTray'), b.x + b.width / 2, y + 112, 11, '#9aa596', 400, 'center');
     ctx.restore();
     return true;
   }
@@ -163,9 +172,9 @@
       const p = back((k - 980) / 220); ctx.save(); ctx.translate(bx + 10, by + 26); ctx.scale(p, p);
       ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI * 2); ctx.fillStyle = '#c6e994'; ctx.fill();
       ctx.strokeStyle = '#10180c'; ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(-4, 0); ctx.lineTo(-1, 3); ctx.lineTo(4.5, -3.5); ctx.stroke(); ctx.restore();
-      text('In je lade', bx + 26, by + 30, 11.5, '#c6e994', 700);
+      text(t('trayApp.caughtInTray'), bx + 26, by + 30, 11.5, '#c6e994', 700);
       if (!incoming.chimed) { incoming.chimed = true; tone(880, 1320, 0.09, 0.016); }
-    } else text(names.length > 1 ? `${names.length} bestanden…` : 'Bezig…', bx, by + 30, 11, '#8f998d', 600);
+    } else text(names.length > 1 ? t('trayApp.processingFiles', { count: names.length }) : t('trayApp.processingFile'), bx, by + 30, 11, '#8f998d', 600);
     ctx.restore();
   }
   let shownView = null;
@@ -228,15 +237,14 @@
     if (firstVolume) { firstVolume = false; return; } // the first report is just the starting value
     if (prefs().volumeHud === false) return;
     const blocks = Math.round(level / 10);
-    const l = prefs().lang;
-    const muteTxt = l === 'tr' ? '🔇 Ses kapalı' : l === 'en' ? '🔇 Muted' : '🔇 Geluid uit';
-    flash(muted ? muteTxt : `${level > 60 ? '🔊' : level > 20 ? '🔉' : '🔈'} ${'▮'.repeat(blocks)}${'▯'.repeat(10 - blocks)} ${level}%`, 1400);
+    flash(muted ? t('header.muted') : `${level > 60 ? '🔊' : level > 20 ? '🔉' : '🔈'} ${'▮'.repeat(blocks)}${'▯'.repeat(10 - blocks)} ${level}%`, 1400);
   });
 
   // Sync language to extras main process (weather localization etc.)
   const syncLang = () => api.extrasConfig?.({ lang: prefs().lang || 'en' });
   syncLang();
   window.addEventListener('lumadock:prefs', syncLang);
+  window.__lumadockI18n?.onChange?.(next => api.extrasConfig?.({ lang: next }));
 
   // Mic / Cam privacy dots
   let privacy = { mic: false, cam: false };
@@ -249,8 +257,7 @@
     dlState = d || { active: [], completed: null };
     if (dlState.completed && dlState.completed.at && dlState.completed.at !== lastDlAt) {
       lastDlAt = dlState.completed.at;
-      const l = prefs().lang;
-      flash(`${l === 'tr' ? '⬇ İndirildi' : l === 'en' ? '⬇ Downloaded' : '⬇ Gedownload'}: ${dlState.completed.name}`, 4500);
+      flash(t('notifications.downloaded', { name: dlState.completed.name }), 4500);
       window.__lumadockChime?.('pop');
     }
   });
@@ -280,8 +287,8 @@
       const pct = Math.round(battery.level * 100);
       for (const at of [20, 10]) {
         if (pct <= at && !warned.has(at)) {
-          warned.add(at); flash(`🪫 Nog ${pct}% batterij. Sluit je lader aan!`, 4000);
-          say(`Batterij bijna leeg: ${pct}%`, 'Sluit je lader aan.'); window.__lumadockFeel?.('surprised', 1500);
+          warned.add(at); flash(t('notifications.batteryFlash', { pct }), 4000);
+          say(t('notifications.batteryLowTitle', { pct }), t('notifications.batteryLowBody')); window.__lumadockFeel?.('surprised', 1500);
         }
       }
     };
@@ -295,7 +302,9 @@
     for (const d of devices) {
       const key = 'lumadock:bt-warned:' + d.name + ':' + new Date().toDateString();
       if (d.battery <= 20 && !localStorage.getItem(key)) {
-        localStorage.setItem(key, '1'); flash(`🎧 ${d.name}: nog ${d.battery}%`, 4000); say(`${d.name} is bijna leeg`, `Nog ${d.battery}% batterij.`);
+        localStorage.setItem(key, '1');
+        flash(t('notifications.btFlash', { name: d.name, pct: d.battery }), 4000);
+        say(t('notifications.btLowTitle', { name: d.name }), t('notifications.btLowBody', { pct: d.battery }));
       }
     }
   });
@@ -316,22 +325,19 @@
   };
   window.__lumadockHomeInfo = () => {
     const parts = [];
-    const l = prefs().lang || 'en';
     if (weather) parts.push(`${weather.code === 0 && !weather.day ? '🌙' : ICONS(weather.code)} ${weather.temp}° ${weather.place}`);
     if (nextEvent) {
       const start = new Date(nextEvent.start), mins = Math.round((nextEvent.start - Date.now()) / 60000);
-      const locale = l === 'tr' ? 'tr-TR' : l === 'nl' ? 'nl-NL' : 'en-GB';
-      const todayW = l === 'tr' ? 'bugün' : l === 'en' ? 'today' : 'vandaag';
-      const nowW = l === 'tr' ? 'şimdi' : l === 'en' ? 'now' : 'nu';
-      const inMins = l === 'tr' ? `${mins} dk sonra` : l === 'en' ? `in ${mins} min` : `over ${mins} min`;
-      const defTitle = l === 'tr' ? 'Toplantı' : l === 'en' ? 'Meeting' : 'Afspraak';
-      const when = nextEvent.allDay ? todayW : mins <= 0 ? nowW : mins < 60 ? inMins : start.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+      const todayW = t('header.todayWord');
+      const nowW = t('header.nowWord');
+      const inMins = t('header.inMinutes', { mins });
+      const defTitle = t('header.meetingDefault');
+      const when = nextEvent.allDay ? todayW : mins <= 0 ? nowW : mins < 60 ? inMins : start.toLocaleTimeString(loc(), { hour: '2-digit', minute: '2-digit' });
       parts.push(`📅 ${when}: ${nextEvent.title || defTitle}`);
       if (mins === 10 && !warned.has('cal' + nextEvent.start)) {
         warned.add('cal' + nextEvent.start);
-        const soonMsg = l === 'tr' ? `10 dk sonra: ${nextEvent.title}` : l === 'en' ? `In 10 min: ${nextEvent.title}` : `Over 10 min: ${nextEvent.title}`;
-        flash(`📅 ${soonMsg}`, 5000);
-        say(l === 'tr' ? '10 dakika sonra' : l === 'en' ? 'In 10 minutes' : 'Over 10 minuten', nextEvent.title);
+        flash(`📅 ${t('notifications.calendarInTenFlash', { title: nextEvent.title })}`, 5000);
+        say(t('notifications.calendarInTenTitle'), nextEvent.title);
       }
     }
     return parts.join('  ·  ');

@@ -1,5 +1,5 @@
 <!doctype html>
-<html><head><meta charset="utf-8">
+<html lang="en"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src data:; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
 <!--
   Robo the buddy (buddy-main.cjs): one see-through layer over the screen. Robo, the frame that shows
@@ -65,31 +65,12 @@
 <div id="shadow"></div>
 <div id="robo"><img id="face" alt=""></div>
 <div id="card"></div>
+<script src="./src/ui/i18n-ui.js"></script>
 <script>
 const $ = s => document.querySelector(s), card = $('#card'), robo = $('#robo'), lens = $('#lens');
-let lang = 'nl', info = {}, lastQuestion = '', answerText = '';
+let lang = window.__lumadockLang?.() || 'en', info = {}, lastQuestion = '', answerText = '';
 const testing = new URLSearchParams(location.search).has('test');
-const T = {
-  nl: { lensCarry: '👀 Hier kijkt Robo', lensLook: '👀 Even kijken…', lensApp: a => '👀 ' + a, lensHome: '🏠 Laat los: terug naar huis', seen: 'Dit zie ik:', at: 'Robo kijkt naar', here: 'dit stukje scherm',
-    placeholder: 'Vraag iets over wat hier staat…', explain: 'Leg uit', spelling: 'Klopt mijn spelling?', translate: 'Vertaal', summary: 'Vat samen',
-    thinking: 'Even nadenken…', copy: 'Kopieer', copied: 'Gekopieerd ✓', again: 'Nieuwe vraag', home: 'Terug naar huis', put: 'Zet in Word',
-    putting: 'Bezig in Word…', noFixes: 'Ik zie geen fouten. Netjes! 🎉', pages: n => `${n} pagina's gelezen`,
-    put_done: (a, n) => `${a} van de ${n} verbeteringen staan in Word, als wijzigingen. Klik in Word op Accepteren of Weigeren.`,
-    wordHint: 'Ik lees alle pagina\'s, niet alleen wat je ziet.', close: 'Terug naar huis' },
-  en: { lensCarry: '👀 Robo looks here', lensLook: '👀 Looking…', lensApp: a => '👀 ' + a, lensHome: '🏠 Let go: back home', seen: 'This is what I see:', at: 'Robo is looking at', here: 'this part of the screen',
-    placeholder: 'Ask about what is here…', explain: 'Explain', spelling: 'Check my spelling', translate: 'Translate', summary: 'Summarize',
-    thinking: 'Thinking…', copy: 'Copy', copied: 'Copied ✓', again: 'New question', home: 'Go home', put: 'Put in Word',
-    putting: 'Working in Word…', noFixes: 'No mistakes found. Nice! 🎉', pages: n => `Read ${n} pages`,
-    put_done: (a, n) => `${a} of ${n} fixes are in Word as tracked changes. Accept or reject them in Word.`,
-    wordHint: 'I read every page, not just what you see.', close: 'Go home' },
-  tr: { lensCarry: '👀 Robo buraya bakıyor', lensLook: '👀 İnceleniyor…', lensApp: a => '👀 ' + a, lensHome: '🏠 Bırakın: eve dönsün', seen: 'Gördüğüm:', at: 'Robo inceliyor:', here: 'ekranın bu kısmı',
-    placeholder: 'Buradaki içerik hakkında bir şey sorun…', explain: 'Açıkla', spelling: 'Yazımı kontrol et', translate: 'Çevir', summary: 'Özetle',
-    thinking: 'Düşünüyor…', copy: 'Kopyala', copied: 'Kopyalandı ✓', again: 'Yeni soru', home: 'Eve dön', put: 'Word\'e uygula',
-    putting: 'Word\'de uygulanıyor…', noFixes: 'Hiçbir hata görünmüyor. Harika! 🎉', pages: n => `${n} sayfa okundu`,
-    put_done: (a, n) => `${n} düzeltmeden ${a} tanesi Word'e değişiklik olarak eklendi.`,
-    wordHint: 'Sadece görünen kısmı değil, tüm sayfaları okurum.', close: 'Eve dön' }
-};
-const t = key => (T[lang] || T.en)[key];
+const t = (key, params) => window.__lumadockT?.(`buddy.overlay.${key}`, params, lang) ?? key;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -126,7 +107,7 @@ function setLens(state, app) {
   lens.style.opacity = state ? 1 : 0;
   lens.classList.toggle('home', state === 'home');
   lens.classList.toggle('scanning', state === 'look');
-  if (state) $('#lensLabel').textContent = state === 'look' ? t('lensLook') : state === 'home' ? t('lensHome') : app ? t('lensApp')(app) : t('lensCarry');
+  if (state) $('#lensLabel').textContent = state === 'look' ? t('lensLook') : state === 'home' ? t('lensHome') : app ? '👀 ' + app : t('lensCarry');
 }
 
 // ---------- the card next to Robo ----------
@@ -162,7 +143,7 @@ function show(state, extra = {}) {
     const r = extra; answerText = r.answer || '';
     let body = r.ok === false ? `<div class="err">${esc(r.error || '')}</div>` : `<div class="answer">${md(r.answer || '')}`;
     if (r.ok !== false && r.word) {
-      if (r.pages) body += `<div class="q" style="margin-top:6px">📄 ${t('pages')(r.pages)}</div>`;
+      if (r.pages) body += `<div class="q" style="margin-top:6px">📄 ${t('pages', { count: r.pages })}</div>`;
       body += r.fixes?.length ? `<ul class="fixes">${r.fixes.map(f => `<li><span class="p">p. ${esc(f.page ?? '?')}</span><del>${esc(f.find)}</del> → <ins>${esc(f.replace)}</ins>${f.why ? `<span class="why">${esc(f.why)}</span>` : ''}</li>`).join('')}</ul>` : `<div style="margin-top:6px">${t('noFixes')}</div>`;
       answerText += '\n' + (r.fixes || []).map(f => `p. ${f.page}: ${f.find} → ${f.replace}`).join('\n');
     }
@@ -190,7 +171,7 @@ card.addEventListener('click', async e => {
   if (act === 'apply') {
     b.disabled = true; b.textContent = t('putting');
     const r = await window.buddy.apply();
-    b.outerHTML = `<div class="${r?.ok ? 'q' : 'err'}" style="width:100%">${esc(r?.ok ? t('put_done')(r.applied, r.total) : r?.error || '?')}</div>`;
+    b.outerHTML = `<div class="${r?.ok ? 'q' : 'err'}" style="width:100%">${esc(r?.ok ? t('putDone', { applied: r.applied, total: r.total }) : r?.error || '?')}</div>`;
     placeCard();
   }
 });
@@ -242,7 +223,7 @@ addEventListener('mousemove', e => {
 
 // ---------- what buddy-main.cjs tells us ----------
 window.buddy.onState(s => {
-  lang = ['en', 'tr'].includes(s.lang) ? s.lang : 'en';
+  if (s.lang) lang = window.__lumadockI18n?.setLang?.(s.lang, { persist: false }) || (s.lang === 'tr' ? 'tr' : 'en');
   letGoSent = false;
   if (s.state === 'carry') { // picked up from the island: start where he was and glide to the mouse
     flight = null; mode = 'carry'; alpha = 1; scale = 1; closeCard(); info = {};

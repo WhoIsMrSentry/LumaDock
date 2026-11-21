@@ -5,12 +5,17 @@
   const names = { chatgpt: 'ChatGPT', claude: 'Claude', claudecode: 'Claude Code', codex: 'Codex' };
   // The four AIs LumaDock can follow: the coding agents (hooks) and the chat apps (their window).
   const PICKS = [['claudecode', 'Claude Code'], ['codex', 'Codex'], ['claude', 'Claude'], ['chatgpt', 'ChatGPT']];
+  const t = (key, params) => (window.__lumadockT ? window.__lumadockT(key, params) : key);
+  const tn = (keyBase, count, params) => (window.__lumadockTn ? window.__lumadockTn(keyBase, count, params) : keyBase);
+  const loc = () => (window.__lumadockLocale ? window.__lumadockLocale() : 'en-US');
   const colours = { running: '#ff9a1f', sending: '#ff9a1f', question: '#ff9a1f', error: '#ff3b3b',
     stopped: '#ff3b3b', unavailable: '#ff3b3b', done: '#22e05a', ready: '#b8c0b5',
     connecting: '#b8c0b5', disconnected: '#7e887a', login: '#7e887a' };
-  const labels = { running: 'Bezig', sending: 'Versturen', question: 'Vraag', error: 'Fout', stopped: 'Gestopt',
-    unavailable: 'Niet beschikbaar', done: 'Klaar', ready: 'Ready', connecting: 'Verbinden', disconnected: 'Niet verbonden', login: 'Inloggen' };
-  let state = { providers: Object.keys(names).map(provider => ({ provider, name: names[provider], state: 'disconnected', detail: 'Verbind jouw gesprek' })) };
+  const LABEL_KEYS = { running: 'status.working', sending: 'status.sending', question: 'status.question', error: 'status.error',
+    stopped: 'status.stopped', unavailable: 'status.unavailable', done: 'status.done', ready: 'status.idle',
+    connecting: 'status.connecting', disconnected: 'status.notConnected', login: 'status.signIn' };
+  const stateLabel = st => t(LABEL_KEYS[st] || 'status.idle');
+  let state = { providers: Object.keys(names).map(provider => ({ provider, name: names[provider], state: 'disconnected', detail: t('monitor.connectChat') })) };
   let selected = null, choosing = false, windows = [], error = '', pending = false, lastSignature = '';
   const drafts = new Map();
   const root = document.createElement('section'); root.id = 'lumadock-ai-monitor'; document.body.appendChild(root);
@@ -390,14 +395,14 @@
   function render() {
     const p = current(), input = root.querySelector('textarea');
     const focused = Boolean(input && input === document.activeElement), start = input?.selectionStart, end = input?.selectionEnd;
-    const sub = p?.kind === 'hooks' ? (p.connected ? (p.source?.title ? `Project: ${p.source.title}` : `Volgt al je ${p.name}-sessies`) : 'Nog niet gekoppeld') : '';
+    const sub = p?.kind === 'hooks' ? (p.connected ? (p.source?.title ? t('monitor.projectPrefix', { title: p.source.title }) : t('monitor.followingSessions', { name: p.name })) : t('status.notConnectedYet')) : '';
     root.innerHTML = p?.kind === 'hooks' ? `<div class="am-shell">${hooksPage(p, sub)}${error ? `<div class="am-error" role="alert">${escape(error)}</div>` : ''}</div>`
-      : `<div class="am-shell"><div class="tc-page-head"><div><p class="tc-page-title">${escape(p?.name || 'Claude Code')}</p><p class="tc-page-sub">${escape(sub)}</p></div><button type="button" id="am-small">Klein</button></div>${
-      choosing ? `<div class="am-hint">Open ${escape(names[selected])} in je browser of desktopapp en log daar in. Laat het gesprek open in een eigen venster. Kies daarna dat venster.</div><div class="am-body">${windows.length ? windows.map((win, index) => `<button type="button" class="am-window" data-window="${index}" ${pending ? 'disabled' : ''}>${escape(win.title)} <span class="am-hint">· ${escape(win.process)}</span></button>`).join('') : '<div class="am-hint">Nog geen geschikt venster gevonden. Houd een websitegesprek in een eigen venster.</div>'}</div><div class="am-row"><button type="button" id="am-launch">Open ${escape(names[selected])}</button><button type="button" id="am-scan" ${pending ? 'disabled' : ''}>Vernieuwen</button><button type="button" id="am-cancel">Terug</button></div>` :
+      : `<div class="am-shell"><div class="tc-page-head"><div><p class="tc-page-title">${escape(p?.name || 'Claude Code')}</p><p class="tc-page-sub">${escape(sub)}</p></div><button type="button" id="am-small">${escape(t('monitor.compactBtn'))}</button></div>${
+      choosing ? `<div class="am-hint">${escape(t('monitor.chooseWindowHint', { name: names[selected] }))}</div><div class="am-body">${windows.length ? windows.map((win, index) => `<button type="button" class="am-window" data-window="${index}" ${pending ? 'disabled' : ''}>${escape(win.title)} <span class="am-hint">· ${escape(win.process)}</span></button>`).join('') : `<div class="am-hint">${escape(t('monitor.noSuitableWindow'))}</div>`}</div><div class="am-row"><button type="button" id="am-launch">${escape(t('monitor.openApp', { name: names[selected] }))}</button><button type="button" id="am-scan" ${pending ? 'disabled' : ''}>${escape(t('common.refresh'))}</button><button type="button" id="am-cancel">${escape(t('common.back'))}</button></div>` :
       p?.kind === 'hooks' ? hooksPage(p) :
-      p?.soon ? `<div class="am-body"><p><strong>${escape(names[selected])} komt binnenkort</strong></p><p class="am-hint">Straks volgt Robo je ${escape(names[selected])}-gesprekken met de LumaDock-extensie voor Chrome. Nu volgt hij Claude Code en Codex.</p></div>` :
-      !p?.connected ? `<div class="am-body"><p><strong>Volg ${escape(names[selected])} met Robo</strong></p><p class="am-hint">Zet ${escape(names[selected])} aan in LumaDock → Verbindingen. LumaDock zoekt je gesprek zelf; je hoeft geen venster te kiezen.</p></div><div class="am-row"><button type="button" class="am-primary" id="am-open-connect">Open Verbindingen</button></div>` : false ? `<div class="am-body"><p><strong>Verbind jouw gesprek</strong></p><p class="am-hint">Gebruik de browser of desktopapp waarin je bent ingelogd. Log in op de originele site of app. Je wachtwoord blijft bij ${escape(names[selected])}.</p><p class="am-hint">Houd het gesprek open in een eigen venster terwijl je verder werkt.</p></div><div class="am-row"><button type="button" class="am-primary" id="am-connect">Kies jouw venster</button><button type="button" id="am-launch">Open ${escape(names[selected])}</button></div>` :
-      `<div class="am-row">${lamp(p)}<strong>${escape(p.detail || labels[p.state])}</strong><span class="am-clock">${p.elapsed || 0}s</span></div>${busy(p) ? '<div class="am-track" role="status" aria-label="AI is bezig"><div class="am-wave"></div></div>' : ''}<div class="am-hint am-source" title="${escape(p.source?.title)}">${escape(p.source?.process)} · ${escape(p.source?.title)}</div><div class="am-body">${p.state === 'question' ? `<div class="am-question">${escape(p.question)}</div>` : `<p class="am-hint">${p.state === 'done' ? 'Je antwoord staat klaar in het gesprek.' : p.state === 'ready' ? 'Ready. Stel je vraag in het gesprek; de island volgt daarna de status.' : p.state === 'unavailable' ? 'Het gesprek is niet meer leesbaar. Houd het open, herstel het venster als het geminimaliseerd is, of verbind opnieuw.' : busy(p) ? 'Werk verder in een andere app. Laat dit gesprekvenster open; de island meldt een vraag of afgerond antwoord.' : 'Open het gesprek om de situatie te controleren.'}</p>`}</div>${p.canReply ? '<div class="am-compose"><textarea id="am-answer" maxlength="5000" placeholder="Jouw antwoord…" aria-label="Antwoord op de vraag"></textarea><button type="button" class="am-primary" id="am-send">Verstuur</button></div>' : ''}<div class="am-row"><button type="button" id="am-launch">Open gesprek</button><button type="button" id="am-connect">Opnieuw verbinden</button><button type="button" id="am-disconnect">Ontkoppelen</button></div>`
+      p?.soon ? `<div class="am-body"><p><strong>${escape(t('monitor.browserSoonTitle', { name: names[selected] }))}</strong></p><p class="am-hint">${escape(t('monitor.browserSoonBody', { name: names[selected] }))}</p></div>` :
+      !p?.connected ? `<div class="am-body"><p><strong>${escape(t('monitor.followWithRobo', { name: names[selected] }))}</strong></p><p class="am-hint">${escape(t('monitor.enableInConnections', { name: names[selected] }))}</p></div><div class="am-row"><button type="button" class="am-primary" id="am-open-connect">${escape(t('monitor.openConnections'))}</button></div>` :
+      `<div class="am-row">${lamp(p)}<strong>${escape(p.detail || stateLabel(p.state))}</strong><span class="am-clock">${p.elapsed || 0}s</span></div>${busy(p) ? `<div class="am-track" role="status" aria-label="${escape(t('monitor.aiBusyAria'))}"><div class="am-wave"></div></div>` : ''}<div class="am-hint am-source" title="${escape(p.source?.title)}">${escape(p.source?.process)} · ${escape(p.source?.title)}</div><div class="am-body">${p.state === 'question' ? `<div class="am-question">${escape(p.question)}</div>` : `<p class="am-hint">${escape(p.state === 'done' ? t('monitor.replyReadyInChat') : p.state === 'ready' ? t('monitor.readyInChatFollow') : p.state === 'unavailable' ? t('monitor.unavailableWindowHint') : busy(p) ? t('monitor.busyKeepOpen') : t('monitor.openChatCheck'))}</p>`}</div>${p.canReply ? `<div class="am-compose"><textarea id="am-answer" maxlength="5000" placeholder="${escape(t('monitor.yourAnswer'))}" aria-label="${escape(t('monitor.answerQuestionAria'))}"></textarea><button type="button" class="am-primary" id="am-send">${escape(t('common.send'))}</button></div>` : ''}<div class="am-row"><button type="button" id="am-launch">${escape(t('monitor.openChatBtn'))}</button><button type="button" id="am-connect">${escape(t('common.reconnect'))}</button><button type="button" id="am-disconnect">${escape(t('common.disconnect'))}</button></div>`
     }${error ? `<div class="am-error" role="alert">${escape(error)}</div>` : ''}</div>`;
     bind('am-small', small); bind('am-connect', choose);
     bind('am-scan', scan); bind('am-launch', launch); bind('am-cancel', () => { choosing = false; error = ''; render(); });
@@ -429,13 +434,13 @@
       const send = root.querySelector('#am-send'); if (send) send.disabled = pending;
     } else projectInputFocused = false;
   }
-  // "5 uur: 23% · reset 14:30 · week: 41%" under the status.
+  // "5h: 23% · resets at 14:30 · week: 41%" under the status.
   function usageLine(p) {
-    const u = p.usage || {}, at = s => new Date(s * 1000).toLocaleTimeString(LOCALE(), { hour: '2-digit', minute: '2-digit' });
+    const u = p.usage || {}, at = s => new Date(s * 1000).toLocaleTimeString(loc(), { hour: '2-digit', minute: '2-digit' });
     const parts = [];
-    if (u.fiveHour) parts.push(`5 uur: <b style="color:${ringColour(u.fiveHour.used)}">${u.fiveHour.used}%</b>${u.fiveHour.resetsAt ? ' · weer vol om ' + at(u.fiveHour.resetsAt) : ''}`);
-    if (u.sevenDay) parts.push(`week: ${u.sevenDay.used}%`);
-    if (u.context != null) parts.push(`gesprek ${u.context}% vol`);
+    if (u.fiveHour) parts.push(`${escape(t('monitor.fiveHour'))}: <b style="color:${ringColour(u.fiveHour.used)}">${u.fiveHour.used}%</b>${u.fiveHour.resetsAt ? ' · ' + escape(t('monitor.resetsAt', { time: at(u.fiveHour.resetsAt) })) : ''}`);
+    if (u.sevenDay) parts.push(`${escape(t('monitor.week'))}: ${u.sevenDay.used}%`);
+    if (u.context != null) parts.push(escape(t('monitor.contextUsed', { pct: u.context })));
     return parts.length ? `<div class="am-hint am-usage">${parts.join(' · ')}</div>` : '';
   }
   // Claude page, like an iPhone Live Activity:
@@ -452,17 +457,8 @@
     other: '<circle cx="12" cy="12" r="7"/><path d="M12 9v3l2 2"/>'
   };
   const svg = (name, size = 15) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name] || ICON_PATHS.other}</svg>`;
-  const LANG = () => (['en', 'tr'].includes(window.__lumadockPrefs?.().lang) ? window.__lumadockPrefs().lang : 'en');
-  const LOCALE = () => (LANG() === 'tr' ? 'tr-TR' : 'en-GB');
-  const EN = () => LANG() === 'en', TR = () => LANG() === 'tr', T = (nl, en, tr) => TR() ? (tr ?? window.__lumadockTr?.(nl) ?? en) : (EN() ? en : nl);
-  const NOW_NL = { read: 'Leest', edit: 'Bewerkt', run: 'Voert uit', search: 'Zoekt', web: 'Zoekt online', agent: 'Helper bezig', other: 'Bezig' };
-  const PAST_NL = { read: 'Gelezen', edit: 'Bewerkt', run: 'Uitgevoerd', search: 'Gezocht', web: 'Online gezocht', agent: 'Helper klaar', other: 'Gedaan' };
-  const NOW_EN = { read: 'Reading', edit: 'Editing', run: 'Running', search: 'Searching', web: 'Searching the web', agent: 'Helper working', other: 'Working' };
-  const PAST_EN = { read: 'Read', edit: 'Edited', run: 'Ran', search: 'Searched', web: 'Searched the web', agent: 'Helper done', other: 'Done' };
-  const NOW_TR = { read: 'Okuyor', edit: 'Düzenliyor', run: 'Çalıştırıyor', search: 'Arıyor', web: 'Web\'de arıyor', agent: 'Yardımcı çalışıyor', other: 'Çalışıyor' };
-  const PAST_TR = { read: 'Okundu', edit: 'Düzenlendi', run: 'Çalıştırıldı', search: 'Arandı', web: 'Web\'de arandı', agent: 'Yardımcı bitti', other: 'Tamamlandı' };
-  const NOW = new Proxy({}, { get: (_, k) => (TR() ? NOW_TR : EN() ? NOW_EN : NOW_NL)[k] });
-  const PAST = new Proxy({}, { get: (_, k) => (TR() ? PAST_TR : EN() ? PAST_EN : PAST_NL)[k] });
+  const toolNow = k => t('tools.now.' + (k || 'other'));
+  const toolPast = k => t('tools.past.' + (k || 'other'));
   const clock = sec => sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
   const shortWhat = (kind, what) => !what ? '' : ['read', 'edit'].includes(kind) ? what.split(/[\\/]/).pop() : what.replace(/\s+/g, ' ');
   // Live timer: the page is only rebuilt on events, so this ticks the seconds in between.
@@ -472,109 +468,96 @@
 
   // Which Claude model Claude Code uses (written to Claude Code's settings.json by the main process).
   const MODEL_INFO = () => ({
-    default: [T('Standaard', 'Default', 'Varsayılan'), T('Wat Claude Code zelf kiest', 'What Claude Code picks by default', 'Claude Code\'un kendi seçtiği')],
-    opus: ['Opus', T('Het slimst, voor moeilijke klussen', 'Smartest, for complex tasks', 'En zeki, zorlu işler için')],
-    sonnet: ['Sonnet', T('Snel en slim, voor de meeste dingen', 'Fast and smart, for most tasks', 'Hızlı ve zeki, çoğu iş için')],
-    haiku: ['Haiku', T('Supersnel, voor kleine dingen', 'Super fast, for quick tasks', 'Süper hızlı, küçük işler için')],
-    opusplan: ['Opus plan', T('Opus plant, Sonnet bouwt', 'Opus plans, Sonnet builds', 'Opus planlar, Sonnet inşa eder')]
+    default: [t('monitor.modelDefault'), t('monitor.models.default')],
+    opus: ['Opus', t('monitor.models.opus')],
+    sonnet: ['Sonnet', t('monitor.models.sonnet')],
+    haiku: ['Haiku', t('monitor.models.haiku')],
+    opusplan: ['Opus plan', t('monitor.models.opusplan')]
   });
   let modelMenu = false;
   function modelPicker(p) {
-    const models = MODEL_INFO(), current = p.model || 'default', label = (current === 'default' ? T('Standaard', 'Default', 'Varsayılan') : null) || models[current]?.[0] || String(current).replace(/^custom:/, '');
-    const button = `<button type="button" class="ch-model" id="am-model" aria-expanded="${modelMenu}" title="${T('Kies welk Claude-model Claude Code gebruikt', 'Choose which Claude model Claude Code uses', 'Claude Code\'un hangi Claude modelini kullanacağını seçin')}">${svg('agent', 12)}${escape(label)}<span>▾</span></button>`;
-    const menu = !modelMenu ? '' : `<div class="ch-model-menu" role="menu"><div class="ch-model-head">${T('Welk model gebruikt Claude?', 'Which model does Claude use?', 'Claude hangi modeli kullanıyor?')}${p.modelNow ? `<small>${T('Nu in gebruik', 'Currently active', 'Şu an kullanılan')}: ${escape(p.modelNow)}</small>` : ''}</div>${
+    const models = MODEL_INFO(), current = p.model || 'default', label = (current === 'default' ? t('monitor.modelDefault') : null) || models[current]?.[0] || String(current).replace(/^custom:/, '');
+    const button = `<button type="button" class="ch-model" id="am-model" aria-expanded="${modelMenu}" title="${escape(t('monitor.modelPickerTitle'))}">${svg('agent', 12)}${escape(label)}<span>▾</span></button>`;
+    const menu = !modelMenu ? '' : `<div class="ch-model-menu" role="menu"><div class="ch-model-head">${escape(t('monitor.modelPickerQuestion'))}${p.modelNow ? `<small>${escape(t('monitor.currentlyActive'))}: ${escape(p.modelNow)}</small>` : ''}</div>${
       Object.entries(models).map(([key, [name, info]]) => `<button type="button" role="menuitemradio" aria-checked="${key === current}" class="${key === current ? 'on' : ''}" data-model="${key}"><b>${name}</b><small>${info}</small>${key === current ? '<i>✓</i>' : ''}</button>`).join('')
-    }<p>${T('Voor nieuwe sessies · in een lopend gesprek', 'For new sessions · in a running chat', 'Yeni oturumlar için · devam eden sohbette')}: <code>/model</code></p></div>`;
+    }<p>${escape(t('monitor.modelNewSessionHint'))}: <code>/model</code></p></div>`;
     return { button, menu };
   }
 
   function hooksPage(p) {
     const off = pending ? 'disabled' : '';
     const st = p.permission ? 'question' : p.state;
-    const project = p.source?.title && p.source.title !== 'Geen actieve sessie' ? p.source.title : '';
-    const statusText = TR() ? ({ running: 'Çalışıyor', sending: 'Çalışıyor', question: 'Seni bekliyor', done: 'Tamamlandı', error: 'Hata', stopped: 'Durduruldu' }[st] || 'Boşta')
-      : EN() ? ({ running: 'Working', sending: 'Working', question: 'Waiting for you', done: 'Done', error: 'Error', stopped: 'Stopped' }[st] || 'Idle')
-      : ({ running: 'Bezig', sending: 'Bezig', question: 'Wacht op jou', done: 'Klaar', error: 'Fout', stopped: 'Gestopt' }[st] || 'Rustig');
+    const project = p.source?.title && p.source.title !== t('monitor.session.noActiveSession') ? p.source.title : '';
+    const statusText = stateLabel(st);
     // Only while Claude works: a live timer. When he's done the time doesn't matter anymore.
     const timer = busy(p) ? ` · <b class="cx-timer" data-live="1" data-base="${p.elapsed || 0}" data-at="${Date.now()}">${clock(p.elapsed || 0)}</b>` : '';
     const calm = p.agent === 'codex' ? '#5b9bff' : '#e8865a', lampOf = x => ['ready', 'disconnected', 'connecting'].includes(x) ? calm : colourOf(x); // quiet = the AI's own colour, not grey
     const pill = p.connected ? `<span class="ch-status" style="--lamp:${lampOf(st)}"><i class="${busy(p) ? 'am-blink' : ''}"></i>${statusText}${timer}</span>` : '';
-    const jump = p.canJump ? `<button type="button" class="cx-jump" id="am-jump" title="${T(`Breng het ${escape(p.name)}-venster naar voren`, `Bring the ${escape(p.name)} window to the front`, `${escape(p.name)} penceresini öne getir`)}">${T('Naar terminal', 'To terminal', 'Terminale git')} <span>↗</span></button>` : '';
+    const jump = p.canJump ? `<button type="button" class="cx-jump" id="am-jump" title="${escape(t('monitor.bringWindowFront', { name: p.name }))}">${escape(t('monitor.toTerminal'))} <span>↗</span></button>` : '';
     const picker = p.connected && p.agent !== 'codex' ? modelPicker(p) : { button: '', menu: '' }; // the Claude model choice is for Claude Code only
     const head = p.connected
       ? `<div class="tc-page-head"><div class="cc-pill"><i style="--lamp:${lampOf(st)}" class="${busy(p) ? 'am-blink' : ''}"></i>${escape(project || p.name)}${project ? `<span>· ${escape(p.name)}</span>` : ''}</div><div class="ch-head-right">${picker.button}${pill}${jump}</div></div>${picker.menu}`
       : `<div class="tc-page-head"><div><p class="cc-kicker">${escape(p.name)}</p><p class="tc-page-title">${escape(project || p.name)}</p></div><div class="ch-head-right">${picker.button}${pill}${jump}</div></div>${picker.menu}`;
     if (!p.connected) {
-      if (p.agent === 'codex' && p.available === false) return head + `<div class="cc-card cc-wide"><p class="cc-big">${T('Codex staat nog niet op deze pc', 'Codex is not installed on this PC yet', 'Codex henüz bu bilgisayarda yüklü değil')}</p><p class="am-hint">${T('Installeer Codex (de AI-programmeerhulp van OpenAI) en open hem één keer. Kom daarna hier terug om hem te koppelen.', 'Install Codex (the AI coding assistant from OpenAI) and open it once. Then come back here to connect it.', 'Codex\'i (OpenAI kodlama asistanı) yükleyip bir kez açın. Ardından bağlamak için buraya dönün.')}</p></div>`;
-      return head + `<div class="cc-card cc-wide"><p class="cc-big">${T(`Zie meteen wat ${escape(p.name)} doet`, `See right away what ${escape(p.name)} is doing`, `${escape(p.name)} ne yapıyor anında görün`)}</p><p class="am-hint">${T(`Bezig, een vraag, klaar of een fout: LumaDock laat het zien${p.agent === 'codex' ? ', terwijl jij iets anders doet' : ', ook als je Claude Code vanaf je telefoon bestuurt'}.`, `Busy, a question, done or an error: LumaDock shows it${p.agent === 'codex' ? ' while you do something else' : ', even when you control Claude Code from your phone'}.`, `Meşgul, soru soruyor, tamamlandı veya hata: LumaDock anında gösterir.
-`)}</p>${
-        p.error ? `<p class="am-error">${escape(p.error)}</p>` : p.hooksInstalled ? `<p class="am-hint">${T('Gekoppeld. Even wachten tot LumaDock klaar is met starten.', 'Connected. Waiting a moment for LumaDock to finish starting.', 'Bağlandı. LumaDock\'un başlaması bekleniyor.')}</p>`
-          : `<button type="button" class="am-primary" id="am-open-connect">${T('Koppelen in LumaDock', 'Connect in LumaDock', 'LumaDock\'ta Bağla')}</button><p class="am-hint">${T('Eén schakelaar in LumaDock → Verbindingen. Daarna doet LumaDock de rest.', 'One switch in LumaDock → Connections. LumaDock does the rest.', 'LumaDock → Bağlantılar altındaki tek düğmeyle etkinleştirin.')}</p>`}</div>`;
+      if (p.agent === 'codex' && p.available === false) return head + `<div class="cc-card cc-wide"><p class="cc-big">${escape(t('monitor.codexMissingTitle'))}</p><p class="am-hint">${escape(t('monitor.codexMissingBody'))}</p></div>`;
+      return head + `<div class="cc-card cc-wide"><p class="cc-big">${escape(t('monitor.seeActivityTitle', { name: p.name }))}</p><p class="am-hint">${escape(p.agent === 'codex' ? t('monitor.seeActivityCodex') : t('monitor.seeActivityClaude'))}</p>${
+        p.error ? `<p class="am-error">${escape(p.error)}</p>` : p.hooksInstalled ? `<p class="am-hint">${escape(t('monitor.connectedWaiting'))}</p>`
+          : `<button type="button" class="am-primary" id="am-open-connect">${escape(t('monitor.connectInApp'))}</button><p class="am-hint">${escape(t('monitor.connectOneSwitchHint'))}</p>`}</div>`;
     }
 
     // ---- the conversation, like the Claude app: you on the right, Claude on the left ----
-    const PROMPT_TR = {
-      'Maak de knop op de homepage blauw': ['Make the button on the homepage blue', 'Ana sayfadaki butonu mavi yap'],
-      'Make the button on the homepage blue': ['Make the button on the homepage blue', 'Ana sayfadaki butonu mavi yap'],
-      'Ana sayfadaki butonu mavi yap': ['Make the button on the homepage blue', 'Ana sayfadaki butonu mavi yap'],
-      'Maak de knop mooier': ['Make the button look nicer', 'Butonu daha şık hale getir'],
-      'Make the button look nicer': ['Make the button look nicer', 'Butonu daha şık hale getir'],
-      'Butonu daha şık hale getir': ['Make the button look nicer', 'Butonu daha şık hale getir'],
-      'Zet de website online': ['Put the website online', 'Web sitesini yayına al'],
-      'Put the website online': ['Put the website online', 'Web sitesini yayına al'],
-      'Web sitesini yayına al': ['Put the website online', 'Web sitesini yayına al'],
-      'Fix de btw-berekening': ['Fix the VAT calculation', 'KDV hesaplamasını düzelt'],
-      'Fix the VAT calculation': ['Fix the VAT calculation', 'KDV hesaplamasını düzelt'],
-      'KDV hesaplamasını düzelt': ['Fix the VAT calculation', 'KDV hesaplamasını düzelt']
-    };
-    const trPrompt = txt => PROMPT_TR[txt] ? (TR() ? PROMPT_TR[txt][1] : PROMPT_TR[txt][0]) : txt;
     const msgs = [];
-    if (p.prompt) msgs.push(`<div class="ch-row me"><div class="ch-bubble me">${escape(trPrompt(p.prompt))}</div></div>`);
+    if (p.prompt) msgs.push(`<div class="ch-row me"><div class="ch-bubble me">${escape(p.prompt)}</div></div>`);
     const steps = (p.steps || []).slice(-6);
-    if (steps.length) msgs.push(`<div class="ch-steps">${steps.map(s => `<div class="ch-step ${s.state}"><span class="ch-ico">${svg(s.kind, 12)}</span><em>${(s.state === 'running' ? NOW : PAST)[s.kind] || PAST.other}</em><small>${escape(shortWhat(s.kind, s.what))}</small>${s.state === 'running' ? '<b class="cc-spin"></b>' : s.state === 'failed' ? '<b class="cx-bad">✕</b>' : '<b class="cx-ok">✓</b>'}</div>`).join('')}</div>`);
+    if (steps.length) msgs.push(`<div class="ch-steps">${steps.map(s => `<div class="ch-step ${s.state}"><span class="ch-ico">${svg(s.kind, 12)}</span><em>${escape(s.state === 'running' ? toolNow(s.kind) : toolPast(s.kind))}</em><small>${escape(shortWhat(s.kind, s.what))}</small>${s.state === 'running' ? '<b class="cc-spin"></b>' : s.state === 'failed' ? '<b class="cx-bad">✕</b>' : '<b class="cx-ok">✓</b>'}</div>`).join('')}</div>`);
     const claude = (inner, cls = '') => `<div class="ch-row"><span class="ch-avatar">${svg('run', 13)}</span><div class="ch-bubble ${cls}">${inner}</div></div>`;
     if (p.ask) msgs.push(claude(askForm(p), 'wide'));
-    else if (p.plan) msgs.push(claude(`<div class="ch-label">Plan</div><div class="am-plan">${planHtml(p.plan)}</div><div class="cc-actions"><button type="button" class="am-primary" id="am-plan-ok" ${off}>${T('Goedkeuren', 'Approve', 'Onayla')}</button><input id="am-plan-note" class="am-note" maxlength="4000" placeholder="${T('Wat moet er anders?', 'What should change?', 'Ne değişmeli?')}"><button type="button" id="am-plan-no" ${off}>${T('Aanpassen', 'Adjust', 'Düzenle')}</button></div>`, 'wide'));
-    else if (p.permission) msgs.push(claude(`<div class="ch-label">${T('Mag ik dit doen?', 'May I do this?', 'Bunu yapabilir miyim?')}</div><b>${escape(p.permission.tool)}</b>${p.permission.what ? `<code class="cx-code">${escape(p.permission.what)}</code>` : ''}<div class="cc-actions"><button type="button" class="am-primary" id="am-allow" ${off}>${T('Toestaan', 'Allow', 'İzin Ver')}</button><button type="button" id="am-deny" ${off}>${T('Weigeren', 'Deny', 'Reddet')}</button></div>`, 'wide'));
-    else if (st === 'question') msgs.push(claude(md(p.question || p.lastMessage || T('Claude heeft je nodig in de terminal.', 'Claude needs you in the terminal.', 'Claude terminalde sizi bekliyor.')), 'ask md'));
+    else if (p.plan) msgs.push(claude(`<div class="ch-label">${escape(t('monitor.plan'))}</div><div class="am-plan">${planHtml(p.plan)}</div><div class="cc-actions"><button type="button" class="am-primary" id="am-plan-ok" ${off}>${escape(t('monitor.approve'))}</button><input id="am-plan-note" class="am-note" maxlength="4000" placeholder="${escape(t('monitor.whatShouldChange'))}"><button type="button" id="am-plan-no" ${off}>${escape(t('monitor.adjust'))}</button></div>`, 'wide'));
+    else if (p.permission) msgs.push(claude(`<div class="ch-label">${escape(t('monitor.mayIDoThis'))}</div><b>${escape(p.permission.tool)}</b>${p.permission.what ? `<code class="cx-code">${escape(p.permission.what)}</code>` : ''}<div class="cc-actions"><button type="button" class="am-primary" id="am-allow" ${off}>${escape(t('monitor.allow'))}</button><button type="button" id="am-deny" ${off}>${escape(t('monitor.deny'))}</button></div>`, 'wide'));
+    else if (st === 'question') msgs.push(claude(md(p.question || p.lastMessage || t('monitor.claudeNeedsYouTerminal')), 'ask md'));
     else if (st === 'done' && p.lastMessage) msgs.push(claude(md(p.lastMessage), 'md'));
-    else if (st === 'error' || st === 'stopped') msgs.push(claude(`<b>${escape(p.detail || T('Er ging iets mis', 'Something went wrong', 'Bir şeyler ters gitti'))}</b><br><span class="ch-dim">${T('Kijk in de terminal wat er misging.', 'Check the terminal to see what went wrong.', 'Sorunu görmek için terminali kontrol edin.')}</span>`, 'error'));
-    else if (busy(p)) msgs.push(claude(`<span class="ch-typing"><i></i><i></i><i></i></span><span class="ch-dim">${escape((EN() || TR()) ? ((s => s ? `${NOW[s.kind] || T('Bezig', 'Working', 'Çalışıyor')} ${shortWhat(s.kind, s.what)}` : T('Claude is bezig', 'Claude is working', 'Claude çalışıyor'))((p.steps || []).filter(x => x.state === 'running').pop())) : (p.detail || 'Claude is bezig'))}</span>`, 'typing'));
+    else if (st === 'error' || st === 'stopped') msgs.push(claude(`<b>${escape(p.detail || t('buddy.chat.wrong'))}</b><br><span class="ch-dim">${escape(t('monitor.checkTerminalError'))}</span>`, 'error'));
+    else if (busy(p)) {
+      const activeStep = (p.steps || []).filter(x => x.state === 'running').pop();
+      const runningTxt = activeStep ? `${toolNow(activeStep.kind)} ${shortWhat(activeStep.kind, activeStep.what)}` : t('monitor.claudeWorkingShort');
+      msgs.push(claude(`<span class="ch-typing"><i></i><i></i><i></i></span><span class="ch-dim">${escape(runningTxt)}</span>`, 'typing'));
+    }
     // ---- always a summary at the end: what Claude did, which files changed ----
     if (['done', 'error', 'stopped'].includes(st) || (st === 'question' && !p.ask && !p.plan && !p.permission)) {
-      const n = p.stats || {}, chip = (icon, count, one, many) => count ? `<span>${svg(icon, 12)}${count} ${count === 1 ? one : many}</span>` : '';
-      const chips = TR() ? [chip('edit', n.edit, 'dosya düzenlendi', 'dosya düzenlendi'), chip('read', n.read, 'dosya okundu', 'dosya okundu'), chip('run', n.run, 'komut', 'komut'), chip('search', (n.search || 0) + (n.web || 0), 'arama', 'arama')].join('')
-        : EN() ? [chip('edit', n.edit, 'file edited', 'files edited'), chip('read', n.read, 'file read', 'files read'), chip('run', n.run, 'command', 'commands'), chip('search', (n.search || 0) + (n.web || 0), 'search', 'searches')].join('')
-        : [chip('edit', n.edit, 'bestand bewerkt', 'bestanden bewerkt'), chip('read', n.read, 'bestand gelezen', 'bestanden gelezen'),
-        chip('run', n.run, 'opdracht', 'opdrachten'), chip('search', (n.search || 0) + (n.web || 0), 'keer gezocht', 'keer gezocht')].join('');
-      const head = st === 'done' ? `<b class="ok">✓ ${T('Klaar', 'Done', 'Tamamlandı')}</b>` : st === 'question' ? `<b class="ask">● ${T('Wacht op jou', 'Waiting for you', 'Seni bekliyor')}</b>` : `<b class="bad">✕ ${T('Gestopt met een fout', 'Stopped with an error', 'Hata ile durdu')}</b>`;
-      const files = (p.files || []).length ? `<div class="ch-sum-files"><small>${T('Gewijzigd', 'Changed', 'Değiştirilen')}</small>${p.files.map(f => `<code>${escape(f)}</code>`).join('')}</div>` : '';
-      msgs.push(`<div class="ch-summary"><div class="ch-sum-head"><span class="ch-sum-title">${T('Samenvatting', 'Summary', 'Özet')}</span>${head}</div>${chips ? `<div class="ch-sum-chips">${chips}</div>` : `<div class="ch-sum-chips"><span>${T('Geen bestanden aangeraakt', 'No files touched', 'Hiçbir dosyaya dokunulmadı')}</span></div>`}${files}</div>`);
+      const n = p.stats || {}, chip = (icon, count, label) => count ? `<span>${svg(icon, 12)}${escape(label)}</span>` : '';
+      const chips = [
+        chip('edit', n.edit, tn('monitor.filesEdited', n.edit)),
+        chip('read', n.read, tn('monitor.filesRead', n.read)),
+        chip('run', n.run, tn('monitor.commands', n.run)),
+        chip('search', (n.search || 0) + (n.web || 0), tn('monitor.searches', (n.search || 0) + (n.web || 0)))
+      ].join('');
+      const head = st === 'done' ? `<b class="ok">${escape(t('status.doneCheck'))}</b>` : st === 'question' ? `<b class="ask">${escape(t('status.waitingDot'))}</b>` : `<b class="bad">${escape(t('status.stoppedError'))}</b>`;
+      const files = (p.files || []).length ? `<div class="ch-sum-files"><small>${escape(t('monitor.changed'))}</small>${p.files.map(f => `<code>${escape(f)}</code>`).join('')}</div>` : '';
+      msgs.push(`<div class="ch-summary"><div class="ch-sum-head"><span class="ch-sum-title">${escape(t('monitor.summary'))}</span>${head}</div>${chips ? `<div class="ch-sum-chips">${chips}</div>` : `<div class="ch-sum-chips"><span>${escape(t('monitor.noFilesTouched'))}</span></div>`}${files}</div>`);
     }
     const past = (state.history || []).filter(h => (h.agent || 'claude') === (p.agent || 'claude')).slice(0, 8);
     if (!msgs.length && past.length) {
-      const when = at => { const d = new Date(at), today = new Date().toDateString() === d.toDateString(); return (today ? '' : d.toLocaleDateString(LOCALE(), { day: 'numeric', month: 'short' }) + ' · ') + d.toLocaleTimeString(LOCALE(), { hour: '2-digit', minute: '2-digit' }); };
-      const RES = { done: ['✓', T('Klaar', 'Done', 'Tamamlandı')], question: ['●', T('Vraag', 'Question', 'Soru')], error: ['✕', T('Fout', 'Error', 'Hata')] };
-      const filesLabel = n => TR() ? `${n} dosya` : EN() ? `${n} file${n === 1 ? '' : 's'}` : `${n} bestand${n === 1 ? '' : 'en'}`;
-      msgs.push(`<div class="ch-hist-title">${T(`Wat ${escape(p.name)} laatst voor je deed`, `Recent ${escape(p.name)} activity`, `Son ${escape(p.name)} aktiviteleri`)}</div>` + past.slice().reverse().map(h => { // oldest first: the newest sits at the bottom, in view
-        const [mark, word] = RES[h.result] || ['•', ''], extra = [h.project, h.files ? filesLabel(h.files) : '', h.seconds ? (h.seconds >= 60 ? Math.round(h.seconds / 60) + (TR() ? ' dk' : ' min') : h.seconds + (TR() ? ' sn' : ' s')) : ''].filter(Boolean).join(' · ');
-        return `<div class="ch-hist"><span class="ch-hist-mark ${escape(h.result)}">${mark}</span><div><b>${escape(trPrompt(h.prompt))}</b><small>${escape(when(h.at))}${extra ? ' · ' + escape(extra) : ''}</small></div><i class="${escape(h.result)}">${word}</i></div>`;
+      const when = at => { const d = new Date(at), today = new Date().toDateString() === d.toDateString(); return (today ? '' : d.toLocaleDateString(loc(), { day: 'numeric', month: 'short' }) + ' · ') + d.toLocaleTimeString(loc(), { hour: '2-digit', minute: '2-digit' }); };
+      const RES = { done: ['✓', t('status.done')], question: ['●', t('status.question')], error: ['✕', t('status.error')] };
+      const dur = s => (s >= 60 ? t('settings.minsShort', { m: Math.round(s / 60) }) : t('settings.secsShort', { s }));
+      msgs.push(`<div class="ch-hist-title">${escape(t('monitor.recentActivity', { name: p.name }))}</div>` + past.slice().reverse().map(h => { // oldest first: the newest sits at the bottom, in view
+        const [mark, word] = RES[h.result] || ['•', ''], extra = [h.project, h.files ? tn('monitor.files', h.files) : '', h.seconds ? dur(h.seconds) : ''].filter(Boolean).join(' · ');
+        return `<div class="ch-hist"><span class="ch-hist-mark ${escape(h.result)}">${mark}</span><div><b>${escape(h.prompt)}</b><small>${escape(when(h.at))}${extra ? ' · ' + escape(extra) : ''}</small></div><i class="${escape(h.result)}">${escape(word)}</i></div>`;
       }).join(''));
     }
-    if (!msgs.length) msgs.push(`<div class="ch-empty">${svg('run', 26)}<b>${T('Nog geen gesprek', 'No conversation yet', 'Henüz görüşme yok')}</b><span>${T(`Typ iets in ${escape(p.name)}. Hier zie je het gesprek live meelopen.`, `Type something in ${escape(p.name)}. You will see it live here.`, `${escape(p.name)} içinde bir şey yazın. Görüşmeyi burada canlı görebilirsiniz.`)}</span></div>`);
+    if (!msgs.length) msgs.push(`<div class="ch-empty">${svg('run', 26)}<b>${escape(t('monitor.noConversation'))}</b><span>${escape(t('monitor.typeSomethingIn', { name: p.name }))}</span></div>`);
 
     // ---- bottom: reply box (when Claude waits for you) or a small limit line ----
     const u = p.usage?.fiveHour;
-    const limit = u ? `<span class="ch-limit">${T('5-uurslimiet', '5-hour limit', '5 saatlik limit')} <b>${u.used}%</b><i><s style="width:${Math.min(100, u.used)}%;background:${ringColour(u.used)}"></s></i></span>` : '';
+    const limit = u ? `<span class="ch-limit">${escape(t('monitor.fiveHourLimit'))} <b>${u.used}%</b><i><s style="width:${Math.min(100, u.used)}%;background:${ringColour(u.used)}"></s></i></span>` : '';
     const footer = p.canReply && !p.ask && !p.plan && !p.permission
-      ? `<div class="ch-compose"><textarea id="am-answer" maxlength="5000" placeholder="${st === 'question' ? T('Jouw antwoord…', 'Your answer…', 'Yanıtınız…') : T('Typ iets voor Claude…', 'Type something for Claude…', 'Claude için bir şey yazın…')}" aria-label="${T('Bericht aan Claude Code', 'Message to Claude Code', 'Claude Code\'a mesaj')}"></textarea><button type="button" class="am-primary" id="am-send" aria-label="${T('Stuur', 'Send', 'Gönder')}" title="${T('Stuur (Enter)', 'Send (Enter)', 'Gönder (Enter)')}">↑</button></div>`
-      : `<div class="ch-foot"><span>${busy(p) ? T('Claude werkt. Je krijgt een seintje als hij klaar is.', 'Claude is working. You get a ping when he is done.', 'Claude çalışıyor. Bittiğinde bildirim alacaksınız.') : st === 'done' ? T('Verder praten? Typ in je terminal.', 'Keep going? Type in your terminal.', 'Devam etmek için terminalinize yazın.') : ''}</span>${limit}</div>`;
+      ? `<div class="ch-compose"><textarea id="am-answer" maxlength="5000" placeholder="${escape(st === 'question' ? t('monitor.yourAnswer') : t('monitor.typeForClaude'))}" aria-label="${escape(t('monitor.messageToClaude'))}"></textarea><button type="button" class="am-primary" id="am-send" aria-label="${escape(t('common.send'))}" title="${escape(t('monitor.sendWithEnter'))}">↑</button></div>`
+      : `<div class="ch-foot"><span>${escape(busy(p) ? t('monitor.claudeWorkingHint') : st === 'done' ? t('monitor.keepGoingTerminal') : '')}</span>${limit}</div>`;
     return head + `<div class="ch-chat"><div class="ch-inner">${msgs.join('')}</div></div>${footer}`; // column-reverse: always shows the newest message
   }
-  // "Gelezen 3 · bewerkt 2 · opdrachten 1" for this turn.
   function statsLine(stats = {}) {
-    const names = { read: 'gelezen', edit: 'bewerkt', run: 'opdrachten', search: 'gezocht', web: 'internet', agent: 'helpers' };
-    const parts = Object.entries(names).filter(([k]) => stats[k]).map(([k, label]) => `${label} <b>${stats[k]}</b>`);
+    const keys = ['read', 'edit', 'run', 'search', 'web', 'agent'];
+    const parts = keys.filter(k => stats[k]).map(k => `${escape(t('monitor.statsLine.' + k))} <b>${stats[k]}</b>`);
     return parts.length ? `<div class="am-hint am-usage">🛠 ${parts.join(' · ')}</div>` : '';
   }
   // Multiple-choice questions: click an option (or several), or type your own answer.
@@ -582,9 +565,9 @@
   function askForm(p) {
     const keyNow = p.sessionId + JSON.stringify(p.ask);
     if (keyNow !== askKey) { askKey = keyNow; askPick = {}; askOther = {}; }
-    return p.ask.map((q, qi) => `<div class="am-ask"><div class="am-said">${q.header ? `<span class="am-tag">${escape(q.header)}</span>` : ''}${escape(q.question)}${q.multiSelect ? ' <i>(kies er meer)</i>' : ''}</div><div class="am-options">${
+    return p.ask.map((q, qi) => `<div class="am-ask"><div class="am-said">${q.header ? `<span class="am-tag">${escape(q.header)}</span>` : ''}${escape(q.question)}${q.multiSelect ? ` <i>${escape(t('monitor.pickMultiple'))}</i>` : ''}</div><div class="am-options">${
       q.options.map((o, oi) => `<button type="button" class="am-option ${(askPick[qi] || []).includes(o.label) ? 'on' : ''}" data-q="${qi}" data-o="${oi}" title="${escape(o.description)}"><b>${escape(o.label)}</b>${o.description ? `<small>${escape(o.description)}</small>` : ''}</button>`).join('')
-    }</div><div class="cc-inline"><input class="am-note" data-other="${qi}" maxlength="2000" placeholder="Of typ je eigen antwoord…" value="${escape(askOther[qi] || '')}">${qi === p.ask.length - 1 ? `<button type="button" class="am-primary" id="am-ask-send" ${pending ? 'disabled' : ''}>Stuur</button>` : ''}</div></div>`).join('');
+    }</div><div class="cc-inline"><input class="am-note" data-other="${qi}" maxlength="2000" placeholder="${escape(t('monitor.orTypeOwnAnswer'))}" value="${escape(askOther[qi] || '')}">${qi === p.ask.length - 1 ? `<button type="button" class="am-primary" id="am-ask-send" ${pending ? 'disabled' : ''}>${escape(t('common.send'))}</button>` : ''}</div></div>`).join('');
   }
   function bindAsk(p) {
     for (const b of root.querySelectorAll('[data-q]')) b.addEventListener('click', () => {
@@ -657,7 +640,7 @@
     const signature = JSON.stringify(providers().map(p => ({ ...p, elapsed: 0, list: p.list?.map(s => ({ ...s, elapsed: 0 })) }))) + (state.history?.[0]?.at || 0);
     if (signature !== lastSignature) {
       lastSignature = signature; render();
-      statusReader.textContent = providers().map(p => `${p.name}: ${labels[p.state]}`).join('. ');
+      statusReader.textContent = providers().map(p => `${p.name}: ${stateLabel(p.state)}`).join('. ');
     }
     const clock = root.querySelector('.am-clock:not([data-sid])'); if (clock) clock.textContent = `${current()?.elapsed || 0}s`;
     for (const item of current()?.list || []) {
@@ -842,12 +825,9 @@
     api.volumeStep?.(e.deltaY < 0 ? 4 : -4);
   }, { passive: false });
   function smallStatus(p) {
-    if (!EN() && !TR()) return p.detail || labels[p.state];
     const step = (p.steps || []).filter(x => x.state === 'running').pop();
-    if (busy(p)) return step ? `${NOW[step.kind] || T('Bezig', 'Working', 'Çalışıyor')} ${shortWhat(step.kind, step.what)}` : T('Bezig', 'Working', 'Çalışıyor');
-    return TR()
-      ? ({ done: 'Tamamlandı ✓', question: 'Seni bekliyor', error: 'Hata', stopped: 'Durduruldu' }[p.state] || 'Boşta')
-      : ({ done: 'Done ✓', question: 'Waiting for you', error: 'Error', stopped: 'Stopped' }[p.state] || 'Idle');
+    if (busy(p)) return step ? `${toolNow(step.kind)} ${shortWhat(step.kind, step.what)}` : t('status.working');
+    return t(({ done: 'status.doneCheck', question: 'status.waitingForYou', error: 'status.error', stopped: 'status.stopped' })[p.state] || 'status.idle');
   }
   // The volume in the small island: the speaker, a bar that glides to the new level, and the percentage.
   let volumeShown = null;
@@ -901,7 +881,7 @@
         const overDl = inside(pointer.x, pointer.y, { x: bx, y: by, width: bw, height: bh });
         text(message, left + 4, cy + 4, 11.5, '#f2f5ed', 700, 'left', bx - left - 12);
         ctx.save(); ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, bh / 2); ctx.fillStyle = overDl ? '#d9f7b3' : '#c6e994'; ctx.fill(); ctx.restore();
-        text(T('Openen', 'Open', 'Aç'), bx + bw / 2, cy + 4, 10.5, '#10180c', 700, 'center');
+        text(t('common.open'), bx + bw / 2, cy + 4, 10.5, '#10180c', 700, 'center');
         hit.cDl = dlBox = { x: bx, y: by, width: bw, height: bh, path: dl.completed.path };
         return;
       }
@@ -913,20 +893,20 @@
       // Claude asks permission: answer right here, without opening the island.
       if (p.permission && !p.ask && !p.plan && p.permission.kind === 'tool') {
         const yesW = 70, noW = 74, bh = 24, by = cy - bh / 2, noX = mid1 - noW, yesX = noX - yesW - 6;
-        line(`${T('Mag ik', 'Allow', 'İzin')}: ${p.permission.what ? p.permission.what.split(/[\\/]/).pop() : p.permission.tool}?`, '#f2f5ed', mid0);
+        line(t('monitor.mayIAllow', { what: p.permission.what ? p.permission.what.split(/[\\/]/).pop() : p.permission.tool }), '#f2f5ed', mid0);
         const btn = (x, w, label, key, primary) => { const over = inside(pointer.x, pointer.y, { x, y: by, width: w, height: bh });
           ctx.save(); ctx.beginPath(); ctx.roundRect(x, by, w, bh, bh / 2); ctx.fillStyle = primary ? (over ? '#d9f7b3' : '#c6e994') : (over ? '#3a2b29' : '#2a2321'); ctx.fill(); ctx.restore();
           text(label, x + w / 2, by + 16, 11, primary ? '#10180c' : '#ffb3a8', 700, 'center'); hit[key] = { x, y: by, width: w, height: bh }; };
         ctx.save(); ctx.fillStyle = '#000'; ctx.fillRect(yesX - 30, 2, mid1 - yesX + 30, H - 4); ctx.restore();
-        btn(yesX, yesW, T('Toestaan', 'Allow', 'İzin Ver'), 'cAllow', true); btn(noX, noW, T('Weigeren', 'Deny', 'Reddet'), 'cDeny', false);
+        btn(yesX, yesW, t('monitor.allow'), 'cAllow', true); btn(noX, noW, t('monitor.deny'), 'cDeny', false);
         return;
       }
-      if (p.state === 'question' && !p.permission && !p.ask && !p.plan) return line(T('Claude heeft een vraag voor je', 'Claude has a question for you', 'Claude\'un bir sorusu var'));
+      if (p.state === 'question' && !p.permission && !p.ask && !p.plan) return line(t('monitor.claudeHasQuestion'));
       if (p.ask || p.plan) {
-        line(p.ask ? T('Claude vraagt iets', 'Claude asks something', 'Claude bir şey soruyor') : T('Plan klaar: goedkeuren?', 'Plan ready: approve?', 'Plan hazır: onaylıyor musun?'), '#f2f5ed', mid0);
+        line(p.ask ? t('monitor.claudeAsksSomething') : t('status.planReadyApprove'), '#f2f5ed', mid0);
         const w = 64, bh = 24, x = mid1 - w, over = inside(pointer.x, pointer.y, { x, y: cy - bh / 2, width: w, height: bh });
         ctx.save(); ctx.beginPath(); ctx.roundRect(x, cy - bh / 2, w, bh, bh / 2); ctx.fillStyle = over ? '#d9f7b3' : '#c6e994'; ctx.fill(); ctx.restore();
-        text(T('Bekijk', 'View', 'Gör'), x + w / 2, cy + 4, 11, '#10180c', 700, 'center'); hit.cOpen = { x, y: cy - bh / 2, width: w, height: bh };
+        text(t('monitor.view'), x + w / 2, cy + 4, 11, '#10180c', 700, 'center'); hit.cOpen = { x, y: cy - bh / 2, width: w, height: bh };
         return;
       }
       return line(`${p.name || 'Claude'} · ${smallStatus(p)}`);
@@ -1027,7 +1007,7 @@
       ctx.beginPath(); ctx.arc(left + cover / 2, cy, r, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.stroke();
       ctx.beginPath(); ctx.arc(left + cover / 2, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * done); ctx.strokeStyle = '#ffb35c'; ctx.stroke(); ctx.restore();
       line(focus.label(), '#ffd28a');
-      if (p?.state === 'running') text(T('Claude bezig', 'Claude working', 'Claude çalışıyor'), mid1, cy + 4, 10, '#8f998d', 600, 'right');
+      if (p?.state === 'running') text(t('monitor.claudeWorkingShort'), mid1, cy + 4, 10, '#8f998d', 600, 'right');
       return;
     }
     const meet = window.__lumadockNextMeeting?.();
@@ -1035,10 +1015,10 @@
       icon('clock');
       const bw = 64, bh = 22, bx = mid1 - bw, by = cy - bh / 2;
       const overJoin = inside(pointer.x, pointer.y, { x: bx, y: by, width: bw, height: bh });
-      const whenLbl = meet.mins <= 0 ? T('Nu', 'Now', 'Şimdi') : `${meet.mins}m`;
+      const whenLbl = meet.mins <= 0 ? t('header.nowWord') : `${meet.mins}m`;
       text(`📅 ${whenLbl} · ${meet.title}`, mid0, cy + 4, 11.5, '#f2f5ed', 700, 'left', bx - mid0 - 8);
       ctx.save(); ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, bh / 2); ctx.fillStyle = overJoin ? '#d9f7b3' : '#22e05a'; ctx.fill(); ctx.restore();
-      text(T('Deelnemen', 'Join', 'Katıl'), bx + bw / 2, cy + 4, 10.5, '#09150c', 700, 'center');
+      text(t('header.join'), bx + bw / 2, cy + 4, 10.5, '#09150c', 700, 'center');
       hit.cJoin = joinBox = { x: bx, y: by, width: bw, height: bh, url: meet.url };
       return;
     }
@@ -1286,19 +1266,20 @@
   window.__lumadockAppIcon = appIcon;
   function mono(str, x, y, size, colour, maxW) {
     ctx.save(); ctx.font = `${size}px "Cascadia Code", Consolas, monospace`; ctx.fillStyle = colour; ctx.textBaseline = 'alphabetic';
-    let s = String(window.__lumadockTr?.(String(str || '')) ?? str ?? ''); if (maxW) while (s.length > 1 && ctx.measureText(s).width > maxW) s = s.slice(0, -2) + '…';
+    let s = String(str ?? ''); if (maxW) while (s.length > 1 && ctx.measureText(s).width > maxW) s = s.slice(0, -2) + '…';
     ctx.fillText(s, x, y); ctx.restore();
   }
-  // ---- Home = widgets. Every app is a widget: Klein (1 vakje), Breed (2×1) or Groot (2×2), on a 4 × 2 grid.
-  // So 8 small ones, 2 big ones, or anything in between. Press + to edit (iPhone style): everything wiggles,
-  // − removes, the arrow badge changes the size, hold and drag to move, empty spots get a + to add a widget.
-  const SIZES = { S: [1, 1], W: [2, 1], L: [2, 2] }, SIZE_NAME = { S: 'Klein', W: 'Breed', L: 'Groot' }, COLS = 4, ROWS = 2;
+  // ---- Home = widgets. Every app is a widget: Small (1x1), Wide (2x1) or Big (2x2), on a 4 x 2 grid.
+  // So 8 small ones, 2 big ones, or anything in between. Press + to edit: everything wiggles,
+  // - removes, the arrow badge changes the size, hold and drag to move, empty spots get a + to add a widget.
+  const SIZES = { S: [1, 1], W: [2, 1], L: [2, 2] }, COLS = 4, ROWS = 2;
+  const sizeName = s => t('home.sizes.' + s);
   const PRESETS = [
-    { name: 'Standaard', list: [['claude', 'L'], ['spotify', 'S'], ['focus', 'S'], ['tray', 'S'], ['settings', 'S']] },
-    { name: '8 klein', list: ['claude', 'spotify', 'focus', 'clock', 'tray', 'clips', 'note', 'settings'].map(id => [id, 'S']) },
-    { name: '2 groot', list: [['claude', 'L'], ['spotify', 'L']] },
-    { name: '4 breed', list: [['claude', 'W'], ['spotify', 'W'], ['focus', 'W'], ['note', 'W']] },
-    { name: 'Muziek', list: [['spotify', 'L'], ['claude', 'W'], ['clock', 'S'], ['focus', 'S']] }
+    { id: 'default', list: [['claude', 'L'], ['spotify', 'S'], ['focus', 'S'], ['tray', 'S'], ['settings', 'S']] },
+    { id: 'eightSmall', list: ['claude', 'spotify', 'focus', 'clock', 'tray', 'clips', 'note', 'settings'].map(id => [id, 'S']) },
+    { id: 'twoBig', list: [['claude', 'L'], ['spotify', 'L']] },
+    { id: 'fourWide', list: [['claude', 'W'], ['spotify', 'W'], ['focus', 'W'], ['note', 'W']] },
+    { id: 'music', list: [['spotify', 'L'], ['claude', 'W'], ['clock', 'S'], ['focus', 'S']] }
   ];
   let homeEdit = false, gallery = null, drag = null, swallowClick = false, longPress = null, homeGeo = null, widgets = null, cell = { w: 171, h: 64, gap: 8 };
   const anim = {};
@@ -1399,8 +1380,8 @@
   // ---- the widgets themselves ----
   function claudeInfo() {
     const p = top(), st = p ? (p.permission ? 'question' : p.state) : 'ready';
-    const agentName = p?.name || 'AI', project = p?.source?.title && p.source.title !== 'Geen actieve sessie' ? p.source.title : agentName;
-    const statusText = !p ? 'Wacht op je AI' : p.permission || st === 'question' ? 'Wacht op jou' : busy(p) ? (p.detail || 'Bezig') : st === 'done' ? 'Klaar' : st === 'error' ? (p.detail || 'Fout') : 'Rustig';
+    const agentName = p?.name || 'AI', project = p?.source?.title && p.source.title !== t('monitor.session.noActiveSession') ? p.source.title : agentName;
+    const statusText = !p ? t('status.waitingForAi') : p.permission || st === 'question' ? t('status.waitingForYou') : busy(p) ? (p.detail || t('status.working')) : st === 'done' ? t('status.done') : st === 'error' ? (p.detail || t('status.error')) : t('status.idle');
     const lastLine = p?.code && busy(p) ? '+ ' + (p.code.lines.find(l => l.t !== '-')?.text || p.code.file) : p?.run ? (p.run.out.slice(-1)[0] || '$ ' + p.run.command) : String(p?.lastMessage || '').split('\n').filter(Boolean)[0] || '';
     return { p, st, project, statusText, dot: p ? colourOf(st) : '#4a504c', lastLine };
   }
@@ -1409,7 +1390,7 @@
     else if (p && busy(p)) { ctx.save(); ctx.translate(x, y); ctx.rotate(performance.now() / 160); ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 1.4); ctx.strokeStyle = dot; ctx.lineWidth = 1.8; ctx.lineCap = 'round'; ctx.stroke(); ctx.restore(); }
     else { ctx.save(); ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.strokeStyle = dot; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore(); }
   }
-  // Each AI has its own colour (the same as in LumaDock → Verbindingen).
+  // Each AI has its own colour (the same as in LumaDock → Connections).
   const AI_COLOUR = { claudecode: '#d97757', codex: '#3b82f6', gemini: '#4285f4', cursor: '#a855f7', claude: '#e8a87c', chatgpt: '#10a37f' };
   // All chats going on at once, across AIs: every Claude Code / Codex / Gemini session, plus the ChatGPT and Claude chats.
   function activeChats() {
@@ -1432,39 +1413,39 @@
     ctx.restore();
   }
   const chatWord = s => ({
-    running: T('Bezig', 'Busy', 'Çalışıyor'),
-    sending: T('Bezig', 'Sending', 'Gönderiyor'),
-    question: T('Wacht op jou', 'Waiting', 'Bekliyor'),
-    done: T('Klaar', 'Done', 'Bitti'),
-    error: T('Fout', 'Error', 'Hata'),
-    ready: T('Rustig', 'Idle', 'Boşta')
+    running: t('status.busy'),
+    sending: t('status.sending'),
+    question: t('status.waitingForYou'),
+    done: t('status.done'),
+    error: t('status.error'),
+    ready: t('status.idle')
   }[s] || '');
   // Nothing going on: which AIs Robo is watching (or where to connect one).
   function drawIdleAi(tx, y, tw, h, live) {
     const watching = providers().filter(q => q.connected || q.hooksInstalled), last = state.history?.[0];
     const hungry = window.__lumadockHomeTitle?.(); // "I'm hungry… finish a task 🍪" (lumadock-fun.js) instead of "Idle"
-    text(hungry || 'Rustig', tx, y + 30, hungry ? 13 : 14, hungry ? '#ffc27a' : '#f2f5ef', 700, 'left', tw);
+    text(hungry || t('status.idle'), tx, y + 30, hungry ? 13 : 14, hungry ? '#ffc27a' : '#f2f5ef', 700, 'left', tw);
     if (last) { // the last job, so a quiet card still tells you something (click it for the whole list)
-      const word = { done: '✓ Klaar', question: '● Vraag', error: '✕ Fout' }[last.result] || '', colour = { done: '#7ef0a4', question: '#ffc27a', error: '#ff9a9a' }[last.result] || '#aab2ad';
-      const at = new Date(last.at).toLocaleTimeString(LOCALE(), { hour: '2-digit', minute: '2-digit' });
-      text(`${T('Laatst', 'Last')}: ${last.prompt}`, tx, y + 50, 11, '#c9d0cb', 600, 'left', tw - 70);
+      const word = { done: t('status.doneCheck'), question: t('status.questionDot'), error: t('status.errorCross') }[last.result] || '', colour = { done: '#7ef0a4', question: '#ffc27a', error: '#ff9a9a' }[last.result] || '#aab2ad';
+      const at = new Date(last.at).toLocaleTimeString(loc(), { hour: '2-digit', minute: '2-digit' });
+      text(`${t('home.last')}: ${last.prompt}`, tx, y + 50, 11, '#c9d0cb', 600, 'left', tw - 70);
       text(word, tx + tw, y + 50, 10.5, colour, 700, 'right');
       text(`${at}${last.project ? ' · ' + last.project : ''}`, tx, y + 65, 10, '#7d847f', 500, 'left', tw);
-    } else text(watching.length ? 'Robo meldt het als je AI klaar is of iets vraagt.' : 'Koppel je AI in LumaDock → Verbindingen.', tx, y + 50, 11, '#8a918c', 500, 'left', tw);
+    } else text(watching.length ? t('home.roboAlertsWhenDone') : t('home.connectAiHint'), tx, y + 50, 11, '#8a918c', 500, 'left', tw);
     watching.slice(0, 4).forEach((q, i) => {
       const bx = tx + i * 70, by = y + h - 44;
       miniBot(bx, by, 20, AI_COLOUR[q.provider] || '#aaa', q.connected ? colourOf(q.state === 'disconnected' ? 'ready' : q.state) : '#4a504c', false, false);
       text(q.name, bx + 26, by + 12, 10, '#aab2ad', 600, 'left', 44);
     });
   }
-  // ChatGPT or Claude (the app or the website), like Coucou: the chat's name, one status line,
+  // ChatGPT or Claude (the app or the website): the chat's name, one status line,
   // and a dark box with the start of the answer, so you see it's really following your chat.
   function drawChatApp(p, st, tx, y, tw, h) {
     const lamp = colourOf(st), name = p.name || 'AI', title = p.source?.title || name;
     ctx.save(); ctx.beginPath(); ctx.arc(tx + 4, y + 21, 3.6, 0, Math.PI * 2); ctx.fillStyle = lamp; ctx.shadowColor = lamp; ctx.shadowBlur = 6; ctx.fill(); ctx.restore();
     text(title, tx + 14, y + 25, 12.5, '#f2f5ef', 700, 'left', tw * 0.62);
     text(name, tx + tw, y + 25, 11, '#7d847f', 600, 'right', tw * 0.3);
-    const line = st === 'question' ? name + ' vraagt iets' : st === 'done' ? 'Klaar · je antwoord staat klaar' : busy(p) ? name + ' schrijft…' : st === 'error' ? 'Er ging iets mis' : st === 'login' ? 'Log eerst in' : 'Volgt dit gesprek';
+    const line = st === 'question' ? t('home.asking', { name }) : st === 'done' ? t('home.doneAnswerReady') : busy(p) ? t('home.writing', { name }) : st === 'error' ? t('buddy.chat.wrong') : st === 'login' ? t('status.signIn') : t('monitor.session.followingChat');
     statusIcon(tx + 7, y + 40, st, lamp, p);
     text(line, tx + 18, y + 44, 11.5, st === 'done' ? lamp : '#e8ece6', 700, 'left', tw - 60);
     if (busy(p) && p.elapsed) text(p.elapsed + ' s', tx + tw, y + 44, 10.5, '#7d847f', 600, 'right');
@@ -1474,14 +1455,18 @@
     const said = String(st === 'question' && p.question ? p.question : p.preview || '').replace(/\s+/g, ' ').trim();
     const lines = said ? wrapLines(busy(p) ? said.slice(-400) : said.slice(0, 400), bw - 20, 10, Math.max(1, Math.floor((bh - 10) / 13))) : [];
     if (lines.length) lines.forEach((l, i) => text(l, bx + 10, by + 16 + i * 13, 10, '#aab2ad', 500, 'left', bw - 20));
-    else text(busy(p) ? 'Het antwoord komt eraan…' : 'Stel je vraag in ' + name + '. Robo kijkt mee.', bx + 10, by + 16, 10, '#5d6460', 500, 'left', bw - 20);
+    else text(busy(p) ? t('home.answerComing') : t('home.askInFollow', { name }), bx + 10, by + 16, 10, '#5d6460', 500, 'left', bw - 20);
     ctx.restore();
   }
   // Several chats at once (two Claude Code sessions, Codex and ChatGPT…): a short summary and one row each.
   function drawChatList(chats, tx, y, tw, h, live) {
     const count = s => chats.filter(c => (s === 'busy' ? busy(c) : c.state === s)).length;
-    const parts = [[count('busy'), T('bezig', 'busy', 'aktif')], [count('question'), T('wachten op jou', 'waiting', 'bekliyor')], [count('done'), T('klaar', 'done', 'bitti')]].filter(([n]) => n).map(([n, w]) => `${n} ${w}`);
-    text(`${chats.length} ${T('chats', 'chats', 'sohbet')}`, tx, y + 29, 14, '#f2f5ef', 700, 'left', tw * 0.4);
+    const parts = [
+      count('busy') ? t('home.chatsBusy', { count: count('busy') }) : '',
+      count('question') ? t('home.chatsWaiting', { count: count('question') }) : '',
+      count('done') ? t('home.chatsDone', { count: count('done') }) : ''
+    ].filter(Boolean);
+    text(t('home.chatsCount', { count: chats.length }), tx, y + 29, 14, '#f2f5ef', 700, 'left', tw * 0.4);
     text(parts.join(' · '), tx + tw, y + 29, 11, '#8a918c', 600, 'right', tw * 0.6);
     const top = y + 42, rowH = Math.max(22, Math.min(28, (h - 54) / Math.min(chats.length, 4))), rows = Math.max(1, Math.floor((h - 50) / rowH));
     chats.slice(0, rows).forEach((c, i) => {
@@ -1493,7 +1478,7 @@
       text(chatWord(c.state), tx + tw, ry + rowH / 2 + 4, 10.5, colourOf(c.state), 700, 'right');
       if (live) hit['aichip_' + i] = { x: tx - 6, y: ry, width: tw + 6, height: rowH, provider: c.provider };
     });
-    if (chats.length > rows) text(`+${chats.length - rows} ${T('meer', 'more', 'diğer')}`, tx + tw, y + h - 8, 10, '#6b726e', 600, 'right');
+    if (chats.length > rows) text(t('home.moreCount', { count: chats.length - rows }), tx + tw, y + h - 8, 10, '#6b726e', 600, 'right');
   }
   function drawClaudeCard(lx, y, leftW, h, live) {
     const { p, st, project, statusText, dot } = claudeInfo(), agentName = p?.name || 'AI';
@@ -1515,13 +1500,13 @@
     if (steps.length) text(`${doneSteps}/${steps.length}`, tx + tw, y + 25, 10.5, '#7d847f', 600, 'right');
     const sx = tx + 2, sy = y + 44;
     statusIcon(sx + 5, sy - 4, st, dot, p);
-    const summary = st === 'done' && p?.run?.out?.length ? (p.run.out.find(l => /pass|passed|ok|success|klaar/i.test(l)) || '') : '';
+    const summary = st === 'done' && p?.run?.out?.length ? (p.run.out.find(l => /pass|passed|ok|success/i.test(l)) || '') : '';
     text(statusText, sx + 16, sy, 11.5, p ? (st === 'done' ? dot : '#e8ece6') : '#8a918c', 700, 'left', tw * 0.5);
     // your 5-hour Claude limit, once it starts to matter
     const lim = usage().fiveHour;
     if (lim && lim.used >= 50) {
       const c = ringColour(lim.used), bw = 74, bx = tx + tw - bw, pulse = lim.used >= 90 ? 0.65 + 0.35 * Math.cos(performance.now() / 260) : 1;
-      ctx.save(); ctx.globalAlpha = pulse; text(`${T('Limiet', 'Limit', 'Limit')} ${lim.used}%`, tx + tw, sy - 2, 10.5, c, 800, 'right');
+      ctx.save(); ctx.globalAlpha = pulse; text(`${t('home.limitWord')} ${lim.used}%`, tx + tw, sy - 2, 10.5, c, 800, 'right');
       ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.beginPath(); ctx.roundRect(bx, sy + 3, bw, 3, 1.5); ctx.fill();
       ctx.fillStyle = c; ctx.beginPath(); ctx.roundRect(bx, sy + 3, bw * Math.min(1, lim.used / 100), 3, 1.5); ctx.fill(); ctx.restore();
     }
@@ -1548,7 +1533,7 @@
       String(p.lastMessage).split('\n').filter(Boolean).slice(0, Math.floor((bh - 8) / lh)).forEach((l, i) => mono(l, mx, by + 15 + i * lh, 9.5, '#aab2ad', bw - 20));
     } else {
       mono(p ? '…' : '$ claude', mx, by + 15, 9.5, '#5d6460', bw - 20);
-      if (!p) mono('LumaDock volgt het vanzelf', mx, by + 28, 9.5, '#3f4542', bw - 20);
+      if (!p) mono(t('home.followAuto'), mx, by + 28, 9.5, '#3f4542', bw - 20);
     }
     ctx.restore();
   }
@@ -1600,7 +1585,7 @@
     const tx = r.x + s + 24, tw = r.x + r.width - tx - 14;
     text(t.name, tx, r.y + 30, 14.5, '#fff', 700, 'left', tw);
     text(artist, tx, r.y + 48, 11.5, '#9aa596', 500, 'left', tw);
-    if (spotifyState.device && !spotifyState.device.here) text(T('Speelt op ', 'Playing on ', 'Çalınan cihaz: ') + spotifyState.device.name, tx, r.y + 68, 10.5, window.__lumadockAlbumColour || '#1ed760', 600, 'left', tw); // where it plays (no fake sound wave)
+    if (spotifyState.device && !spotifyState.device.here) text(t('home.playingOn', { device: spotifyState.device.name }), tx, r.y + 68, 10.5, window.__lumadockAlbumColour || '#1ed760', 600, 'left', tw); // where it plays (no fake sound wave)
     const py = r.y + r.height - 50;
     ctx.save(); ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.beginPath(); ctx.roundRect(tx, py, tw, 4, 2); ctx.fill(); ctx.fillStyle = '#f4f7f0'; ctx.beginPath(); ctx.roundRect(tx, py, Math.max(4, tw * part), 4, 2); ctx.fill(); ctx.restore();
     const cy = r.y + r.height - 24, mid = tx + tw / 2;
@@ -1619,13 +1604,13 @@
     if (w.size === 'S') {
       ring(r.x + 30, r.y + r.height / 2, 17, 3.5); window.__lumadockIcon?.('timer', r.x + 30, r.y + r.height / 2, 16, '#ffd3a1');
       text(label, r.x + 58, r.y + r.height / 2 - 1, 15, '#fff', 700, 'left', r.width - 66);
-      text(on ? 'Focus loopt' : 'Focus', r.x + 58, r.y + r.height / 2 + 14, 10.5, '#8f998d', 500, 'left', r.width - 66);
+      text(on ? t('home.focusRunning') : t('focus.title'), r.x + 58, r.y + r.height / 2 + 14, 10.5, '#8f998d', 500, 'left', r.width - 66);
       return;
     }
     if (w.size === 'W') {
       const rad = r.height / 2 - 12; ring(r.x + 14 + rad, r.y + r.height / 2, rad, 4); window.__lumadockIcon?.('timer', r.x + 14 + rad, r.y + r.height / 2, 18, '#ffd3a1');
       text(label, r.x + rad * 2 + 30, r.y + r.height / 2 + 2, 20, '#fff', 700);
-      text(on ? 'Blijf gefocust' : 'Focus', r.x + rad * 2 + 30, r.y + r.height / 2 + 17, 10.5, '#8f998d', 500);
+      text(on ? t('home.stayFocused') : t('focus.title'), r.x + rad * 2 + 30, r.y + r.height / 2 + 17, 10.5, '#8f998d', 500);
       wbtn(r.x + r.width - 28, r.y + r.height / 2, 16, on ? 'stop' : 'play', 'focusQuick', true, live);
       return;
     }
@@ -1633,25 +1618,25 @@
     ring(cx, cy, rad, 6);
     text(label, cx, cy + 7, 21, '#fff', 700, 'center');
     const tx = cx + rad + 22;
-    text('Focus', tx, r.y + 36, 15, '#fff', 700);
-    text(on ? 'Blijf gefocust, Robo let op' : 'Klaar om te starten', tx, r.y + 54, 11, '#8f998d', 500, 'left', r.x + r.width - tx - 12);
+    text(t('focus.title'), tx, r.y + 36, 15, '#fff', 700);
+    text(on ? t('home.stayFocusedWatching') : t('home.readyToStart'), tx, r.y + 54, 11, '#8f998d', 500, 'left', r.x + r.width - tx - 12);
     wbtn(tx + 18, r.y + r.height - 32, 18, on ? 'stop' : 'play', 'focusQuick', true, live);
   }
   function noteWidget(w, r) {
     if (w.size === 'S') return genericWidget(w, r);
     window.__lumadockIcon?.('note', r.x + 22, r.y + 20, 16, '#ffd166');
-    text('Notitie', r.x + 36, r.y + 25, 12, '#f2f5ef', 700);
+    text(t('toolsPage.noteTitle'), r.x + 36, r.y + 25, 12, '#f2f5ef', 700);
     const lines = wrapLines(noteText, r.width - 32, 11.5, Math.max(1, Math.floor((r.height - 38) / 16)));
-    if (!lines.length) { text('Tik om iets op te schrijven', r.x + 16, r.y + 46, 11.5, '#6f7a6b', 500); return; }
+    if (!lines.length) { text(t('home.tapToWrite'), r.x + 16, r.y + 46, 11.5, '#6f7a6b', 500); return; }
     lines.forEach((l, i) => text(l, r.x + 16, r.y + 46 + i * 16, 11.5, '#d9dfd4', 500, 'left', r.width - 32));
   }
   function clipsWidget(w, r) {
     if (w.size === 'S') return genericWidget(w, r);
     window.__lumadockIcon?.('copy', r.x + 22, r.y + 20, 16, '#5ad1c4');
-    text('Klembord', r.x + 36, r.y + 25, 12, '#f2f5ef', 700);
+    text(t('toolsPage.clipboardTitle'), r.x + 36, r.y + 25, 12, '#f2f5ef', 700);
     if (clipList.length) text(String(clipList.length), r.x + r.width - 16, r.y + 25, 11, '#7d847f', 600, 'right');
     const max = Math.max(1, Math.floor((r.height - 36) / 17));
-    if (!clipList.length) { text('Kopieer iets, dan staat het hier', r.x + 16, r.y + 46, 11.5, '#6f7a6b', 500); return; }
+    if (!clipList.length) { text(t('home.copySomethingHint'), r.x + 16, r.y + 46, 11.5, '#6f7a6b', 500); return; }
     clipList.slice(0, max).forEach((c, i) => {
       const ly = r.y + 36 + i * 17;
       if (i) { ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fillRect(r.x + 14, ly - 2, r.width - 28, 1); }
@@ -1659,8 +1644,8 @@
     });
   }
   function clockWidget(w, r) {
-    const d = new Date(), time = d.toLocaleTimeString(LOCALE(), { hour: '2-digit', minute: '2-digit' });
-    const day = d.toLocaleDateString(LOCALE(), w.size === 'S' ? { weekday: 'short', day: 'numeric', month: 'short' } : { weekday: 'long', day: 'numeric', month: 'long' });
+    const d = new Date(), time = d.toLocaleTimeString(loc(), { hour: '2-digit', minute: '2-digit' });
+    const day = d.toLocaleDateString(loc(), w.size === 'S' ? { weekday: 'short', day: 'numeric', month: 'short' } : { weekday: 'long', day: 'numeric', month: 'long' });
     const sec = (d.getSeconds() + d.getMilliseconds() / 1000) / 60;
     if (w.size === 'L') {
       text(time, r.x + r.width / 2, r.y + r.height / 2 + 10, 44, '#fff', 700, 'center');
@@ -1700,7 +1685,7 @@
       ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect(r.x + 16, y + 6, Math.max(4, (r.width - 32) * Math.min(1, part)), 4, 2); ctx.fill(); ctx.restore();
     };
     window.__lumadockIcon?.('cpu', r.x + 22, r.y + 19, 15, '#7fd8ff');
-    text(T('Systeem', 'System', 'Sistem'), r.x + 36, r.y + 23, 12, '#f2f5ef', 700);
+    text(t('home.appsLabels.system'), r.x + 36, r.y + 23, 12, '#f2f5ef', 700);
     if (w.size === 'W') {
       barRow('CPU', `${st.cpuPct}%`, st.cpuPct / 100, r.y + 42, st.cpuPct > 80 ? '#ff7b72' : '#7fd8ff');
       barRow('RAM', `${st.memPct}% · ${st.memUsedGb}G`, st.memPct / 100, r.y + 62, '#c6e994');
@@ -1793,13 +1778,13 @@
   function setGallery(v) { const was = Boolean(gallery); gallery = v; if (was !== Boolean(v) && mode === 'expanded') setMode('expanded', false); }
   function galleryResult() { // what would happen if you press the button
     const list = getWidgets(), mine = list.find(w => w.id === gallery.pick);
-    if (mine && mine.size === gallery.size) return { label: 'Staat er al', ok: false };
+    if (mine && mine.size === gallery.size) return { label: t('home.alreadyThere'), ok: false };
     const item = { id: gallery.pick, size: gallery.size, c: mine ? mine.c : gallery.c, r: mine ? mine.r : gallery.r };
     const rest = list.filter(w => w.id !== gallery.pick);
     let plan = arrange([...rest, item], item.id);
     if (!plan.ok) plan = arrange([...rest, { ...item, c: undefined, r: undefined }]);
-    if (!plan.ok) return { label: 'Geen plek', ok: false, hint: 'Haal eerst iets weg of maak iets kleiner' };
-    return { label: mine ? `Maak ${SIZE_NAME[gallery.size].toLowerCase()}` : 'Toevoegen', ok: true, plan };
+    if (!plan.ok) return { label: t('home.noRoom'), ok: false, hint: t('home.makeSmallerFirst') };
+    return { label: mine ? t('home.makeSized', { size: sizeName(gallery.size).toLowerCase() }) : t('home.addWidget'), ok: true, plan };
   }
   function chip(x, y, w, h, label, on, key) {
     const b = { x, y, width: w, height: h }, over = inside(pointer.x, pointer.y, b);
@@ -1809,9 +1794,9 @@
   }
   function drawGallery(area) {
     const x = area.x, y = area.y, W = area.width;
-    text('Widgets', x + 4, y + 20, 16, '#fff', 700);
-    text('Kies een app en een maat, of pak een kant-en-klare indeling', x + 78, y + 20, 11, '#8f998d', 500, 'left', W - 200);
-    chip(x + W - 74, y + 4, 74, 26, 'Klaar', true, 'hmGalClose');
+    text(t('home.widgets'), x + 4, y + 20, 16, '#fff', 700);
+    text(t('home.pickLayoutHint'), x + 78, y + 20, 11, '#8f998d', 500, 'left', W - 200);
+    chip(x + W - 74, y + 4, 74, 26, t('header.doneBtn'), true, 'hmGalClose');
     // ready-made layouts, each with a tiny picture of the grid
     const py = y + 32, pw = (W - 4 * 8) / 5, ph = 40;
     PRESETS.forEach((p, i) => {
@@ -1819,7 +1804,7 @@
       ctx.save(); ctx.beginPath(); ctx.roundRect(bx, py, pw, ph, 12); ctx.fillStyle = over ? '#202326' : '#16181a'; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.stroke(); ctx.restore();
       const tw = 40, th = 22, tx = bx + 10, ty = py + (ph - th) / 2, tg = 2, tcw = (tw - tg * 3) / 4, tch = (th - tg) / 2;
       presetLayout(p).placed.forEach(w => { if (w.hidden) return; ctx.save(); ctx.beginPath(); ctx.roundRect(tx + w.c * (tcw + tg), ty + w.r * (tch + tg), w.cw * tcw + (w.cw - 1) * tg, w.ch * tch + (w.ch - 1) * tg, 3); ctx.fillStyle = APPS[w.id].tint(); ctx.globalAlpha = 0.75; ctx.fill(); ctx.restore(); });
-      text(p.name, tx + tw + 10, py + ph / 2 + 4, 11.5, '#e8ece6', 700, 'left', pw - tw - 26);
+      text(t('home.presets.' + p.id), tx + tw + 10, py + ph / 2 + 4, 11.5, '#e8ece6', 700, 'left', pw - tw - 26);
       hit['hmPreset_' + i] = b;
     });
     // left: all apps
@@ -1834,7 +1819,7 @@
     });
     // right: sizes + live preview + button
     const rx = x + colW * 2 + 26, rw = x + W - rx, sy = by;
-    ['S', 'W', 'L'].forEach((s, i) => chip(rx + i * 80, sy, 72, 26, SIZE_NAME[s], gallery.size === s, 'hmGalSize_' + s));
+    ['S', 'W', 'L'].forEach((s, i) => chip(rx + i * 80, sy, 72, 26, sizeName(s), gallery.size === s, 'hmGalSize_' + s));
     const res = galleryResult();
     const bw = 130, bb = { x: x + W - bw, y: sy, width: bw, height: 26 };
     ctx.save(); ctx.beginPath(); ctx.roundRect(bb.x, bb.y, bw, 26, 13); ctx.fillStyle = res.ok ? (inside(pointer.x, pointer.y, bb) ? '#d9f7b3' : '#c6e994') : '#2a2d30'; ctx.fill(); ctx.restore();
@@ -1899,9 +1884,9 @@
         const order = ['S', 'W', 'L'], list = getWidgets();
         for (let k = 1; k < 3; k++) {
           const size = order[(order.indexOf(w.size) + k) % 3], plan = arrange(list.map(x => x.id === w.id ? { ...x, size, c: Math.min(x.c, COLS - SIZES[size][0]), r: Math.min(x.r, ROWS - SIZES[size][1]) } : x), w.id);
-          if (plan.ok) { saveWidgets(plan.placed); window.__lumadockFlash?.(SIZE_NAME[size], 700); sound('click'); return; }
+          if (plan.ok) { saveWidgets(plan.placed); window.__lumadockFlash?.(sizeName(size), 700); sound('click'); return; }
         }
-        window.__lumadockFlash?.('Geen plek om groter te maken', 1200); return;
+        window.__lumadockFlash?.(t('home.noRoomToGrow'), 1200); return;
       }
     }
   }, true);
@@ -1931,47 +1916,47 @@
   }
   drawApps = function (area) {
     const PAGE = window.__lumadockPage, focus = window.__lumadockFocus, p = top();
-    PAGE.title(area, 'Apps', T('Alles wat LumaDock voor je kan doen · Ctrl+Alt+1–6 = sneltoets', 'Everything LumaDock can do for you · Ctrl+Alt+1–6 = shortcut', 'LumaDock ile yapabileceğiniz her şey · Ctrl+Alt+1–6 = kısayol'));
+    PAGE.title(area, t('home.allApps'), t('home.allAppsSub'));
     const cols = 4, x = area.x + PAGE.contentX, gap = 10, w = Math.floor((area.width - PAGE.contentX * 2 - gap * (cols - 1)) / cols);
     const tray = window.__lumadockTrayCount?.() || 0;
     const st = window.__lumadockStats?.();
     const tiles = [
-      ['music', 'Spotify', spotifyState.track ? short(spotifyState.track.name, 22) : (spotifyConnected ? T('Niks aan het spelen', 'No music playing', 'Müzik çalmıyor') : T('Nog niet gekoppeld', 'Not connected', 'Bağlı değil')), 'spotifyApp', window.__lumadockAlbumColour || TILE_TINT.music],
-      ['terminal', 'AI', p ? p.name + ' · ' + (p.detail || labels[p.state]) : 'Claude, ChatGPT, Codex', 'monitor_claudecode', p ? colourOf(p.state) : TILE_TINT.terminal],
-      ['timer', 'Focus', focus?.active() ? `${focus.label()}` : `${focus?.minutes?.() || 25} min`, 'focusApp', TILE_TINT.timer],
-      ['tray', T('Lade', 'Tray', 'Çekmece'), tray ? `${tray} ` + T('bestand', 'file', 'dosya') : T('Leeg', 'Empty', 'Boş'), 'trayApp', TILE_TINT.tray],
-      ['copy', T('Klembord', 'Clipboard', 'Pano'), T('Je laatste kopieën', 'Recent clippings', 'Son kopyalananlar'), 'clipsApp', '#5ad1c4'],
-      ['note', T('Notitie', 'Notes', 'Notlar'), T('Snel iets opschrijven', 'Quick note', 'Hızlı not al'), 'noteApp', '#ffd166'],
-      ['cpu', T('Systeem', 'System', 'Sistem'), st ? `CPU ${st.cpuPct}% · RAM ${st.memPct}%` : 'CPU & RAM', 'cpuApp', '#7fd8ff'],
-      ['picker', T('Kleur', 'Color Picker', 'Renk Seç'), lastPickedColour || T('Kopieer pixelkleur', 'Pick screen color', 'Ekrandan renk al'), 'pickerApp', lastPickedColour || '#ff85b3'],
-      ['gear', T('Instellingen', 'Settings', 'Ayarlar'), T('Kleuren, geluid en meer', 'Colors, sound and more', 'Renkler, ses ve fazlası'), 'settingsApp', TILE_TINT.gear]
+      ['music', 'Spotify', spotifyState.track ? short(spotifyState.track.name, 22) : (spotifyConnected ? t('home.noMusic') : t('status.notConnected')), 'spotifyApp', window.__lumadockAlbumColour || TILE_TINT.music],
+      ['terminal', 'AI', p ? p.name + ' · ' + (p.detail || stateLabel(p.state)) : 'Claude, ChatGPT, Codex', 'monitor_claudecode', p ? colourOf(p.state) : TILE_TINT.terminal],
+      ['timer', t('focus.title'), focus?.active() ? `${focus.label()}` : t('focus.minutesUnit', { n: focus?.minutes?.() || 25 }), 'focusApp', TILE_TINT.timer],
+      ['tray', t('home.appsLabels.tray'), tray ? tn('monitor.files', tray) : t('home.empty'), 'trayApp', TILE_TINT.tray],
+      ['copy', t('home.appsLabels.clips'), t('home.recentClippings'), 'clipsApp', '#5ad1c4'],
+      ['note', t('home.appsLabels.note'), t('home.quickNote'), 'noteApp', '#ffd166'],
+      ['cpu', t('home.appsLabels.system'), st ? `CPU ${st.cpuPct}% · RAM ${st.memPct}%` : 'CPU & RAM', 'cpuApp', '#7fd8ff'],
+      ['picker', t('home.appsLabels.picker'), lastPickedColour || t('home.pickScreenColor'), 'pickerApp', lastPickedColour || '#ff85b3'],
+      ['gear', t('home.appsLabels.settings'), t('home.colorsSoundMore'), 'settingsApp', TILE_TINT.gear]
     ];
-    // apps you removed in LumaDock Instellingen → Apps are not here (Instellingen itself always is)
-    const off = window.__lumadockAppsOff?.() || new Set(), shown = tiles.filter(t => !off.has(APP_OF_KEY[t[3]]));
+    // apps you removed in LumaDock Settings → Apps are not here (Settings itself always is)
+    const off = window.__lumadockAppsOff?.() || new Set(), shown = tiles.filter(tileItem => !off.has(APP_OF_KEY[tileItem[3]]));
     const rows = Math.max(2, Math.ceil((shown.length + 1) / cols));
     const y = area.y + PAGE.bodyY, h = Math.min(84, Math.floor((area.height - PAGE.bodyY - gap * (rows - 1) - 4) / rows));
-    for (const t of tiles) if (!shown.includes(t)) delete hit[t[3]];
+    for (const tileItem of tiles) if (!shown.includes(tileItem)) delete hit[tileItem[3]];
     shown.forEach(([icon, name, status, key, tint], i) => tile(x + (i % cols) * (w + gap), y + Math.floor(i / cols) * (h + gap), w, h, icon, name, status, key, tint));
     // next free spot: the Robo tip
     const tipAt = Math.min(shown.length, cols * rows - 1), tx = x + (tipAt % cols) * (w + gap), ty = y + Math.floor(tipAt / cols) * (h + gap);
     ctx.save(); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.roundRect(tx + 0.5, ty + 0.5, w - 1, h - 1, 15.5); ctx.strokeStyle = 'rgba(255,255,255,.1)'; ctx.stroke(); ctx.restore();
-    text('TIP', tx + 16, ty + h / 2 - 16, 9.5, '#c6e994', 700);
+    text(t('home.tip'), tx + 16, ty + h / 2 - 16, 9.5, '#c6e994', 700);
     text('Ctrl + Alt + T', tx + 16, ty + h / 2 + 2, 13, '#fff', 700, 'left', w - 32);
-    text(T('opent LumaDock overal', 'opens LumaDock anywhere', 'LumaDock\'u her yerde açar'), tx + 16, ty + h / 2 + 18, 10.5, '#8f998d', 500, 'left', w - 32);
+    text(t('home.openAnywhere'), tx + 16, ty + h / 2 + 18, 10.5, '#8f998d', 500, 'left', w - 32);
     delete hit.todayApp; delete hit.assistantApp; delete hit.projectApp;
   };
   // ---- Your shortcuts (the + button): you choose which apps are here (max 4). The same apps are on the home card. ----
   const APPS = {
     spotify: { icon: 'music', label: 'Spotify', key: 'spotifyApp', tint: () => window.__lumadockAlbumColour || '#1ed760' },
     claude: { icon: 'terminal', label: 'AI', key: 'monitor_claudecode', tint: () => '#c6e994' },
-    focus: { icon: 'timer', label: 'Focus', key: 'focusApp', tint: () => '#ffb35c' },
-    tray: { icon: 'tray', label: T('Lade', 'Tray', 'Çekmece'), key: 'trayApp', tint: () => '#7ab8ff' },
-    clips: { icon: 'copy', label: T('Klembord', 'Clipboard', 'Pano'), key: 'clipsApp', tint: () => '#5ad1c4' },
-    note: { icon: 'note', label: T('Notitie', 'Notes', 'Notlar'), key: 'noteApp', tint: () => '#ffd166' },
-    cpu: { icon: 'cpu', label: T('Systeem', 'System', 'Sistem'), key: 'cpuApp', tint: () => '#7fd8ff' },
-    picker: { icon: 'picker', label: T('Kleur', 'Color', 'Renk Seç'), key: 'pickerApp', tint: () => lastPickedColour || '#ff85b3' },
-    settings: { icon: 'gear', label: T('Instellingen', 'Settings', 'Ayarlar'), key: 'settingsApp', tint: () => '#b98cff' },
-    clock: { icon: 'clock', label: T('Klok', 'Clock', 'Saat'), key: 'clockApp', tint: () => '#8ab4ff' }
+    focus: { icon: 'timer', get label() { return t('focus.title'); }, key: 'focusApp', tint: () => '#ffb35c' },
+    tray: { icon: 'tray', get label() { return t('home.appsLabels.tray'); }, key: 'trayApp', tint: () => '#7ab8ff' },
+    clips: { icon: 'copy', get label() { return t('home.appsLabels.clips'); }, key: 'clipsApp', tint: () => '#5ad1c4' },
+    note: { icon: 'note', get label() { return t('home.appsLabels.note'); }, key: 'noteApp', tint: () => '#ffd166' },
+    cpu: { icon: 'cpu', get label() { return t('home.appsLabels.system'); }, key: 'cpuApp', tint: () => '#7fd8ff' },
+    picker: { icon: 'picker', get label() { return t('home.appsLabels.picker'); }, key: 'pickerApp', tint: () => lastPickedColour || '#ff85b3' },
+    settings: { icon: 'gear', get label() { return t('home.appsLabels.settings'); }, key: 'settingsApp', tint: () => '#b98cff' },
+    clock: { icon: 'clock', get label() { return t('home.appsLabels.clock'); }, key: 'clockApp', tint: () => '#8ab4ff' }
   };
   const APP_OF_KEY = Object.fromEntries(Object.entries(APPS).map(([id, a]) => [a.key, id]));
   const MAX_SHORTCUTS = 4, DEFAULT_SHORTCUTS = ['spotify', 'focus', 'tray', 'settings'];
@@ -1982,24 +1967,24 @@
   let editShortcuts = false;
   function appStatus(id) {
     const focus = window.__lumadockFocus, p = top(), tray = window.__lumadockTrayCount?.() || 0, st = window.__lumadockStats?.();
-    if (id === 'spotify') return spotifyState.track ? short(spotifyState.track.name, 20) : T('Muziek', 'Music', 'Müzik');
-    if (id === 'claude') return p ? p.detail || labels[p.state] : T('Rustig', 'Idle', 'Boşta');
-    if (id === 'focus') return focus?.active() ? focus.label() : `${focus?.minutes?.() || 25} min`;
-    if (id === 'tray') return tray ? `${tray} ` + T('bestand', 'file', 'dosya') : T('Leeg', 'Empty', 'Boş');
-    if (id === 'clips') return T('Laatste kopieën', 'Recent clips', 'Son kopyalar');
-    if (id === 'note') return T('Opschrijven', 'Write note', 'Not yaz');
+    if (id === 'spotify') return spotifyState.track ? short(spotifyState.track.name, 20) : t('home.appsLabels.music');
+    if (id === 'claude') return p ? p.detail || stateLabel(p.state) : t('status.idle');
+    if (id === 'focus') return focus?.active() ? focus.label() : t('focus.minutesUnit', { n: focus?.minutes?.() || 25 });
+    if (id === 'tray') return tray ? tn('monitor.files', tray) : t('home.empty');
+    if (id === 'clips') return t('home.recentClips');
+    if (id === 'note') return t('home.writeNote');
     if (id === 'cpu') return st ? `CPU ${st.cpuPct}% · RAM ${st.memPct}%` : 'CPU & RAM';
-    if (id === 'picker') return lastPickedColour || T('Kleur kiezen', 'Pick color', 'Renk seç');
-    if (id === 'clock') return new Date().toLocaleTimeString(LOCALE(), { hour: '2-digit', minute: '2-digit' });
-    return T('Kleuren, geluid', 'Colors, sound', 'Renkler, ses');
+    if (id === 'picker') return lastPickedColour || t('home.pickColor');
+    if (id === 'clock') return new Date().toLocaleTimeString(loc(), { hour: '2-digit', minute: '2-digit' });
+    return t('home.colorsAndSound');
   }
   function drawShortcuts(area) {
     const PAGE = window.__lumadockPage, list = shortcuts();
-    PAGE.title(area, 'Snelkoppelingen', editShortcuts ? `Kies tot ${MAX_SHORTCUTS} apps · ze staan ook op je homescherm` : 'Jouw favoriete apps');
+    PAGE.title(area, t('home.shortcuts'), editShortcuts ? t('home.shortcutsEditSub', { max: MAX_SHORTCUTS }) : t('home.shortcutsSub'));
     // edit / done button (top right)
     const bw = 104, bx = area.x + area.width - PAGE.contentX - bw, by = area.y + 10, overB = inside(pointer.x, pointer.y, { x: bx, y: by, width: bw, height: 32 });
     ctx.save(); ctx.beginPath(); ctx.roundRect(bx, by, bw, 32, 16); ctx.fillStyle = editShortcuts ? (overB ? '#d9f7b3' : '#c6e994') : (overB ? '#24272a' : '#1a1c1e'); ctx.fill(); ctx.restore();
-    text(editShortcuts ? 'Klaar' : 'Aanpassen', bx + bw / 2, by + 21, 12, editShortcuts ? '#10180c' : '#e8ece6', 700, 'center');
+    text(editShortcuts ? t('header.doneBtn') : t('common.edit'), bx + bw / 2, by + 21, 12, editShortcuts ? '#10180c' : '#e8ece6', 700, 'center');
     hit.scEdit = { x: bx, y: by, width: bw, height: 32 };
     const x = area.x + PAGE.contentX, w = area.width - PAGE.contentX * 2, y = area.y + PAGE.bodyY;
     if (!editShortcuts) {
@@ -2007,9 +1992,9 @@
       list.forEach((id, i) => { const a = APPS[id]; tile(x + i * (tw + gap), y, tw, th, a.icon, a.label, appStatus(id), a.key, a.tint()); });
       for (let i = list.length; i < MAX_SHORTCUTS; i++) { // empty spot
         const tx = x + i * (tw + gap); ctx.save(); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.roundRect(tx + 0.5, y + 0.5, tw - 1, th - 1, 15.5); ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.stroke(); ctx.restore();
-        text('+ Lege plek', tx + tw / 2, y + th / 2 + 4, 11.5, '#6f7a6b', 600, 'center');
+        text(t('home.emptySpot'), tx + tw / 2, y + th / 2 + 4, 11.5, '#6f7a6b', 600, 'center');
       }
-      text('Tip: Ctrl + Alt + 1–6 opent apps ook met het toetsenbord', x, y + th + 28, 11, '#6f7a6b', 500);
+      text(t('home.shortcutsKeyTip'), x, y + th + 28, 11, '#6f7a6b', 500);
       return;
     }
     // edit mode: every app as a toggle; chosen ones are lit and numbered
@@ -2026,7 +2011,7 @@
       else { ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore(); }
       hit['scToggle_' + id] = bounds;
     });
-    text(list.length >= MAX_SHORTCUTS ? `Vol (${MAX_SHORTCUTS}/${MAX_SHORTCUTS}) · klik er een uit om te wisselen` : `${list.length}/${MAX_SHORTCUTS} gekozen`, x, y + 2 * (ch + gap) + 18, 11, '#7f8a7a', 600);
+    text(list.length >= MAX_SHORTCUTS ? t('home.shortcutsFull', { max: MAX_SHORTCUTS }) : t('home.shortcutsPicked', { count: list.length, max: MAX_SHORTCUTS }), x, y + 2 * (ch + gap) + 18, 11, '#7f8a7a', 600);
   }
   canvas.addEventListener('click', event => {
     if (currentView !== 'shortcuts' || mode !== 'expanded') return;
@@ -2038,7 +2023,7 @@
       stop(); let list = shortcuts();
       if (list.includes(id)) list = list.filter(x => x !== id);
       else if (list.length < MAX_SHORTCUTS) list.push(id);
-      else { window.__lumadockFlash?.('Max 4 · haal er eerst een uit', 1200); return; }
+      else { window.__lumadockFlash?.(t('home.maxFourHint'), 1200); return; }
       saveShortcuts(list); sound('click'); return;
     }
   }, true);
@@ -2066,7 +2051,7 @@
       api.buddyPickColor?.().then(res => {
         if (res?.ok && res.hex) {
           lastPickedColour = res.hex;
-          window.__lumadockFlash?.(`🎨 ${res.hex} ${T('gekopieerd', 'copied', 'kopyalandı')}`, 2500);
+          window.__lumadockFlash?.('🎨 ' + t('home.copiedColor', { hex: res.hex }), 2500);
           window.__lumadockChime?.('pop');
         }
       }).catch(() => {});
@@ -2085,7 +2070,7 @@
     for (const provider of Object.keys(names)) {
       if (inside(event.clientX, event.clientY, hit['monitor_' + provider])) { event.preventDefault(); event.stopImmediatePropagation(); open(provider); return; }
     }
-    // Answer from the small island (Toestaan / Weigeren / Bekijk).
+    // Answer from the compact island (Allow / Deny / View).
     if (mode === 'compact') {
       const p = top(), stop = () => { event.preventDefault(); event.stopImmediatePropagation(); };
       if (p && inside(event.clientX, event.clientY, hit.cAllow)) { stop(); hooks('aiMonitorHooksDecide', p.sessionId, 'allow'); sound('click'); return; }
@@ -2124,5 +2109,6 @@
     requestAnimationFrame(position);
   }
   window.addEventListener('lumadock:prefs', () => { lastSignature = ''; render(); });
+  window.__lumadockI18n?.onChange?.(() => { lastSignature = ''; render(); });
   window.__lumadockMonitor = Object.freeze({ open, small, state: () => state, refresh: () => { lastSignature = ''; update(state); } }); render(); requestAnimationFrame(position);
 })();

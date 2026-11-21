@@ -1,6 +1,9 @@
 // The settings app (settings-app.html): the island's lists and clicks, the AI choice, our news, and Robo's live face.
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('settingsApp', {
+  i18nBundle: () => ipcRenderer.sendSync('i18n:get-bundle'),
+  i18nSetLang: lang => ipcRenderer.invoke('i18n:set-lang', lang),
+  onI18nChanged: callback => { const fn = (_e, data) => callback(data); ipcRenderer.on('i18n:lang-changed', fn); return () => ipcRenderer.removeListener('i18n:lang-changed', fn); },
   get: req => ipcRenderer.invoke('settings-app:get', req),
   dirty: on => ipcRenderer.send('settings-app:dirty', !!on),
   theme: name => ipcRenderer.send('settings-app:theme', name),

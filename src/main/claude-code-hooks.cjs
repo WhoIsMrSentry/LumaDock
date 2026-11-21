@@ -8,6 +8,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { randomBytes, timingSafeEqual } = require('node:crypto');
 const { questionFrom } = require('./ai-monitor-model.cjs');
+const { t } = require('../shared/i18n.cjs');
 
 const PORT = Number(process.env.LUMADOCK_HOOK_PORT) || 47823;
 const ROUTE = '/lumadock-hook';
@@ -65,37 +66,33 @@ function createHub(options = {}) {
   }
   const sessions = new Map();
   const waiting = new Map(); // session id → open PermissionRequest response
-  let server = null, listening = false, serverError = '', hooksCache = false, checkedAt = 0;
+  let server = null, listening = false, serverError = '', serverErrorKey = '', hooksCache = false, checkedAt = 0;
   let usage = { fiveHour: null, sevenDay: null, at: 0 };
   const changed = () => { checkedAt = 0; onChange(); };
-  // What your AI did, for the home page of the LumaDock app: the last 40 finished turns (kept on this PC only).
-  const LEGACY_PROMPTS = {
-    'Maak de knop op de homepage blauw': 'Make the button on the homepage blue',
-    'Maak de knop mooier': 'Make the button look nicer',
-    'Zet de website online': 'Put the website online',
-    'Fix de btw-berekening': 'Fix the VAT calculation'
+  const setDetail = (s, key, params) => {
+    s._detailKey = key || null;
+    s._detailParams = params || null;
+    s._errorType = '';
+    s.detail = key ? t(key, params) : '';
   };
-  const cleanPrompt = p => LEGACY_PROMPTS[p] || p;
+  const setErrorDetail = (s, type) => {
+    s._detailKey = null;
+    s._detailParams = null;
+    s._errorType = String(type || '');
+    s.detail = t('status.errorPrefix', { detail: errorLabel(s._errorType) });
+  };
+  const detailOf = s => (s._detailKey ? t(s._detailKey, s._detailParams) : s._errorType ? t('status.errorPrefix', { detail: errorLabel(s._errorType) }) : s.detail);
+  // What your AI did, for the home page of the LumaDock app: the last 40 finished turns (kept on this PC only).
   const historyFile = userData ? path.join(userData, 'lumadock-history.json') : null;
   let history = [];
   try {
     history = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
     if (!Array.isArray(history)) history = [];
-    let dirty = false;
-    history = history.map(h => {
-      const next = cleanPrompt(h?.prompt);
-      if (next !== h?.prompt) { dirty = true; return { ...h, prompt: next }; }
-      return h;
-    });
-    if (dirty && historyFile) {
-      fs.writeFileSync(historyFile + '.tmp', JSON.stringify(history));
-      fs.renameSync(historyFile + '.tmp', historyFile);
-    }
   } catch {}
   function remember(s, result) {
     if (!historyFile || !s.prompt) return;
     if (s.id === 'lumadock-test' || (s.cwd && s.cwd.toLowerCase().includes('c:\\test'))) return; // never persist synthetic test scenes to real history
-    const entry = { at: Date.now(), agent: s.agent || 'claude', name: (AGENTS[s.agent] || AGENTS.claude).name, project: s.project || '', cwd: s.cwd || '', prompt: cleanPrompt(s.prompt),
+    const entry = { at: Date.now(), agent: s.agent || 'claude', name: (AGENTS[s.agent] || AGENTS.claude).name, project: s.project || '', cwd: s.cwd || '', prompt: s.prompt,
       result, files: (s.files || []).length, seconds: s.startedAt ? Math.round((Date.now() - s.startedAt) / 1000) : 0 };
     if (s.tokens) entry.tokens = s.tokens;
     if (s.costUsd) entry.costUsd = s.costUsd;
@@ -118,7 +115,7 @@ function createHub(options = {}) {
   const replyCommand = () => `node "${REPLY_SCRIPT}" ${token()}`;
   function readSettings() {
     try { return JSON.parse(fs.readFileSync(settingsFile, 'utf8')); }
-    catch (error) { if (error.code === 'ENOENT') return {}; throw new Error('~/.claude/settings.json is geen geldige JSON. Er is niets veranderd.'); }
+    catch (error) { if (error.code === 'ENOENT') return {}; throw new Error(t('monitor.errors.claudeSettingsInvalidJson')); }
   }
   function ours() {
     try {
@@ -152,7 +149,7 @@ function createHub(options = {}) {
     modelAt = Date.now(); return modelCache;
   }
   function setModel(model) {
-    if (!MODELS.includes(model)) throw new Error('Onbekend model.');
+    if (!MODELS.includes(model)) throw new Error(t('monitor.errors.unknownModel'));
     const settings = readSettings(); if (model === 'default') delete settings.model; else settings.model = model;
     writeSettings(settings); modelCache = model; modelAt = Date.now(); onChange();
   }
@@ -193,7 +190,7 @@ function createHub(options = {}) {
     const available = () => fs.existsSync(homeDir);
     function readCfg() {
       try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); }
-      catch (error) { if (error.code === 'ENOENT') return {}; throw new Error(`${path.basename(homeDir)}/${path.basename(filePath)} invalid JSON.`); }
+      catch (error) { if (error.code === 'ENOENT') return {}; throw new Error(t('monitor.errors.cliInvalidJson', { file: `${path.basename(homeDir)}/${path.basename(filePath)}` })); }
     }
     function writeCfg(config) {
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -250,10 +247,10 @@ function createHub(options = {}) {
   }
   function reply(sessionId, text) {
     const clean = String(text || '').trim();
-    if (!clean || clean.length > 5000) throw new Error('Typ een antwoord van maximaal 5000 tekens.');
-    if (!answer(sessionId, clean)) throw new Error('Claude Code wacht niet meer op een antwoord. Typ het in de terminal.');
+    if (!clean || clean.length > 5000) throw new Error(t('monitor.errors.replyRangeError'));
+    if (!answer(sessionId, clean)) throw new Error(t('monitor.errors.claudeNotWaiting'));
     const s = sessions.get(sessionId);
-    if (s) { s.state = 'running'; s.detail = 'Je antwoord is verstuurd'; s.question = ''; s.startedAt = Date.now(); s.endedAt = null; }
+    if (s) { s.state = 'running'; setDetail(s, 'status.answerSent'); s.question = ''; s.startedAt = Date.now(); s.endedAt = null; }
     onChange(); return { ok: true };
   }
 
@@ -266,40 +263,40 @@ function createHub(options = {}) {
     return true;
   }
   function decide(sessionId, behavior) {
-    if (!['allow', 'deny'].includes(behavior)) throw new Error('Kies toestaan of weigeren.');
+    if (!['allow', 'deny'].includes(behavior)) throw new Error(t('monitor.errors.chooseAllowOrDeny'));
     const s = sessions.get(sessionId);
-    const decision = behavior === 'allow' ? { behavior: 'allow', updatedInput: s?.permissionInput || {} } : { behavior: 'deny', message: 'Geweigerd vanuit LumaDock.' };
-    if (!release(sessionId, decision)) throw new Error('Deze vraag is al beantwoord, misschien in de terminal.');
-    if (s) { s.permission = null; s.question = ''; s.state = 'running'; s.detail = behavior === 'allow' ? 'Toegestaan, gaat verder' : 'Geweigerd'; }
+    const decision = behavior === 'allow' ? { behavior: 'allow', updatedInput: s?.permissionInput || {} } : { behavior: 'deny', message: t('status.permissionCodexDenied') };
+    if (!release(sessionId, decision)) throw new Error(t('monitor.errors.alreadyAnswered'));
+    if (s) { s.permission = null; s.question = ''; s.state = 'running'; setDetail(s, behavior === 'allow' ? 'status.allowedContinuing' : 'status.denied'); }
     onChange(); return { ok: true };
   }
 
   // Multiple-choice question (AskUserQuestion): answers map question text → chosen label(s) or your own text.
   function answerQuestions(sessionId, answers) {
     const s = sessions.get(sessionId);
-    if (!s?.ask) throw new Error('Er staat geen keuzevraag meer open.');
+    if (!s?.ask) throw new Error(t('monitor.errors.noMultipleChoiceOpen'));
     const clean = {};
     for (const q of s.ask) {
       const value = answers?.[q.question];
       const text = Array.isArray(value) ? value.map(String).filter(Boolean).join(', ') : String(value || '').trim();
-      if (!text) throw new Error('Kies bij elke vraag een antwoord.');
+      if (!text) throw new Error(t('monitor.errors.chooseAnswerPerQuestion'));
       clean[q.question] = text.slice(0, 2000);
     }
     const decision = { behavior: 'allow', updatedInput: { ...s.permissionInput, answers: clean } };
-    if (!release(sessionId, decision)) throw new Error('Deze vraag is al beantwoord, misschien in de terminal.');
-    s.permission = null; s.ask = null; s.question = ''; s.state = 'running'; s.detail = 'Je antwoord is verstuurd';
+    if (!release(sessionId, decision)) throw new Error(t('monitor.errors.alreadyAnswered'));
+    s.permission = null; s.ask = null; s.question = ''; s.state = 'running'; setDetail(s, 'status.answerSent');
     onChange(); return { ok: true };
   }
   // Plan mode (ExitPlanMode): approve the plan, or send it back with your feedback.
   function decidePlan(sessionId, approve, feedback) {
     const s = sessions.get(sessionId);
-    if (!s?.plan) throw new Error('Er staat geen plan meer open.');
+    if (!s?.plan) throw new Error(t('monitor.errors.noPlanOpen'));
     const note = String(feedback || '').trim().slice(0, 4000);
     const decision = approve ? { behavior: 'allow', updatedInput: s.permissionInput || {} }
-      : { behavior: 'deny', message: note ? 'De gebruiker wil het plan aanpassen: ' + note : 'De gebruiker wil het plan nog niet uitvoeren. Vraag wat er anders moet.' };
-    if (!release(sessionId, decision)) throw new Error('Dit plan is al beantwoord, misschien in de terminal.');
+      : { behavior: 'deny', message: note ? t('monitor.errors.planReviseNote', { note }) : t('monitor.errors.planReviseDefault') };
+    if (!release(sessionId, decision)) throw new Error(t('monitor.errors.planAlreadyAnswered'));
     s.permission = null; s.plan = null; s.question = ''; s.state = 'running';
-    s.detail = approve ? 'Toegestaan, gaat verder' : 'Je antwoord is verstuurd';
+    setDetail(s, approve ? 'status.allowedContinuing' : 'status.answerSent');
     onChange(); return { ok: true };
   }
 
@@ -326,7 +323,7 @@ function createHub(options = {}) {
   function seen() {
     for (const s of sessions.values()) {
       if (['done', 'error'].includes(s.state) || (s.state === 'question' && !waiting.has(s.id))) {
-        s.state = 'ready'; s.detail = 'Gezien'; s.question = ''; s.permission = null;
+        s.state = 'ready'; setDetail(s, 'status.seen'); s.question = ''; s.permission = null;
       }
     }
     onChange(); return { ok: true };
@@ -362,9 +359,9 @@ function createHub(options = {}) {
     let held = false;
     switch (name) {
       case 'SessionStart':
-        s.state = 'ready'; s.detail = 'Klaar voor je vraag'; break;
+        s.state = 'ready'; setDetail(s, 'status.waitingForQuestion'); break;
       case 'UserPromptSubmit':
-        s.startedAt = now; s.endedAt = null; s.state = 'running'; s.detail = who.short + ' is bezig'; s.question = ''; s.permission = null;
+        s.startedAt = now; s.endedAt = null; s.state = 'running'; setDetail(s, 'status.workingNamed', { name: who.short }); s.question = ''; s.permission = null;
         s.ask = null; s.plan = null; s.stats = {}; s.steps = []; s.files = []; s.commands = []; s.code = null; s.run = null;
         s.prompt = String(event.prompt || '').replace(/\s+/g, ' ').trim().slice(0, 240); s.lastMessage = ''; break;
       case 'PreToolUse':
@@ -388,7 +385,9 @@ function createHub(options = {}) {
           if (toolKind(event.tool_name) === 'run' && input.command) s.run = { command: String(input.command).slice(0, 80), out: [] };
         }
         if (waiting.has(id)) break;
-        s.state = 'running'; s.detail = toolLabel(event, who.short); s.question = ''; s.permission = null; break;
+        s.state = 'running';
+        { const info = toolLabelInfo(event, who.short); setDetail(s, info.key, info.params); }
+        s.question = ''; s.permission = null; break;
       case 'PostToolUse': case 'PostToolUseFailure': {
         start(); s.state = 'running'; s.question = ''; s.permission = null; s.ask = null; s.plan = null;
         const kind = toolKind(event.tool_name); if (kind) { s.stats ||= {}; s.stats[kind] = (s.stats[kind] || 0) + 1; }
@@ -402,19 +401,19 @@ function createHub(options = {}) {
         release(id); // an older open request for this session is stale
         const input = event.tool_input && typeof event.tool_input === 'object' ? event.tool_input : {};
         s.permissionInput = input; s.ask = null; s.plan = null;
-        s.state = 'question'; s.detail = 'Wil toestemming';
+        s.state = 'question'; setDetail(s, 'status.needsPermission');
         s.permission = { kind: 'tool', tool: toolLabel(event, who.short), what: toolDetail(event) };
         if (event.tool_name === 'AskUserQuestion' && Array.isArray(input.questions)) {
           s.ask = input.questions.slice(0, 4).map(q => ({ question: String(q?.question || ''), header: String(q?.header || '').slice(0, 20),
             multiSelect: Boolean(q?.multiSelect), options: (Array.isArray(q?.options) ? q.options : []).slice(0, 6)
               .map(o => ({ label: String(o?.label || ''), description: String(o?.description || '') })) }));
-          s.permission = { kind: 'ask', tool: who.short + ' vraagt iets', what: '' }; s.detail = 'Kies een antwoord';
+          s.permission = { kind: 'ask', tool: t('monitor.agentAsks', { name: who.short }), what: '' }; setDetail(s, 'status.chooseAnswer');
         } else if (event.tool_name === 'ExitPlanMode') {
           s.plan = String(input.plan || '').slice(0, 20000);
-          s.permission = { kind: 'plan', tool: 'Plan klaar', what: '' }; s.detail = 'Plan klaar: goedkeuren?';
+          s.permission = { kind: 'plan', tool: t('status.planReady'), what: '' }; setDetail(s, 'status.planReadyApprove');
         }
-        s.question = s.ask ? s.ask.map(q => q.question).join('\n') : s.plan ? who.short + ' heeft een plan gemaakt.' : s.permission.tool + (s.permission.what ? ':\n' + s.permission.what : '');
-        if (agent === 'codex') { s.detail = 'Wil toestemming: antwoord in Codex'; s.permission = null; s.ask = null; s.plan = null; }
+        s.question = s.ask ? s.ask.map(q => q.question).join('\n') : s.plan ? t('status.planCreated', { name: who.short }) : s.permission.tool + (s.permission.what ? ':\n' + s.permission.what : '');
+        if (agent === 'codex') { setDetail(s, 'status.permissionCodexTerminal'); s.permission = null; s.ask = null; s.plan = null; }
         if (res) {
           waiting.set(id, { res, timer: setTimeout(() => { release(id); onChange(); }, PERMISSION_WAIT_S * 1000) });
           res.on('close', () => { if (waiting.get(id)?.res === res) { waiting.delete(id); onChange(); } });
@@ -425,7 +424,7 @@ function createHub(options = {}) {
       case 'Notification': {
         const kind = event.notification_type || '';
         if (QUESTION_NOTIFICATIONS.has(kind) && s.state !== 'question') {
-          s.state = 'question'; s.detail = 'Wacht op jou'; s.question = String(event.message || who.name + ' heeft je nodig.');
+          s.state = 'question'; setDetail(s, 'status.waitingForYou'); s.question = String(event.message || t('monitor.agentNeedsYou', { name: who.name }));
           onFinish(s);
         }
         break;
@@ -435,13 +434,13 @@ function createHub(options = {}) {
         s.endedAt = now; s.state = question ? 'question' : 'done'; s.permission = null; s.ask = null; s.plan = null;
         for (const step of s.steps || []) if (step.state === 'running') step.state = 'done';
         s.lastMessage = tail(String(event.last_assistant_message || ''), 2000);
-        s.detail = question ? 'Heeft een vraag voor jou' : 'Klaar'; s.question = question ? s.lastMessage : '';
+        setDetail(s, question ? 'status.hasQuestionForYou' : 'status.done'); s.question = question ? s.lastMessage : '';
         remember(s, question ? 'question' : 'done');
         onFinish(s); break;
       }
       case 'StopFailure':
         s.endedAt = now; s.state = 'error'; s.permission = null; s.question = '';
-        s.detail = 'Fout: ' + errorLabel(event.error_type || event.error); remember(s, 'error'); onFinish(s); break;
+        setErrorDetail(s, event.error_type || event.error); remember(s, 'error'); onFinish(s); break;
     }
     sessions.set(id, s); onChange();
     return held;
@@ -481,12 +480,11 @@ function createHub(options = {}) {
     });
     server.on('error', error => {
       listening = false; server = null;
-      serverError = error.code === 'EADDRINUSE'
-        ? 'LumaDock başka bir yerde zaten çalışıyor (port ' + PORT + ' kullanımda). Lütfen diğer LumaDock uygulamasını kapatın.'
-        : error.message;
+      serverErrorKey = error.code === 'EADDRINUSE' ? 'monitor.errors.portInUse' : '';
+      serverError = error.code === 'EADDRINUSE' ? t('monitor.errors.portInUse', { port: PORT }) : error.message;
       onChange();
     });
-    server.listen(PORT, '127.0.0.1', () => { listening = true; serverError = ''; onChange(); });
+    server.listen(PORT, '127.0.0.1', () => { listening = true; serverError = ''; serverErrorKey = ''; onChange(); });
   }
   function stop() { for (const id of [...waiting.keys()]) release(id); for (const id of [...replies.keys()]) answer(id, ''); try { server?.close(); } catch {} server = null; listening = false; }
 
@@ -502,14 +500,15 @@ function createHub(options = {}) {
     } // the files are read at most every 5 s
     const hooks = agent === 'codex' ? codexCache : agent === 'gemini' ? geminiCache : agent === 'cursor' ? cursorCache : hooksCache;
     const available = agent === 'codex' ? codexAvailable() : agent === 'gemini' ? geminiAvailable() : agent === 'cursor' ? cursorAvailable() : true;
+    const errText = serverErrorKey ? t(serverErrorKey, { port: PORT }) : serverError;
     const base = { provider: who.id, name: who.name, agent, kind: 'hooks', hooksInstalled: hooks, available,
-      model: agent === 'claude' ? getModel() : '', modelNow: top?.modelName || '', canReply: false, questionId: '', error: serverError,
+      model: agent === 'claude' ? getModel() : '', modelNow: top?.modelName || '', canReply: false, questionId: '', error: errText,
       usage: { fiveHour: live(usage.fiveHour, now), sevenDay: live(usage.sevenDay, now), context: top?.context ?? null, costUsd: top?.costUsd ?? usage.costUsd ?? null, tokens: top?.tokens ?? usage.tokens ?? null } };
-    if (!hooks || !listening) return { ...base, connected: false, state: 'disconnected', detail: hooks ? 'Etkin değil' : 'Bağlı değil', question: '', elapsed: 0, list: [] };
-    const item = s => ({ id: s.id, project: s.project || who.name, state: s.state, detail: s.detail,
+    if (!hooks || !listening) return { ...base, connected: false, state: 'disconnected', detail: t(hooks ? 'status.notActive' : 'status.notConnectedYet'), question: '', elapsed: 0, list: [] };
+    const item = s => ({ id: s.id, project: s.project || who.name, state: s.state, detail: detailOf(s),
       elapsed: s.startedAt ? Math.floor(((s.endedAt || now) - s.startedAt) / 1000) : 0 });
-    if (!top) return { ...base, connected: true, state: 'ready', detail: who.name + ' bekleniyor', question: '', elapsed: 0, list: [] };
-    return { ...base, connected: true, state: top.state, detail: top.detail, question: top.question, elapsed: item(top).elapsed,
+    if (!top) return { ...base, connected: true, state: 'ready', detail: t('status.waitingForSession', { name: who.name }), question: '', elapsed: 0, list: [] };
+    return { ...base, connected: true, state: top.state, detail: detailOf(top), question: top.question, elapsed: item(top).elapsed,
       sessionId: top.id, lastMessage: top.lastMessage || '', ask: waiting.has(top.id) ? top.ask || null : null,
       plan: waiting.has(top.id) ? top.plan || null : null, stats: top.stats || {}, steps: (top.steps || []).slice(-8), prompt: top.prompt || '', files: (top.files || []).slice(-8), commands: (top.commands || []).slice(-3), code: top.code || null, run: top.run || null, canJump: Boolean(top.pid), canReply: replies.has(top.id) && !waiting.has(top.id), permission: top.permission && waiting.has(top.id) ? top.permission : null,
       tokens: top.tokens || null, costUsd: top.costUsd ?? null,
@@ -542,18 +541,21 @@ function toolKind(tool) {
   if (/^(Agent|Task)$/.test(tool)) return 'agent';
   return '';
 }
-function toolLabel(event, who = 'Claude') {
+function toolLabelInfo(event, who = 'Claude') {
   const tool = String(event.tool_name || '');
   const file = event.tool_input?.file_path ? path.basename(String(event.tool_input.file_path)) : '';
-  if (tool === 'Read') return 'Leest ' + (file || 'een bestand');
-  if (/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(tool)) return 'Bewerkt ' + (file || 'een bestand');
-  if (/^(Bash|PowerShell)$/.test(tool)) return 'Voert een opdracht uit';
-  if (/^(Grep|Glob)$/.test(tool)) return 'Zoekt in de code';
-  if (/^(WebSearch|WebFetch)$/.test(tool)) return 'Zoekt op internet';
-  if (/^(Agent|Task)$/.test(tool)) return 'Start een helper';
-  if (/^(shell|exec_command|local_shell|unified_exec)$/i.test(tool)) return 'Voert een opdracht uit';  // Codex
-  if (/^apply_patch$/i.test(tool)) return 'Bewerkt bestanden';
-  return tool ? 'Gebruikt ' + tool : who + ' is bezig';
+  if (tool === 'Read') return { key: file ? 'tools.live.readingNamed' : 'tools.live.readingGeneric', params: file ? { file } : null };
+  if (/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(tool)) return { key: file ? 'tools.live.editingNamed' : 'tools.live.editingGeneric', params: file ? { file } : null };
+  if (/^(Bash|PowerShell|shell|exec_command|local_shell|unified_exec)$/i.test(tool)) return { key: 'tools.live.runningCommand', params: null };
+  if (/^(Grep|Glob)$/.test(tool)) return { key: 'tools.live.searchingCode', params: null };
+  if (/^(WebSearch|WebFetch)$/.test(tool)) return { key: 'tools.live.searchingWeb', params: null };
+  if (/^(Agent|Task)$/.test(tool)) return { key: 'tools.live.startingHelper', params: null };
+  if (/^apply_patch$/i.test(tool)) return { key: 'tools.live.editingFiles', params: null };
+  return tool ? { key: 'tools.live.usingTool', params: { tool } } : { key: 'status.workingNamed', params: { name: who } };
+}
+function toolLabel(event, who = 'Claude') {
+  const info = toolLabelInfo(event, who);
+  return t(info.key, info.params);
 }
 // What exactly will happen, so you can judge before allowing.
 function toolDetail(event) {
@@ -571,9 +573,16 @@ function tail(text, max) {
   return '…' + (line > 0 && line < max / 2 ? cut.slice(line + 1) : cut);
 }
 function errorLabel(type) {
-  const labels = { rate_limit: 'limiet bereikt', overloaded: 'Claude is overbelast', authentication_failed: 'niet ingelogd',
-    billing_error: 'betaalprobleem', server_error: 'serverfout', max_output_tokens: 'antwoord te lang' };
-  return labels[type] || String(type || 'onbekend');
+  const keys = {
+    rate_limit: 'status.limitReached',
+    overloaded: 'status.overloaded',
+    authentication_failed: 'status.notLoggedIn',
+    billing_error: 'status.paymentError',
+    server_error: 'status.serverError',
+    max_output_tokens: 'status.answerTooLong'
+  };
+  const key = keys[type];
+  return key ? t(key) : String(type || t('status.unknown'));
 }
 
 module.exports = { createHub, EVENTS, CODEX_EVENTS, GEMINI_EVENTS, CURSOR_EVENTS, PORT, HOOK_URL };

@@ -4,6 +4,7 @@ delete process.env.ELECTRON_RUN_AS_NODE;
 // place where you can always find and close LumaDock. Also: only one LumaDock runs at a time.
 const { app, Tray, Menu, nativeImage, BrowserWindow, ipcMain } = require('electron');
 const path = require('node:path');
+const i18n = require('../shared/i18n.cjs');
 
 let tray = null;
 
@@ -26,28 +27,27 @@ function setStartsWithWindows(on) { try { app.setLoginItemSettings({ ...loginOpt
 function quit() { app.quit(); } // main.js shows the goodbye first
 function restart() { app.relaunch(); app.quit(); }
 
-let trayLang = 'en';
 function buildMenu() {
   if (!tray) return;
-  const tr = trayLang === 'tr';
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'LumaDock', enabled: false },
+    { label: i18n.t('common.appName'), enabled: false },
     { type: 'separator' },
-    { label: tr ? 'Adayı Aç' : 'Open Island', accelerator: 'Ctrl+Alt+1', registerAccelerator: false, click: openIsland },
-    { label: tr ? 'Ayarlar' : 'Settings', click: () => app.emit('lumadock-open-settings') },
-    { label: tr ? 'Windows ile Başlat' : 'Start with Windows', type: 'checkbox', checked: startsWithWindows(), click: item => setStartsWithWindows(item.checked) },
+    { label: i18n.t('tray.openIsland'), accelerator: 'Ctrl+Alt+1', registerAccelerator: false, click: openIsland },
+    { label: i18n.t('tray.settings'), click: () => app.emit('lumadock-open-settings') },
+    { label: i18n.t('tray.startWithWindows'), type: 'checkbox', checked: startsWithWindows(), click: item => setStartsWithWindows(item.checked) },
     { type: 'separator' },
-    { label: tr ? 'Yeniden Başlat' : 'Restart', click: restart },
-    { label: tr ? 'LumaDock\'u Kapat' : 'Quit LumaDock', click: quit }
+    { label: i18n.t('tray.restart'), click: restart },
+    { label: i18n.t('tray.quit'), click: quit }
   ]));
 }
 
 if (!app.requestSingleInstanceLock()) {
   app.exit(0);
 } else {
-  // "LumaDock Instellingen" in the Start menu starts LumaDock with --settings: then only that app opens.
+  // Legacy Start menu settings entry starts LumaDock with --settings so only the settings window opens.
   app.on('second-instance', (event, argv) => { if ((argv || []).includes('--settings')) app.emit('lumadock-open-settings'); else openIsland(); });
   app.setName('LumaDock');
+  i18n.onLanguageChange(() => buildMenu());
   app.whenReady().then(() => {
     // Windows shows the name and icon of a notification from a Start menu shortcut with the same app id.
     // Without it, notifications said "Electron". Made (or fixed) on every start, it costs nothing.
@@ -75,7 +75,7 @@ if (!app.requestSingleInstanceLock()) {
           cwd: app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(),
           icon: path.join(path.resolve(__dirname, '..', '..'), 'assets', 'icon.ico'), iconIndex: 0,
           appUserModelId: 'com.lumadock.assistant',
-          description: 'LumaDock: Dynamic Island for Windows'
+          description: i18n.t('tray.appDescription')
         });
         // The second app: LumaDock Settings, with its own icon and app id (its own button on the taskbar).
         const settingsLink = path.join(programs, 'LumaDock Settings.lnk');
@@ -85,7 +85,7 @@ if (!app.requestSingleInstanceLock()) {
           cwd: app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(),
           icon: path.join(path.resolve(__dirname, '..', '..'), 'assets', 'settings-icon.ico'), iconIndex: 0,
           appUserModelId: 'com.lumadock.settings',
-          description: 'LumaDock Settings: connections, Robo, wardrobe and more'
+          description: i18n.t('tray.settingsDescription')
         });
       } catch { }
       // The shortcut alone was not enough: Windows also reads the name and icon of notifications from

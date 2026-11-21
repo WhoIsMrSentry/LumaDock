@@ -1,7 +1,7 @@
 'use strict';
-// Switching apps (Home, Chat, Spotify, Lade, Instellingen …), the modern way (like iOS): the header stays put and its
+// Switching apps (Home, Chat, Spotify, Tray, Settings…), the modern way: the header stays put and its
 // pill slides to the new icon (icons-ui.js), the old page blurs away, the island glides to its new size, and the new
-// page comes into focus with a small lift. Quick (about a third of a second). Settings → Animaties → App-animaties turns it off.
+// page comes into focus with a small lift. Quick (about a third of a second). Settings -> Animations -> App Transitions turns it off.
 (function appSwitch() {
   const OUT = 110, IN = 280; // ms
   const ROOTS = '#lumadock-ai-monitor,#lumadock-settings-v2,#lumadock-extras,#lumadock-focus,#lumadock-tools,#lumadock-chat';

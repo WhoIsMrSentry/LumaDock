@@ -1,13 +1,13 @@
 // Settings are their own app now (settings-app.html, opened by settings-app-main.cjs). The settings code
 // itself stays here in the island, where Robo and all his preferences live: the app asks for a list
-// ("general" or "karakter") and every click in the app is played on a hidden copy of that list here.
+// ("general" or "character") and every click in the app is played on a hidden copy of that list here.
 //
 // Everything you change in the app is a draft first: the app's own Robo shows it right away, the real Robo
 // and the island only get it when you press Save (and nothing at all when you press Cancel).
 (() => {
   const openView = setView;
   // The gear, the Settings tile and the AI shortcut all open the app instead of the small settings page.
-  // An app from a pack you don't have yet opens Instellingen → Apps instead, where you can get it (once per few seconds:
+  // An app from a pack you don't have yet opens Settings -> Apps instead, where you can get it (once per few seconds:
   // dragging a file over the island asks for the Tray again and again).
   const PACK_VIEWS = ['focus', 'tray', 'clips', 'note', 'spotify'];
   let askedAt = 0;
@@ -58,8 +58,7 @@
       || Object.keys(draft.extras).length > 0 || !same([...draft.apps].sort(), [...appsOff()].sort());
   }
 
-  const settle = () => new Promise(r => setTimeout(r, 0)); // the English translation (i18n-ui.js) runs right after a change
-  // A list as it looks with your draft.
+  // Return a settings list reflecting the current draft preferences.
   async function list(which) {
     const d = begin();
     box.innerHTML = window.__lumadockWithDraft(d.prefs, () => window.__lumadockSettingsHtml?.(which) || '');
@@ -67,22 +66,6 @@
     set('[data-action="sleep"]', d.sleep);
     if (d.login !== null) set('[data-login]', d.login);
     for (const [key, value] of Object.entries(d.extras)) box.querySelectorAll('#tc-in-' + key).forEach(i => i.setAttribute('value', value));
-    await settle();
-    window.__lumadockWithDraft(d.prefs, () => {
-      const trFn = window.__lumadockTr;
-      if (typeof trFn !== 'function') return;
-      const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
-      let node;
-      while ((node = walker.nextNode())) {
-        if (node.nodeType === 3) {
-          if (node.nodeValue && node.nodeValue.trim()) node.nodeValue = trFn(node.nodeValue);
-        } else if (node.nodeType === 1) {
-          for (const attr of ['placeholder', 'title', 'aria-label']) {
-            if (node.hasAttribute(attr)) node.setAttribute(attr, trFn(node.getAttribute(attr)));
-          }
-        }
-      }
-    });
     return box.innerHTML;
   }
   const info = () => {
@@ -120,7 +103,7 @@
     if (!draft) return;
     const d = draft;
     window.__lumadockSaveDraft(d.prefs);
-    box.innerHTML = window.__lumadockSettingsHtml?.('karakter') || '';
+    box.innerHTML = window.__lumadockSettingsHtml?.('character') || '';
     if (d.sleep !== !!sleepEnabled) box.querySelector('[data-action="sleep"]')?.click();
     box.innerHTML = window.__lumadockSettingsHtml?.('general') || '';
     if (d.login !== null && d.login !== realLogin()) box.querySelector('[data-login]')?.click();
@@ -137,7 +120,7 @@
 
   // req: { kind: 'list' | 'click' | 'save' | 'discard' | 'apps' | 'app', ... }
   window.__lumadockRemoteSettings = async req => {
-    const which = req?.which === 'karakter' ? 'karakter' : 'general';
+    const which = (req?.which === 'character' || req?.which === 'karakter') ? 'character' : 'general';
     if (req?.kind === 'save') await saveDraft();
     if (req?.kind === 'discard') { draft = null; window.__lumadockPreviewPrefs(null); }
     if (req?.kind === 'apps' || req?.kind === 'app') {

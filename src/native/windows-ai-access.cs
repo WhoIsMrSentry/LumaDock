@@ -69,22 +69,22 @@ namespace LumaDock.Native {
     }
     static AutomationElement Root(Target target) {
       var handle = new IntPtr(target.handle);
-      if (!IsWindow(handle)) throw new Exception("Het verbonden venster is gesloten.");
+      if (!IsWindow(handle)) throw new Exception("The connected window was closed.");
       uint pid; GetWindowThreadProcessId(handle, out pid);
-      if ((int)pid != target.pid) throw new Exception("Het venster hoort niet meer bij dezelfde app.");
+      if ((int)pid != target.pid) throw new Exception("This window no longer belongs to the same app.");
       using (var process = Process.GetProcessById(target.pid)) {
         if (process.StartTime.ToUniversalTime().Ticks.ToString() != target.started ||
             !String.Equals(process.ProcessName, target.process, StringComparison.OrdinalIgnoreCase))
-          throw new Exception("De app is opnieuw gestart. Verbind het venster opnieuw.");
+          throw new Exception("The app was restarted. Please reconnect the window.");
       }
       return AutomationElement.FromHandle(handle);
     }
     static string Value(AutomationElement element) {
-      if (element.Current.IsPassword) throw new Exception("Wachtwoordveld wordt niet gelezen.");
+      if (element.Current.IsPassword) throw new Exception("Password fields are never read.");
       object pattern;
       if (element.TryGetCurrentPattern(ValuePattern.Pattern, out pattern)) return ((ValuePattern)pattern).Current.Value;
       if (element.TryGetCurrentPattern(TextPattern.Pattern, out pattern)) return ((TextPattern)pattern).DocumentRange.GetText(10000);
-      throw new Exception("Het invoerveld kan niet veilig worden gelezen.");
+      throw new Exception("The input box cannot be read safely.");
     }
     static string BrowserUrl(AutomationElement root) {
       var edits = root.FindAll(TreeScope.Descendants,
@@ -92,7 +92,7 @@ namespace LumaDock.Native {
       foreach (AutomationElement edit in edits) {
         try {
           string label = edit.Current.Name;
-          if (!Regex.IsMatch(label, "address|adres|location|locatie|search or enter|zoek.*adres", RegexOptions.IgnoreCase)) continue;
+          if (!Regex.IsMatch(label, "address|adres|location|konum|search or enter|adres.*ara|ara.*adres", RegexOptions.IgnoreCase)) continue;
           string raw = Value(edit).Trim();
           if (!raw.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) raw = "https://" + raw;
           Uri url;
@@ -106,7 +106,7 @@ namespace LumaDock.Native {
     static string Identity(Target target, AutomationElement root, out string provider) {
       if (Browser(target.process)) {
         string url = BrowserUrl(root);
-        if (url == null) throw new Exception("Het actieve tabblad toont geen herkenbaar ChatGPT- of Claude-gesprek. Houd het gesprek in een eigen venster.");
+        if (url == null) throw new Exception("The active tab does not show a recognized ChatGPT or Claude conversation. Keep the chat in its own window.");
         provider = new Uri(url).Host == "chatgpt.com" ? "chatgpt" : "claude";
         return target.id + ":" + url;
       }
@@ -117,7 +117,7 @@ namespace LumaDock.Native {
       var document = root.FindFirst(TreeScope.Descendants,
         new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Document));
       if (document != null) return document;
-      if (Browser(target.process)) throw new Exception("De browser maakt dit gesprek niet leesbaar voor Windows.");
+      if (Browser(target.process)) throw new Exception("The browser does not expose this conversation to Windows.");
       return root;
     }
     static void Walk(AutomationElement element, int parent, List<Node> nodes,
@@ -170,48 +170,48 @@ namespace LumaDock.Native {
     static void GuardContext(Target target, string expected) {
       string provider;
       if (Identity(target, Root(target), out provider) != expected)
-        throw new Exception("Het gesprek is veranderd. Het antwoord is niet verstuurd.");
+        throw new Exception("The conversation changed. Reply was not sent.");
     }
     static void CheckGuards(Dictionary<string, AutomationElement> elements, Guard[] guards) {
-      if (guards == null || guards.Length == 0) throw new Exception("De vraag is niet meer herkenbaar.");
+      if (guards == null || guards.Length == 0) throw new Exception("The question is no longer recognizable.");
       foreach (var guard in guards) {
         AutomationElement element;
         if (!elements.TryGetValue(guard.id, out element) || element.Current.Name != guard.name)
-          throw new Exception("De vraag is ondertussen veranderd. Bekijk het gesprek opnieuw.");
+          throw new Exception("The question changed meanwhile. Reopen the conversation.");
       }
     }
     static void CheckTimeline(Snapshot snapshot, string composerId, Guard[] timeline) {
       int editor = -1;
       foreach (var node in snapshot.nodes) if (node.id == composerId) editor = node.index;
-      if (editor < 0 || timeline == null) throw new Exception("Het gesprek kan niet worden gecontroleerd.");
+      if (editor < 0 || timeline == null) throw new Exception("Unable to verify the conversation.");
       var actual = new List<Node>();
       foreach (var node in snapshot.nodes) if (node.type == "Text" && node.index < editor) actual.Add(node);
-      if (actual.Count != timeline.Length) throw new Exception("Er is een nieuw bericht of een andere vraag. Controleer het gesprek.");
+      if (actual.Count != timeline.Length) throw new Exception("A new message or prompt appeared. Check the conversation.");
       for (int i = 0; i < actual.Count; i++)
         if (actual[i].id != timeline[i].id || actual[i].name != timeline[i].name)
-          throw new Exception("Het gesprek is ondertussen veranderd. Controleer het gesprek.");
+          throw new Exception("The conversation changed meanwhile. Check the conversation.");
     }
     static bool SameFocus(Target target, AutomationElement composer) {
       try { return GetForegroundWindow() == new IntPtr(target.handle) &&
         RuntimeId(AutomationElement.FocusedElement) == RuntimeId(composer); } catch { return false; }
     }
     public static void Reply(Target target, string expectedContext, string composerId, Guard[] guards, Guard[] timeline, string text) {
-      if (String.IsNullOrWhiteSpace(text) || text.Length > 5000) throw new Exception("Gebruik een antwoord van 1 tot 5000 tekens.");
+      if (String.IsNullOrWhiteSpace(text) || text.Length > 5000) throw new Exception("Use a reply between 1 and 5000 characters.");
       var elements = new Dictionary<string, AutomationElement>();
       var snapshot = Read(target, elements);
       if (!snapshot.ok || snapshot.truncated || snapshot.contextKey != expectedContext)
-        throw new Exception("Het gesprek kan niet veilig worden gecontroleerd. Open het gesprek opnieuw.");
+        throw new Exception("Unable to verify the conversation safely. Reopen the conversation.");
       CheckGuards(elements, guards);
       CheckTimeline(snapshot, composerId, timeline);
       foreach (var node in snapshot.nodes)
         if (node.type == "Button" && node.enabled && Regex.IsMatch(node.name.Trim(),
-          "^(stop( generating| response| streaming| answering)?|stoppen( met genereren)?|antwoord stoppen|genereren stoppen)$", RegexOptions.IgnoreCase))
-          throw new Exception("De AI is alweer bezig. Het antwoord is niet verstuurd.");
+          "^(stop( generating| response| streaming| answering)?|durdur|yan[\u0131i]t[\u0131i] durdur|üretimi durdur)$", RegexOptions.IgnoreCase))
+          throw new Exception("The AI is already working again. Reply was not sent.");
       AutomationElement composer;
       if (!elements.TryGetValue(composerId, out composer) || composer.Current.IsPassword || !composer.Current.IsEnabled)
-        throw new Exception("Het juiste invoerveld is niet meer beschikbaar.");
+        throw new Exception("The target input box is no longer available.");
       if (!String.IsNullOrWhiteSpace(Value(composer)))
-        throw new Exception("Er staat al tekst in het gesprek. Die wordt niet overschreven.");
+        throw new Exception("There is already text in the input box. It will not be overwritten.");
       GuardContext(target, expectedContext);
       object pattern;
       if (composer.TryGetCurrentPattern(ValuePattern.Pattern, out pattern) && !((ValuePattern)pattern).Current.IsReadOnly) {
@@ -220,7 +220,7 @@ namespace LumaDock.Native {
         // Unicode input only after an explicit Send click, into the exact verified editor.
         Open(target); composer.SetFocus(); Thread.Sleep(160);
         for (int offset = 0; offset < text.Length; offset += 256) {
-          if (!SameFocus(target, composer)) throw new Exception("De focus veranderde. Controleer het invoerveld; het antwoord is niet verstuurd.");
+          if (!SameFocus(target, composer)) throw new Exception("Focus changed. Check the input box; reply was not sent.");
           GuardContext(target, expectedContext);
           int count = Math.Min(256, text.Length - offset);
           var input = new INPUT[count * 2];
@@ -229,26 +229,26 @@ namespace LumaDock.Native {
             input[i * 2 + 1] = input[i * 2]; input[i * 2 + 1].data.key.flags = 6;
           }
           if (SendInput((uint)input.Length, input, Marshal.SizeOf(typeof(INPUT))) != input.Length)
-            throw new Exception("Windows heeft de tekstinvoer onderbroken. Controleer het gesprek.");
+            throw new Exception("Windows interrupted text input. Check the conversation.");
         }
       }
       Thread.Sleep(350);
       GuardContext(target, expectedContext);
-      if (Value(composer).Replace("\r\n", "\n").Trim() != text.Replace("\r\n", "\n").Trim()) throw new Exception("De ingevoerde tekst is niet bevestigd. Controleer het gesprek.");
+      if (Value(composer).Replace("\r\n", "\n").Trim() != text.Replace("\r\n", "\n").Trim()) throw new Exception("The entered text was not confirmed. Check the conversation.");
       elements.Clear(); snapshot = Read(target, elements);
-      if (!snapshot.ok || snapshot.truncated || snapshot.contextKey != expectedContext) throw new Exception("Het gesprek is niet meer leesbaar. Controleer je ingevoerde antwoord.");
+      if (!snapshot.ok || snapshot.truncated || snapshot.contextKey != expectedContext) throw new Exception("The conversation is no longer readable. Check your entered reply.");
       CheckGuards(elements, guards);
       CheckTimeline(snapshot, composerId, timeline);
       AutomationElement send = null;
       foreach (var node in snapshot.nodes) {
         if (node.type == "Button" && node.enabled && Regex.IsMatch(node.name.Trim(),
-          "^(send( message)?|send now|verstuur|verzenden|bericht verzenden|bericht versturen)$", RegexOptions.IgnoreCase)) {
-          if (send != null) throw new Exception("Meerdere verzendknoppen gevonden. Verstuur het antwoord in de app.");
+          "^(send( message| prompt)?|send now|gönder|mesaj[\u0131i] gönder|şimdi gönder)$", RegexOptions.IgnoreCase)) {
+          if (send != null) throw new Exception("Multiple send buttons found. Send your reply in the app.");
           send = elements[node.id];
         }
       }
       if (send == null || !send.TryGetCurrentPattern(InvokePattern.Pattern, out pattern))
-        throw new Exception("Het antwoord staat in het gesprek, maar verzenden wordt niet ondersteund. Klik daar op Verstuur.");
+        throw new Exception("The reply is typed in the chat, but sending is not supported. Click Send there.");
       GuardContext(target, expectedContext);
       ((InvokePattern)pattern).Invoke();
       // The caller confirms a new streaming turn; Invoke alone is not a delivery receipt.

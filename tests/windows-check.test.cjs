@@ -2,7 +2,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { check } = require('../src/main/check-windows.cjs');
+const { setLanguage } = require('../src/shared/i18n.cjs');
 test('Windows check skips unrelated windows and never prints conversation content', async () => {
+  setLanguage('en');
   const logs = [], actions = [];
   const worker = { request: async (method, args) => {
     actions.push(method);
@@ -18,7 +20,7 @@ test('Windows check skips unrelated windows and never prints conversation conten
   }};
   assert.deepEqual(await check(worker,line=>logs.push(line)),{identified:1,readable:1});
   assert.equal(logs.join('\n').includes('PRIVATE CONVERSATION'),false);
-  assert.match(logs.join('\n'),/invoerveld herkend/);
+  assert.match(logs.join('\n'),/input box detected/);
   assert.deepEqual(actions,['windows','read','read']);
 });
 test('Windows check rejects worker startup failure', async () => {

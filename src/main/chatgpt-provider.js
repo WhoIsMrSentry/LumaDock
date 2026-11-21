@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const readline = require('readline');
+const { t } = require('../shared/i18n.cjs');
 
 let child = null;
 let starting = null;
@@ -45,7 +46,7 @@ function nativeRuntime() {
 
   if (!target) {
     throw new Error(
-      `Codex bu sistemi desteklemiyor: ${platform}.`
+      t('ai.unsupportedPlatform', { platform })
     );
   }
 
@@ -61,7 +62,7 @@ function nativeRuntime() {
     );
   } catch {
     throw new Error(
-      'Codex\'i yükleyin: npm.cmd install @openai/codex --save --include=optional'
+      t('ai.installCodex')
     );
   }
 
@@ -311,13 +312,13 @@ function waitFor(method, predicate, timeout) {
 
       reject(
         new Error(
-          'ChatGPT bağlantısı zaman aşımına uğradı. Lütfen tekrar deneyin.'
+          t('ai.timeout')
         )
       );
     }, timeout);
   });
 
-  // Meldingen kunnen eerder aankomen dan het RPC-antwoord.
+  // Notifications may arrive before the RPC response.
   promise.catch(() => {});
 
   return {
@@ -331,13 +332,13 @@ function waitFor(method, predicate, timeout) {
 
 async function start(retry = false) {
   if (quitting) {
-    throw new Error('LumaDock kapatılıyor.');
+    throw new Error(t('ai.quitting'));
   }
 
   if (starting) return starting;
   if (child) return;
 
-  // Na een fout alleen opnieuw starten op expliciet inloggen.
+  // After a startup failure, only retry on explicit sign-in.
   if (startError && !retry) throw startError;
 
   startError = null;
@@ -349,7 +350,7 @@ async function start(retry = false) {
   const task = (async () => {
     const env = { ...process.env };
 
-    // Eigen login en configuratie voor LumaDock.
+    // Isolated login and configuration for LumaDock.
     env.CODEX_HOME = path.join(folder(), 'codex');
 
     fs.mkdirSync(env.CODEX_HOME, { recursive: true });
@@ -415,7 +416,7 @@ async function start(retry = false) {
       args.push('-c', override);
     }
 
-    // Rechtstreeks het programma starten, zonder extra launcher.
+    // Launch binary directly without an intermediate wrapper shell.
     const running = spawn(runtime.executable, args, {
       cwd: workspace(),
       env,
@@ -440,7 +441,7 @@ async function start(retry = false) {
       if (child === running) {
         stop(
           new Error(
-            `Codex başlatılamadı: ${safeMessage(error.message)}`
+            t('ai.codexStartFailed', { message: safeMessage(error.message) })
           )
         );
       }
@@ -451,11 +452,11 @@ async function start(retry = false) {
 
       const detail = diagnostics.trim()
         ? safeMessage(diagnostics.trim())
-        : 'Tekrar denemek için Giriş Yap\'a tıklayın.';
+        : t('ai.clickSignIn');
 
       stop(
         new Error(
-          `Codex durduruldu (${code ?? signal ?? 'bilinmiyor'}). ${detail}`
+          t('ai.codexStopped', { code: code ?? signal ?? t('status.unknown'), detail })
         )
       );
     });
@@ -468,8 +469,8 @@ async function start(retry = false) {
 
     await request('initialize', {
       clientInfo: {
-        name: 'lumadock_assistent',
-        title: 'LumaDock Assistent',
+        name: 'lumadock_assistant',
+        title: 'LumaDock Assistant',
         version: '1.0.0'
       },
       capabilities: {
@@ -616,7 +617,7 @@ function peek() {
 async function login() {
   if (loginPending) {
     throw new Error(
-      'Zaten açık bir ChatGPT girişi var.'
+      t('ai.loginAlreadyOpen')
     );
   }
 
@@ -624,7 +625,7 @@ async function login() {
 
   if (loginPending) {
     throw new Error(
-      'Zaten açık bir ChatGPT girişi var.'
+      t('ai.loginAlreadyOpen')
     );
   }
 
@@ -657,7 +658,7 @@ async function login() {
 
     if (attempt.cancelled) {
       throw new Error(
-        'ChatGPT girişi iptal edildi.'
+        t('ai.loginCancelled')
       );
     }
 
@@ -667,7 +668,7 @@ async function login() {
       !result.userCode
     ) {
       throw new Error(
-        'ChatGPT giriş kodu döndürmedi. Cihaz kodu ile girişin hesabınız veya çalışma alanınız için açık olduğunu doğrulayın.'
+        t('ai.noDeviceCode')
       );
     }
 
@@ -681,20 +682,20 @@ async function login() {
       ].includes(url.hostname)
     ) {
       throw new Error(
-        'Giriş bağlantısı OpenAI\'a ait değil.'
+        t('ai.untrustedLoginUrl')
       );
     }
 
     const choice = await dialog.showMessageBox({
       type: 'info',
-      title: 'LumaDock · ChatGPT Bağlama',
+      title: t('ai.loginDialogTitle'),
       message:
-        `Tek kullanımlık giriş kodunuz: ${result.userCode}`,
+        t('ai.loginDialogMessage', { code: result.userCode }),
       detail:
-        'Kodu kopyalamak ve resmi OpenAI giriş sayfasını açmak için aşağıya tıklayın. Giriş yapın ve kodu oraya yapıştırın. Bağlantı tamamlanana kadar LumaDock\'u açık bırakın.',
+        t('ai.loginDialogDetail'),
       buttons: [
-        'Kodu Kopyala ve Tarayıcıyı Aç',
-        'İptal'
+        t('ai.loginDialogCopyBtn'),
+        t('common.cancel')
       ],
       defaultId: 0,
       cancelId: 1,
@@ -707,7 +708,7 @@ async function login() {
       child == null
     ) {
       throw new Error(
-        'ChatGPT girişi iptal edildi.'
+        t('ai.loginCancelled')
       );
     }
 
@@ -721,7 +722,7 @@ async function login() {
       throw new Error(
         safeMessage(
           completed.error ||
-          'ChatGPT girişi kesintiye uğradı.'
+          t('ai.loginInterrupted')
         )
       );
     }
@@ -734,7 +735,7 @@ async function login() {
     if (!account.ready) {
       throw new Error(
         account.error ||
-        'Hesap henüz bağlanmadı.'
+        t('ai.accountNotReady')
       );
     }
 
@@ -764,7 +765,7 @@ async function cancelLogin() {
   attempt.cancelled = true;
 
   attempt.waiter?.cancel(
-    new Error('ChatGPT girişi iptal edildi.')
+    new Error(t('ai.loginCancelled'))
   );
 
   if (attempt.id) {
@@ -791,7 +792,7 @@ async function answer(prompt, instructions, images = []) {
   if (!account.ready) {
     throw new Error(
       account.error ||
-      'Log eerst in via Instellingen → AI → ChatGPT.'
+      t('ai.signInViaSettings')
     );
   }
 
@@ -809,7 +810,7 @@ async function answer(prompt, instructions, images = []) {
 
   if (!chosen?.model) {
     throw new Error(
-      'Voor dit account is geen model gevonden.'
+      t('ai.noModelForAccount')
     );
   }
 
@@ -822,7 +823,7 @@ async function answer(prompt, instructions, images = []) {
     permissions: 'lumadock-chat',
     ephemeral: true,
     baseInstructions:
-      'Beantwoord de aangeleverde tekst. Gebruik geen tools en lees of wijzig geen bestanden.',
+      'Answer the provided text directly. Do not use tools and do not read or modify any files.',
     developerInstructions: instructions
   });
 
@@ -830,7 +831,7 @@ async function answer(prompt, instructions, images = []) {
 
   if (!threadId) {
     throw new Error(
-      'Het ChatGPT-gesprek kon niet worden gestart.'
+      t('ai.threadStartFailed')
     );
   }
 
@@ -883,14 +884,14 @@ async function answer(prompt, instructions, images = []) {
       throw new Error(
         safeMessage(
           event.turn?.error?.message ||
-          'ChatGPT heeft het verzoek niet voltooid.'
+          t('ai.requestIncomplete')
         )
       );
     }
 
     if (!text.trim()) {
       throw new Error(
-        'ChatGPT gaf geen leesbaar antwoord terug.'
+        t('ai.noReadableAnswer')
       );
     }
 
@@ -938,16 +939,16 @@ function fixInFolder(dir, prompt, images = [], sandbox = 'workspace-write') {
   return new Promise((resolve, reject) => {
     const running = spawn(runtime.executable, args, { cwd: dir, env, windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
     let diagnostics = '';
-    const timer = setTimeout(() => { try { running.kill(); } catch {} reject(new Error('Codex zaman aşımına uğradı.')); }, 300000);
+    const timer = setTimeout(() => { try { running.kill(); } catch {} reject(new Error(t('ai.codexTimeout'))); }, 300000);
     running.stderr.on('data', data => { diagnostics = (diagnostics + data.toString()).slice(-2000); });
     running.stdout.on('data', () => {});
-    running.on('error', error => { clearTimeout(timer); reject(new Error(`Codex kon niet starten: ${safeMessage(error.message)}`)); });
+    running.on('error', error => { clearTimeout(timer); reject(new Error(t('ai.codexStartFailed', { message: safeMessage(error.message) }))); });
     running.on('close', code => {
       clearTimeout(timer);
       let text = '';
       try { text = fs.readFileSync(out, 'utf8').trim(); fs.unlinkSync(out); } catch {}
       if (text) resolve(text);
-      else reject(new Error(code === 0 ? 'Codex gaf geen antwoord.' : `Codex stopte: ${safeMessage(diagnostics.split('\n').filter(Boolean).pop() || String(code))}`));
+      else reject(new Error(code === 0 ? t('ai.codexNoAnswer') : t('ai.codexExited', { detail: safeMessage(diagnostics.split('\n').filter(Boolean).pop() || String(code)) })));
     });
     running.stdin.end(prompt);
   });
