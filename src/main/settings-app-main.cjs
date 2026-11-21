@@ -319,7 +319,7 @@ async function checkAndApplyUpdate(silent = false) {
     updateState = { status: 'downloading', tag: latestTag, hash: remoteHash, progress: 10, error: '' };
     const targetFile = path.join(os.tmpdir(), `LumaDock-Setup-${latestTag.replace(/[^\w.-]/g, '_')}.exe`);
     const resp = await net.fetch(exeAsset.url, { headers: { 'User-Agent': 'LumaDock' } });
-    if (!resp.ok) throw new Error('Download failed: ' + resp.status);
+    if (!resp.ok) throw new Error(t('settings.downloadFailed', { status: resp.status }));
     const buf = Buffer.from(await resp.arrayBuffer());
 
     // Verify SHA-256 checksum if digest or .sha256 sidecar asset exists
@@ -339,7 +339,7 @@ async function checkAndApplyUpdate(silent = false) {
     if (expectedSha) {
       const actualSha = crypto.createHash('sha256').update(buf).digest('hex');
       if (actualSha.toLowerCase() !== expectedSha.toLowerCase()) {
-        throw new Error('Checksum mismatch for downloaded installer.');
+        throw new Error(t('settings.checksumMismatch'));
       }
     }
 

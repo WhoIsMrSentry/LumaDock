@@ -292,7 +292,33 @@
       "noPlanOpen": "No plan approval is currently open.",
       "planAlreadyAnswered": "This plan was already answered, perhaps in the terminal.",
       "planReviseDefault": "The user does not want to execute the plan yet. Ask what should change.",
-      "planReviseNote": "The user wants to adjust the plan: {note}"
+      "planReviseNote": "The user wants to adjust the plan: {note}",
+      "native": {
+        "windowClosed": "The connected window was closed.",
+        "wrongApp": "This window no longer belongs to the same app.",
+        "appRestarted": "The app was restarted. Please reconnect the window.",
+        "passwordProtected": "Password fields are never read.",
+        "inputUnreadable": "The input box cannot be read safely.",
+        "unrecognizedTab": "The active tab does not show a recognized ChatGPT or Claude conversation. Keep the chat in its own window.",
+        "browserNotExposed": "The browser does not expose this conversation to Windows.",
+        "conversationChanged": "The conversation changed. Reply was not sent.",
+        "questionUnrecognizable": "The question is no longer recognizable.",
+        "questionChanged": "The question changed meanwhile. Reopen the conversation.",
+        "verifyFailed": "Unable to verify the conversation.",
+        "newMessageAppeared": "A new message or prompt appeared. Check the conversation.",
+        "conversationChangedCheck": "The conversation changed meanwhile. Check the conversation.",
+        "verifySafelyFailed": "Unable to verify the conversation safely. Reopen the conversation.",
+        "aiAlreadyWorking": "The AI is already working again. Reply was not sent.",
+        "targetInputUnavailable": "The target input box is no longer available.",
+        "inputNotEmpty": "There is already text in the input box. It will not be overwritten.",
+        "focusChanged": "Focus changed. Check the input box; reply was not sent.",
+        "textInputInterrupted": "Windows interrupted text input. Check the conversation.",
+        "textNotConfirmed": "The entered text was not confirmed. Check the conversation.",
+        "conversationUnreadableReply": "The conversation is no longer readable. Check your entered reply.",
+        "multipleSendButtons": "Multiple send buttons found. Send your reply in the app.",
+        "sendUnsupported": "The reply is typed in the chat, but sending is not supported. Click Send there.",
+        "unknownCommand": "Unknown command."
+      }
     },
     "demo": {
       "busyPrompt": "Make the button on the homepage blue",
@@ -668,7 +694,8 @@
       "pixelReadFailed": "Could not sample pixel colour.",
       "pairingDenied": "Pairing denied.",
       "pairingExpired": "Pairing expired.",
-      "pairingTimeout": "Pairing timed out."
+      "pairingTimeout": "Pairing timed out.",
+      "wordBusy": "Word is busy. Try again in a moment."
     }
   },
   "project": {
@@ -835,13 +862,17 @@
       "fileDisallowedAi": "This file cannot be read by the AI.",
       "typeWhatToChange": "Type what you want to change first.",
       "aiNotConfigured": "AI is not set up yet. Open Settings → AI.",
-      "noReadableReply": "I did not receive a readable response."
+      "noReadableReply": "I did not receive a readable response.",
+      "startConversationFailed": "Could not start AI conversation."
     }
   },
   "ai": {
     "unsupportedPlatform": "Codex does not support this system: {platform}.",
     "installCodex": "Install Codex: npm.cmd install @openai/codex --save --include=optional",
     "timeout": "ChatGPT connection timed out. Please try again.",
+    "connectionClosed": "ChatGPT connection closed.",
+    "notStarted": "ChatGPT has not started.",
+    "sendFailed": "Could not send the request to ChatGPT.",
     "quitting": "LumaDock is closing.",
     "codexStartFailed": "Could not start Codex: {message}",
     "clickSignIn": "Click Sign in to try again.",
@@ -1272,6 +1303,8 @@
     "upToDateToast": "You are up to date: v{version}{hash} verified.",
     "downloadingUpdate": "Downloading update…",
     "updateReady": "Update ready, installing…",
+    "downloadFailed": "Download failed: {status}",
+    "checksumMismatch": "Checksum mismatch for downloaded installer.",
     "openingDownloadPage": "Opening download page…",
     "onGithub": "View on GitHub",
     "newsError": "The news could not be loaded. Are you online?",

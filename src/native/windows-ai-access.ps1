@@ -45,7 +45,9 @@ while ($null -ne ($line = [Console]::ReadLine())) {
     }
     $response = @{ id = $request.id; result = $result }
   } catch {
-    $response = @{ id = $request.id; result = @{ ok = $false; error = $_.Exception.Message } }
+    $ex = $_.Exception
+    while ($ex.InnerException) { $ex = $ex.InnerException }
+    $response = @{ id = $request.id; result = @{ ok = $false; error = $ex.Message } }
   }
   [Console]::WriteLine((ConvertTo-Json -InputObject $response -Depth 10 -Compress))
 }

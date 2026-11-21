@@ -1641,7 +1641,7 @@ async function openAIRequest(
     (!config.key && !isLocalBaseUrl(baseUrl))
   ) {
     throw new Error(
-      'AI is not configured yet. Go to Settings → AI.'
+      t('project.errors.aiNotConfigured')
     );
   }
 
@@ -1749,7 +1749,7 @@ async function createConversation(
     !result?.id
   ) {
     throw new Error(
-      'Could not start AI conversation.'
+      t('project.errors.startConversationFailed')
     );
   }
 

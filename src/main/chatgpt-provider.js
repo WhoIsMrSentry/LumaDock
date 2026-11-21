@@ -163,7 +163,7 @@ function notify(method, params) {
 }
 
 function stop(
-  error = new Error('ChatGPT connection closed.')
+  error = new Error(t('ai.connectionClosed'))
 ) {
   const running = child;
 
@@ -243,7 +243,7 @@ function request(method, params = {}, timeout = 25000) {
       child.killed ||
       !child.stdin.writable
     ) {
-      reject(new Error('ChatGPT has not started.'));
+      reject(new Error(t('ai.notStarted')));
       return;
     }
 
@@ -254,7 +254,7 @@ function request(method, params = {}, timeout = 25000) {
 
       reject(
         new Error(
-          'ChatGPT did not respond in time. Please try again.'
+          t('ai.timeout')
         )
       );
     }, timeout);
@@ -271,7 +271,7 @@ function request(method, params = {}, timeout = 25000) {
 
         reject(
           new Error(
-            'Could not send the request to ChatGPT.'
+            t('ai.sendFailed')
           )
         );
       }

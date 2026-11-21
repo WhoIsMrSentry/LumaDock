@@ -292,7 +292,33 @@
       "noPlanOpen": "Şu anda açık bir plan onayı yok.",
       "planAlreadyAnswered": "Bu plan zaten yanıtlanmış (muhtemelen terminalde).",
       "planReviseDefault": "Kullanıcı planı henüz uygulamak istemiyor. Neyin değişmesi gerektiğini sorun.",
-      "planReviseNote": "Kullanıcı planı değiştirmek istiyor: {note}"
+      "planReviseNote": "Kullanıcı planı değiştirmek istiyor: {note}",
+      "native": {
+        "windowClosed": "Bağlı pencere kapatıldı.",
+        "wrongApp": "Bu pencere artık aynı uygulamaya ait değil.",
+        "appRestarted": "Uygulama yeniden başlatıldı. Lütfen pencereyi tekrar bağlayın.",
+        "passwordProtected": "Parola alanları hiçbir zaman okunmaz.",
+        "inputUnreadable": "Giriş alanı güvenli bir şekilde okunamıyor.",
+        "unrecognizedTab": "Etkin sekme tanınan bir ChatGPT veya Claude sohbeti göstermiyor. Sohbeti ayrı bir pencerede açık tutun.",
+        "browserNotExposed": "Tarayıcı bu sohbeti Windows'a göstermiyor.",
+        "conversationChanged": "Sohbet değişti. Yanıt gönderilmedi.",
+        "questionUnrecognizable": "Soru artık algılanamıyor.",
+        "questionChanged": "Soru bu arada değişti. Sohbeti yeniden açın.",
+        "verifyFailed": "Sohbet doğrulanamadı.",
+        "newMessageAppeared": "Yeni bir mesaj veya istem belirdi. Sohbeti kontrol edin.",
+        "conversationChangedCheck": "Sohbet bu arada değişti. Sohbeti kontrol edin.",
+        "verifySafelyFailed": "Sohbet güvenli bir şekilde doğrulanamadı. Sohbeti yeniden açın.",
+        "aiAlreadyWorking": "Yapay zeka yeniden çalışmaya başladı. Yanıt gönderilmedi.",
+        "targetInputUnavailable": "Hedef giriş alanı artık kullanılamıyor.",
+        "inputNotEmpty": "Giriş alanında zaten metin var. Üzerine yazılmayacak.",
+        "focusChanged": "Odak değişti. Giriş alanını kontrol edin; yanıt gönderilmedi.",
+        "textInputInterrupted": "Windows metin girişini kesti. Sohbeti kontrol edin.",
+        "textNotConfirmed": "Girilen metin doğrulanamadı. Sohbeti kontrol edin.",
+        "conversationUnreadableReply": "Sohbet artık okunamıyor. Yazdığınız yanıtı kontrol edin.",
+        "multipleSendButtons": "Birden fazla gönder düğmesi bulundu. Yanıtınızı uygulamadan gönderin.",
+        "sendUnsupported": "Yanıt sohbete yazıldı ancak otomatik gönderme desteklenmiyor. Oradan Gönder'e tıklayın.",
+        "unknownCommand": "Bilinmeyen komut."
+      }
     },
     "demo": {
       "busyPrompt": "Ana sayfadaki butonu mavi yap",
@@ -668,7 +694,8 @@
       "pixelReadFailed": "Renk okunamadı.",
       "pairingDenied": "Eşleştirme reddedildi.",
       "pairingExpired": "Eşleştirme süresi doldu.",
-      "pairingTimeout": "Eşleştirme zaman aşımına uğradı."
+      "pairingTimeout": "Eşleştirme zaman aşımına uğradı.",
+      "wordBusy": "Word şu anda meşgul. Kısa süre sonra tekrar deneyin."
     }
   },
   "project": {
@@ -835,13 +862,17 @@
       "fileDisallowedAi": "Bu dosya yapay zeka tarafından okunamaz.",
       "typeWhatToChange": "Önce neyi değiştirmek istediğinizi yazın.",
       "aiNotConfigured": "Yapay zeka henüz ayarlanmadı. Ayarlar → Yapay Zeka açın.",
-      "noReadableReply": "Okunabilir bir yanıt alınamadı."
+      "noReadableReply": "Okunabilir bir yanıt alınamadı.",
+      "startConversationFailed": "Yapay zeka sohbeti başlatılamadı."
     }
   },
   "ai": {
     "unsupportedPlatform": "Codex bu sistemi desteklemiyor: {platform}.",
     "installCodex": "Codex'i yükleyin: npm.cmd install @openai/codex --save --include=optional",
     "timeout": "ChatGPT bağlantısı zaman aşımına uğradı. Lütfen tekrar deneyin.",
+    "connectionClosed": "ChatGPT bağlantısı kapatıldı.",
+    "notStarted": "ChatGPT henüz başlatılmadı.",
+    "sendFailed": "İstek ChatGPT'ye gönderilemedi.",
     "quitting": "LumaDock kapatılıyor.",
     "codexStartFailed": "Codex başlatılamadı: {message}",
     "clickSignIn": "Tekrar denemek için Giriş Yap'a tıklayın.",
@@ -1272,6 +1303,8 @@
     "upToDateToast": "Güncelsiniz: v{version}{hash} doğrulandı.",
     "downloadingUpdate": "Güncelleme indiriliyor…",
     "updateReady": "Güncelleme hazır, yükleniyor…",
+    "downloadFailed": "İndirme başarısız: {status}",
+    "checksumMismatch": "İndirilen kurulum dosyasının doğrulama toplamı eşleşmiyor.",
     "openingDownloadPage": "İndirme sayfası açılıyor…",
     "onGithub": "GitHub'da Görüntüle",
     "newsError": "Haberler yüklenemedi. İnternete bağlı mısınız?",

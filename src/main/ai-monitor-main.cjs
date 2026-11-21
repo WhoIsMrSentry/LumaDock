@@ -4,7 +4,7 @@ const { StringDecoder } = require('node:string_decoder');
 const path = require('node:path');
 const fs = require('node:fs');
 const { fileURLToPath } = require('node:url');
-const { PROVIDERS, observe, Session } = require('./ai-monitor-model.cjs');
+const { PROVIDERS, observe, Session, resolveNativeError } = require('./ai-monitor-model.cjs');
 const { createHub } = require('./claude-code-hooks.cjs');
 const { t, getLanguage, onLanguageChange } = require('../shared/i18n.cjs');
 
@@ -210,7 +210,10 @@ function setup(electron, options = {}) {
           const oldContext = session.contextKey;
           session.accept(observe(result, provider)); if (oldContext !== session.contextKey) save(); notify(session);
         } catch (error) {
-          if (sessions.get(provider) === session) session.accept({ valid: false, detail: error.message });
+          if (sessions.get(provider) === session) {
+            const resolved = resolveNativeError(error.message);
+            session.accept({ valid: false, detail: resolved.text, detailKey: resolved.key });
+          }
         }
         emit();
       }
@@ -398,7 +401,14 @@ function setup(electron, options = {}) {
     },
     'ai-monitor:open-source': async payload => {
       const provider = providerOf(payload), session = sessions.get(provider);
-      if (session) return worker.request('open', { target: session.target });
+      if (session) {
+        const result = await worker.request('open', { target: session.target });
+        if (!result?.ok && result?.error) {
+          const resolved = resolveNativeError(result.error);
+          return { ...result, error: resolved.text, errorKey: resolved.key };
+        }
+        return result;
+      }
       await shell.openExternal(PROVIDERS[provider].url); return { ok: true };
     },
     'ai-monitor:reply': async payload => {
@@ -419,7 +429,7 @@ function setup(electron, options = {}) {
         const result = await worker.request('reply', { target: session.target, contextKey: session.contextKey,
           composerId: obs.composer.id, guards: obs.assistant.guards,
           timeline: fresh.nodes.filter(n => n.type === 'Text' && n.index < obs.composer.index).map(n => ({ id: n.id, name: n.name })), text });
-        if (!result?.ok) throw new Error(result?.error || t('monitor.errors.replySendFailed'));
+        if (!result?.ok) throw new Error(resolveNativeError(result?.error).text || t('monitor.errors.replySendFailed'));
         // Do not retry an uncertain send: a user could otherwise receive duplicate prompts.
         const until = Date.now() + 12000;
         while (Date.now() < until) {
@@ -431,8 +441,13 @@ function setup(electron, options = {}) {
         }
         throw new Error(t('monitor.errors.workerTimeoutReply'));
       } catch (error) {
-        session.state = 'error'; session._setRawDetail ? session._setRawDetail(error.message) : (session.detail = error.message); session.run = null; emit();
-        return { ok: false, error: error.message, uncertain: true };
+        const resolved = resolveNativeError(error.message);
+        session.state = 'error';
+        if (resolved.key && session._setDetail) session._setDetail(resolved.key);
+        else if (session._setRawDetail) session._setRawDetail(resolved.text);
+        else session.detail = resolved.text;
+        session.run = null; emit();
+        return { ok: false, error: resolved.text, errorKey: resolved.key, uncertain: true };
       } finally { answering.delete(provider); }
     }
   };

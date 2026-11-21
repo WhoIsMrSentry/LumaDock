@@ -5,6 +5,41 @@ const PROVIDERS = Object.freeze({
   chatgpt: { name: 'ChatGPT', url: 'https://chatgpt.com/' },
   claude: { name: 'Claude', url: 'https://claude.ai/' }
 });
+const NATIVE_ERROR_KEYS = Object.freeze({
+  'The connected window was closed.': 'monitor.errors.native.windowClosed',
+  'This window no longer belongs to the same app.': 'monitor.errors.native.wrongApp',
+  'The app was restarted. Please reconnect the window.': 'monitor.errors.native.appRestarted',
+  'Password fields are never read.': 'monitor.errors.native.passwordProtected',
+  'The input box cannot be read safely.': 'monitor.errors.native.inputUnreadable',
+  'The active tab does not show a recognized ChatGPT or Claude conversation. Keep the chat in its own window.': 'monitor.errors.native.unrecognizedTab',
+  'The browser does not expose this conversation to Windows.': 'monitor.errors.native.browserNotExposed',
+  'The conversation changed. Reply was not sent.': 'monitor.errors.native.conversationChanged',
+  'The question is no longer recognizable.': 'monitor.errors.native.questionUnrecognizable',
+  'The question changed meanwhile. Reopen the conversation.': 'monitor.errors.native.questionChanged',
+  'Unable to verify the conversation.': 'monitor.errors.native.verifyFailed',
+  'A new message or prompt appeared. Check the conversation.': 'monitor.errors.native.newMessageAppeared',
+  'The conversation changed meanwhile. Check the conversation.': 'monitor.errors.native.conversationChangedCheck',
+  'Use a reply between 1 and 5000 characters.': 'monitor.errors.replyRangeError',
+  'Unable to verify the conversation safely. Reopen the conversation.': 'monitor.errors.native.verifySafelyFailed',
+  'The AI is already working again. Reply was not sent.': 'monitor.errors.native.aiAlreadyWorking',
+  'The target input box is no longer available.': 'monitor.errors.native.targetInputUnavailable',
+  'There is already text in the input box. It will not be overwritten.': 'monitor.errors.native.inputNotEmpty',
+  'Focus changed. Check the input box; reply was not sent.': 'monitor.errors.native.focusChanged',
+  'Windows interrupted text input. Check the conversation.': 'monitor.errors.native.textInputInterrupted',
+  'The entered text was not confirmed. Check the conversation.': 'monitor.errors.native.textNotConfirmed',
+  'The conversation is no longer readable. Check your entered reply.': 'monitor.errors.native.conversationUnreadableReply',
+  'Multiple send buttons found. Send your reply in the app.': 'monitor.errors.native.multipleSendButtons',
+  'The reply is typed in the chat, but sending is not supported. Click Send there.': 'monitor.errors.native.sendUnsupported',
+  'Unknown command.': 'monitor.errors.native.unknownCommand'
+});
+/** Strip PowerShell MethodInvocationException wrappers and map native errors to i18n keys. */
+function resolveNativeError(raw) {
+  let msg = String(raw || '').trim();
+  const psWrap = /^Exception calling "[^"]+" with "\d+" argument\(s\):\s*"([\s\S]*)"$/i.exec(msg);
+  if (psWrap) msg = psWrap[1].trim();
+  const key = NATIVE_ERROR_KEYS[msg] || null;
+  return { key, text: key ? t(key) : msg };
+}
 const hash = text => createHash('sha256').update(text || '').digest('hex');
 const clean = text => String(text || '').replace(/\r/g, '').trim();
 const STOP = /^(stop( generating| response| streaming| answering)?|durdur|yan[ıi]t[ıi] durdur|üretimi durdur|akışı durdur)$/i;
@@ -105,7 +140,11 @@ function questionFrom(text) {
   return text.slice(-6000);
 }
 function observe(snapshot, provider) {
-  if (!snapshot?.ok) return { valid: false, detail: snapshot?.error || t('monitor.errors.windowUnavailable'), detailKey: snapshot?.error ? null : 'monitor.errors.windowUnavailable' };
+  if (!snapshot?.ok) {
+    if (!snapshot?.error) return { valid: false, detail: t('monitor.errors.windowUnavailable'), detailKey: 'monitor.errors.windowUnavailable' };
+    const resolved = resolveNativeError(snapshot.error);
+    return { valid: false, detail: resolved.text, detailKey: resolved.key };
+  }
   if (!PROVIDERS[provider] || snapshot.provider !== provider) return { valid: false, detail: t('monitor.errors.wrongChatWindow'), detailKey: 'monitor.errors.wrongChatWindow' };
   if (snapshot.truncated) return { valid: false, detail: t('monitor.errors.windowTruncated'), detailKey: 'monitor.errors.windowTruncated' };
   const nodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : [];
@@ -243,4 +282,4 @@ class Session {
       preview: String(this.preview || '').slice(-1200) };
   }
 }
-module.exports = { PROVIDERS, observe, Session, questionFrom, hash };
+module.exports = { PROVIDERS, observe, Session, questionFrom, hash, resolveNativeError };

@@ -424,3 +424,30 @@ test('AI monitor supports Turkish and English chat window detection without Dutc
   assert.notEqual(questionFrom('Hazır. Haber ver.'), '');
   assert.equal(questionFrom('Örnek: hangi rengi istersin?'), '');
 });
+
+test('all C#/PowerShell native AI monitor exceptions map to localized EN/TR keys and unwrap InnerException', () => {
+  const { resolveNativeError } = require(path.join(ROOT, 'src', 'main', 'ai-monitor-model.cjs'));
+  const { setLanguage, getLanguage } = require(path.join(ROOT, 'src', 'shared', 'i18n.cjs'));
+  const cs = fs.readFileSync(path.join(ROOT, 'src', 'native', 'windows-ai-access.cs'), 'utf8');
+  const ps = fs.readFileSync(path.join(ROOT, 'src', 'native', 'windows-ai-access.ps1'), 'utf8');
+  assert.match(ps, /while\s*\(\$ex\.InnerException\)\s*\{\s*\$ex\s*=\s*\$ex\.InnerException\s*\}/);
+
+  const rawMsgs = [...cs.matchAll(/throw\s+new\s+Exception\("([^"]+)"\)/g)].map(m => m[1]);
+  rawMsgs.push('Unknown command.');
+  assert.ok(rawMsgs.length >= 25);
+
+  const prev = getLanguage();
+  try {
+    setLanguage('tr');
+    for (const msg of rawMsgs) {
+      const r = resolveNativeError(msg);
+      assert.ok(r.key, `Missing native i18n mapping for: ${msg}`);
+      assert.notEqual(r.text, msg, `Expected Turkish translation for: ${msg}`);
+      const wrapped = resolveNativeError(`Exception calling "Open" with "1" argument(s): "${msg}"`);
+      assert.equal(wrapped.key, r.key);
+      assert.equal(wrapped.text, r.text);
+    }
+  } finally {
+    setLanguage(prev);
+  }
+});

@@ -56,8 +56,14 @@ function ps(args, timeout = 30000) {
     execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, '..', 'native', 'buddy-look.ps1'), ...args.map(String)],
       { windowsHide: true, timeout, maxBuffer: 32 * 1024 * 1024 }, (error, stdout) => {
         const out = String(stdout || '').trim();
-        try { const json = JSON.parse(out.slice(out.indexOf('{'))); if (json.error) throw new Error(json.error); resolve(json); }
-        catch (parseError) { reject(error || parseError); }
+        try {
+          const json = JSON.parse(out.slice(out.indexOf('{')));
+          if (json.error) throw new Error(json.error === 'Word is busy. Try again in a moment.' ? bt('buddy.errors.wordBusy') : json.error);
+          resolve(json);
+        } catch (parseError) {
+          const msg = error?.message || '';
+          reject(msg.includes('Word is busy. Try again in a moment.') ? new Error(bt('buddy.errors.wordBusy')) : (error || parseError));
+        }
       });
   });
 }

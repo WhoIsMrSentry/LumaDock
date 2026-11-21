@@ -189,3 +189,39 @@ test('native worker uses shell=false, parses split UTF-8 JSONL and cannot restar
   assert.equal((await worker.request('read', {})).text, 'question 👻'); assert.equal(args.options.shell, false); assert.ok(args.argv.includes('-Mta'));
   worker.close(); await assert.rejects(worker.request('windows'), /shutting down/);
 });
+test('native window-closed and PowerShell-wrapped errors localize dynamically in EN and TR', async () => {
+  let closed = false;
+  const worker = {
+    async request(method) {
+      if (method === 'windows') return { ok: true, windows: [target] };
+      if (method === 'read') return closed ? { ok: false, error: 'The connected window was closed.' } : snapshot();
+      if (method === 'open') return { ok: false, error: 'Exception calling "Open" with "1" argument(s): "The connected window was closed."' };
+      return { ok: true };
+    },
+    close() {}
+  };
+  const h = backend(worker);
+  try {
+    await h.call('windows');
+    await h.call('connect', { provider: 'chatgpt', targetId: target.id });
+    closed = true;
+    await h.bridge.poll();
+
+    assert.equal(h.bridge.view().providers[0].state, 'unavailable');
+    assert.equal(h.bridge.view().providers[0].detail, 'The connected window was closed.');
+    const openEn = await h.call('open-source', { provider: 'chatgpt' });
+    assert.equal(openEn.ok, false);
+    assert.equal(openEn.error, 'The connected window was closed.');
+    assert.equal(openEn.errorKey, 'monitor.errors.native.windowClosed');
+
+    setLanguage('tr');
+    assert.equal(h.bridge.view().providers[0].detail, 'Bağlı pencere kapatıldı.');
+    const openTr = await h.call('open-source', { provider: 'chatgpt' });
+    assert.equal(openTr.ok, false);
+    assert.equal(openTr.error, 'Bağlı pencere kapatıldı.');
+    assert.equal(openTr.errorKey, 'monitor.errors.native.windowClosed');
+  } finally {
+    setLanguage('en');
+    h.cleanup();
+  }
+});

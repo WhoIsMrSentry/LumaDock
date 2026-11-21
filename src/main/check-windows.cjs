@@ -1,11 +1,11 @@
 'use strict';
 const { NativeWorker } = require('./ai-monitor-main.cjs');
-const { observe, PROVIDERS } = require('./ai-monitor-model.cjs');
+const { observe, PROVIDERS, resolveNativeError } = require('./ai-monitor-model.cjs');
 const { t } = require('../shared/i18n.cjs');
 
 async function check(worker, write = console.log) {
   const result = await worker.request('windows');
-  if (!result?.ok) throw new Error(result?.error || t('checkWindows.unavailable'));
+  if (!result?.ok) throw new Error(result?.error ? resolveNativeError(result.error).text : t('checkWindows.unavailable'));
   write(t('checkWindows.started'));
   let identified = 0, readable = 0;
   for (const target of result.windows || []) {

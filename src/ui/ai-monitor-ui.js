@@ -16,7 +16,8 @@
     connecting: 'status.connecting', disconnected: 'status.notConnected', login: 'status.signIn' };
   const stateLabel = st => t(LABEL_KEYS[st] || 'status.idle');
   let state = { providers: Object.keys(names).map(provider => ({ provider, name: names[provider], state: 'disconnected', detail: t('monitor.connectChat') })) };
-  let selected = null, choosing = false, windows = [], error = '', pending = false, lastSignature = '';
+  let selected = null, choosing = false, windows = [], error = '', errorKey = null, pending = false, lastSignature = '';
+  const setErr = (msg = '', key = null) => { error = msg || ''; errorKey = msg && key ? key : null; };
   const drafts = new Map();
   const root = document.createElement('section'); root.id = 'lumadock-ai-monitor'; document.body.appendChild(root);
   const statusReader = document.createElement('div'); statusReader.id = 'lumadock-ai-monitor-status';
@@ -405,12 +406,12 @@
       `<div class="am-row">${lamp(p)}<strong>${escape(p.detail || stateLabel(p.state))}</strong><span class="am-clock">${p.elapsed || 0}s</span></div>${busy(p) ? `<div class="am-track" role="status" aria-label="${escape(t('monitor.aiBusyAria'))}"><div class="am-wave"></div></div>` : ''}<div class="am-hint am-source" title="${escape(p.source?.title)}">${escape(p.source?.process)} · ${escape(p.source?.title)}</div><div class="am-body">${p.state === 'question' ? `<div class="am-question">${escape(p.question)}</div>` : `<p class="am-hint">${escape(p.state === 'done' ? t('monitor.replyReadyInChat') : p.state === 'ready' ? t('monitor.readyInChatFollow') : p.state === 'unavailable' ? t('monitor.unavailableWindowHint') : busy(p) ? t('monitor.busyKeepOpen') : t('monitor.openChatCheck'))}</p>`}</div>${p.canReply ? `<div class="am-compose"><textarea id="am-answer" maxlength="5000" placeholder="${escape(t('monitor.yourAnswer'))}" aria-label="${escape(t('monitor.answerQuestionAria'))}"></textarea><button type="button" class="am-primary" id="am-send">${escape(t('common.send'))}</button></div>` : ''}<div class="am-row"><button type="button" id="am-launch">${escape(t('monitor.openChatBtn'))}</button><button type="button" id="am-connect">${escape(t('common.reconnect'))}</button><button type="button" id="am-disconnect">${escape(t('common.disconnect'))}</button></div>`
     }${error ? `<div class="am-error" role="alert">${escape(error)}</div>` : ''}</div>`;
     bind('am-small', small); bind('am-connect', choose);
-    bind('am-scan', scan); bind('am-launch', launch); bind('am-cancel', () => { choosing = false; error = ''; render(); });
-    bind('am-disconnect', async () => { const result = await api.aiMonitorDisconnect(selected); if (result.ok) update(result); else { error = result.error; render(); } });
+    bind('am-scan', scan); bind('am-launch', launch); bind('am-cancel', () => { choosing = false; setErr(); render(); });
+    bind('am-disconnect', async () => { const result = await api.aiMonitorDisconnect(selected); if (result.ok) { setErr(); update(result); } else { setErr(result.error, result.errorKey); render(); } });
     bind('am-send', reply);
     bind('am-open-connect', () => { window.lumadock.settingsOpen?.('connect'); small(); }); // connecting lives in the LumaDock app now
     bind('am-hooks-install', () => hooks('aiMonitorHooksInstall', current()?.agent)); bind('am-hooks-uninstall', () => hooks('aiMonitorHooksUninstall', current()?.agent));
-    root.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => { if (b.dataset.pick !== selected) { markSeen(); selected = b.dataset.pick; choosing = false; error = ''; render(); } }));
+    root.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => { if (b.dataset.pick !== selected) { markSeen(); selected = b.dataset.pick; choosing = false; setErr(); render(); } }));
     // Show the end of Claude's message (the question) when the answer box takes space.
     if (p?.kind === 'hooks' && !p.plan && !p.ask) { const body = root.querySelector('.am-body'); if (body) body.scrollTop = body.scrollHeight; }
     if (p?.ask) bindAsk(p);
@@ -599,38 +600,38 @@
     }).join('');
   }
   async function hooks(method, ...args) {
-    if (pending) return; pending = true; error = ''; render();
-    try { const result = await api[method](...args); if (result.ok) update(result); else error = result.error; }
-    catch (failure) { error = failure.message; } finally { pending = false; render(); }
+    if (pending) return; pending = true; setErr(); render();
+    try { const result = await api[method](...args); if (result.ok) update(result); else setErr(result.error, result.errorKey); }
+    catch (failure) { setErr(failure.message); } finally { pending = false; render(); }
   }
   async function launch() {
     const result = await api.aiMonitorOpenSource(selected);
-    if (!result.ok) { error = result.error; render(); }
+    if (!result.ok) { setErr(result.error, result.errorKey); render(); }
   }
-  async function choose() { choosing = true; error = ''; render(); await scan(); }
+  async function choose() { choosing = true; setErr(); render(); await scan(); }
   async function scan() {
     if (pending) return; pending = true; render();
-    try { const result = await api.aiMonitorWindows(); windows = result.windows || []; error = result.ok ? '' : result.error; }
-    catch (failure) { error = failure.message; } finally { pending = false; render(); }
+    try { const result = await api.aiMonitorWindows(); windows = result.windows || []; if (result.ok) setErr(); else setErr(result.error, result.errorKey); }
+    catch (failure) { setErr(failure.message); } finally { pending = false; render(); }
   }
   async function connect(targetId) {
-    if (pending || !targetId) return; const provider = selected; pending = true; error = ''; render();
+    if (pending || !targetId) return; const provider = selected; pending = true; setErr(); render();
     try {
       const result = await api.aiMonitorConnect(provider, targetId);
-      if (result.ok) { choosing = false; update(result); } else error = result.error;
-    } catch (failure) { error = failure.message; } finally { pending = false; render(); }
+      if (result.ok) { choosing = false; update(result); } else setErr(result.error, result.errorKey);
+    } catch (failure) { setErr(failure.message); } finally { pending = false; render(); }
   }
   async function reply() {
     const p = current(), text = (drafts.get(key(p)) || '').trim();
     if (pending || !p?.canReply || !text) return;
     const provider = p.provider, questionId = p.questionId, draftKey = key(p);
-    pending = true; error = ''; render();
+    pending = true; setErr(); render();
     try {
       // Claude Code: the answer wakes Claude through the asyncRewake Stop hook.
       const result = p.kind === 'hooks' ? await api.aiMonitorHooksReply(p.sessionId, text) : await api.aiMonitorReply(provider, questionId, text);
       if (result.ok && p.kind === 'hooks') update(result);
-      if (result.ok) drafts.delete(draftKey); else error = result.error;
-    } catch (failure) { error = failure.message; } finally { pending = false; render(); }
+      if (result.ok) drafts.delete(draftKey); else setErr(result.error, result.errorKey);
+    } catch (failure) { setErr(failure.message); } finally { pending = false; render(); }
   }
   function update(next) {
     if (!next?.ok || !Array.isArray(next.providers)) return;
@@ -2109,6 +2110,6 @@
     requestAnimationFrame(position);
   }
   window.addEventListener('lumadock:prefs', () => { lastSignature = ''; render(); });
-  window.__lumadockI18n?.onChange?.(() => { lastSignature = ''; render(); });
+  window.__lumadockI18n?.onChange?.(() => { if (errorKey) error = t(errorKey); lastSignature = ''; render(); });
   window.__lumadockMonitor = Object.freeze({ open, small, state: () => state, refresh: () => { lastSignature = ''; update(state); } }); render(); requestAnimationFrame(position);
 })();
