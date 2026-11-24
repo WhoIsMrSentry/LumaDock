@@ -41,9 +41,10 @@
   // prefs: a copy of Robo's preferences; sleep/login: the two switches that live outside prefs;
   // extras: city and calendar link typed but not saved; apps: the apps you want in your LumaDock.
   let draft = null;
-  const realLogin = () => box.querySelector('[data-login]')?.classList.contains('on') ?? false;
+  const realLogin = () => Boolean(window.__lumadockGetLogin?.() ?? box.querySelector('[data-login]')?.classList.contains('on'));
   function begin() {
     if (draft) return draft;
+    window.__lumadockRefreshLogin?.();
     box.innerHTML = window.__lumadockSettingsHtml?.('general') || '';
     // login: null until you flip it (its real value arrives a moment after start, so it is read when needed)
     draft = { prefs: window.__lumadockRealPrefs(), sleep: !!sleepEnabled, login: null, extras: {}, apps: [...appsOff()] };
@@ -106,7 +107,10 @@
     box.innerHTML = window.__lumadockSettingsHtml?.('character') || '';
     if (d.sleep !== !!sleepEnabled) box.querySelector('[data-action="sleep"]')?.click();
     box.innerHTML = window.__lumadockSettingsHtml?.('general') || '';
-    if (d.login !== null && d.login !== realLogin()) box.querySelector('[data-login]')?.click();
+    if (d.login !== null && d.login !== realLogin()) {
+      if (window.__lumadockSetLogin) await window.__lumadockSetLogin(d.login);
+      else box.querySelector('[data-login]')?.click();
+    }
     for (const [key, value] of Object.entries(d.extras)) {
       box.innerHTML = window.__lumadockSettingsHtml?.('general') || '';
       document.querySelectorAll('#tc-in-' + key).forEach(i => { i.value = value; });

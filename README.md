@@ -5,7 +5,7 @@
 Robo monitors Claude Code, ChatGPT, Claude, and Codex, requests one-click permissions, and alerts you when tasks finish.</p>
 
 <p align="center">
-  <b>🧪 Public Beta</b> · Windows 10 & 11 · Free & Open Source<br>
+  <b>🧪 Public Beta</b> · Windows 10 & 11 · macOS (Apple Silicon & Intel) · Free & Open Source<br>
   <a href="README.tr.md">🇹🇷 Türkçe Dokümantasyon</a>
 </p>
 
@@ -31,10 +31,15 @@ LumaDock brings a responsive, fluid **Dynamic Island** experience to Windows 10 
 
 ## Quick Start (Pre-built)
 
-1. Download **`LumaDock-Windows.zip`** from [Releases](../../releases/latest).
-2. Extract the archive to your desired location (e.g., `Documents\LumaDock`).
-3. Run **`LumaDock.exe`**.
-4. *(If SmartScreen appears, click **More info → Run anyway**).*
+### Windows
+1. Download **`LumaDock-Setup-1.2.0-beta.3-x64.exe`** (installer) or **`LumaDock-1.2.0-beta.3-win-x64.zip`** (portable) from [Releases](../../releases/latest).
+2. Run the installer or extract the archive and launch **`LumaDock.exe`**.
+3. *(If SmartScreen appears, click **More info → Run anyway**).*
+
+### macOS
+1. Download **`LumaDock-1.2.0-beta.3-mac-arm64.dmg`** (Apple Silicon) or **`LumaDock-1.2.0-beta.3-mac-x64.dmg`** (Intel) from [Releases](../../releases/latest).
+2. Drag **`LumaDock`** into **Applications**.
+3. *(Since builds are unsigned, on first launch right-click **LumaDock → Open** or allow it in **System Settings → Privacy & Security**).*
 
 ### Shortcuts & Control
 

@@ -867,11 +867,30 @@
   window.lumadock?.extrasConfig?.().then(r => { if (r.ok) extrasCfg = r.config; }).catch(() => {});
   window.lumadock?.windowDisplays?.().then(d => { if (Array.isArray(d)) displaysList = d; }).catch(() => {});
   let loginOn = false;
-  window.lumadock?.loginGet?.().then(r => { if (r?.ok) loginOn = r.on; }).catch(() => {});
+  const refreshLogin = async () => {
+    try {
+      const r = await window.lumadock?.loginGet?.();
+      if (r?.ok) loginOn = Boolean(r.on);
+    } catch {}
+    return loginOn;
+  };
+  const applyLogin = async on => {
+    try {
+      const r = await window.lumadock?.loginSet?.(Boolean(on));
+      if (r?.ok) loginOn = Boolean(r.on);
+    } catch {}
+    rerender();
+    return loginOn;
+  };
+  window.__lumadockGetLogin = () => loginOn;
+  window.__lumadockRefreshLogin = refreshLogin;
+  window.__lumadockSetLogin = applyLogin;
+  window.lumadock?.onLoginChanged?.(on => { loginOn = Boolean(on); rerender(); });
+  refreshLogin();
   window.__lumadockSettingsAction = target => {
     if (target.dataset.quit) { window.lumadock?.close?.(); return true; }
     if (target.dataset.restart) { window.lumadock?.restart?.(); return true; }
-    if (target.dataset.login) { window.lumadock?.loginSet?.(!loginOn).then(r => { if (r?.ok) loginOn = r.on; rerender(); }).catch(() => {}); return true; }
+    if (target.dataset.login) { applyLogin(!loginOn); return true; }
     if (target.dataset.mood) {
       moodTimers.forEach(clearTimeout); moodTimers = [];
       if (target.dataset.mood === 'all') { playAllMoods(); return true; }

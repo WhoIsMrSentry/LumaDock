@@ -1,14 +1,33 @@
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
 const { t, getLanguage } = require('../shared/i18n.cjs');
 
-/** Spotify Client ID must be supplied locally via Settings or LUMADOCK_SPOTIFY_CLIENT_ID (never hardcoded in git). */
-const DEFAULT_SPOTIFY_CLIENT_ID = '';
-
-/** Validate a Spotify 32-char hexadecimal Client ID. */
+/** Spotify Client ID must be supplied locally via Settings, env var, or CI build-config.json (never hardcoded in git). */
 function isValidSpotifyClientId(value) {
   return /^[0-9a-f]{32}$/i.test(String(value || '').trim());
 }
+
+function getBundledSpotifyClientId() {
+  try {
+    const cfgPath = path.join(__dirname, 'build-config.json');
+    if (fs.existsSync(cfgPath)) {
+      const parsed = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+      const id = String(parsed?.spotifyClientId || '').trim();
+      if (isValidSpotifyClientId(id)) return id;
+    }
+  } catch {}
+  return '';
+}
+
+function getDefaultSpotifyClientId() {
+  const envId = String(process.env.LUMADOCK_SPOTIFY_CLIENT_ID || '').trim();
+  if (isValidSpotifyClientId(envId)) return envId;
+  return getBundledSpotifyClientId();
+}
+
+const DEFAULT_SPOTIFY_CLIENT_ID = getDefaultSpotifyClientId();
 
 /** Check whether stored token scopes cover private/collaborative playlist reading. */
 function hasSpotifyPlaylistScope(tokens) {
@@ -302,6 +321,8 @@ async function collectPagedSpotifyPlaylists(fetchPage, options = {}) {
 
 module.exports = {
   DEFAULT_SPOTIFY_CLIENT_ID,
+  getDefaultSpotifyClientId,
+  getBundledSpotifyClientId,
   isValidSpotifyClientId,
   hasSpotifyPlaylistScope,
   normalizeTrackMeta,

@@ -19,10 +19,32 @@ function openIsland() {
   win.webContents.send('extras:shortcut', 'home');
 }
 
-// Start with Windows. During development LumaDock runs as "electron.exe <folder>", so pass those along.
-function loginOptions() { return app.isPackaged ? {} : { path: process.execPath, args: [app.getAppPath()] }; }
-function startsWithWindows() { try { return app.getLoginItemSettings(loginOptions()).openAtLogin; } catch { return false; } }
-function setStartsWithWindows(on) { try { app.setLoginItemSettings({ ...loginOptions(), openAtLogin: !!on }); } catch { } buildMenu(); }
+// Start with Windows/macOS. During development LumaDock runs as "electron.exe <folder>", so pass those along.
+function loginOptions() {
+  if (app.isPackaged || process.platform === 'darwin') return {};
+  return { path: process.execPath, args: [path.resolve(app.getAppPath())] };
+}
+function startsWithWindows() {
+  try {
+    const s = app.getLoginItemSettings(loginOptions());
+    return Boolean(s.openAtLogin && s.executableWillLaunchAtLogin !== false);
+  } catch { return false; }
+}
+function broadcastLogin() {
+  const on = startsWithWindows();
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed() && /mascot\.html/.test(win.webContents.getURL())) {
+      try { win.webContents.send('app:login-changed', on); } catch {}
+    }
+  }
+}
+function setStartsWithWindows(on) {
+  try {
+    app.setLoginItemSettings({ ...loginOptions(), openAtLogin: !!on });
+  } catch {}
+  buildMenu();
+  broadcastLogin();
+}
 
 function quit() { app.quit(); } // main.js shows the goodbye first
 function restart() { app.relaunch(); app.quit(); }
@@ -32,7 +54,7 @@ function buildMenu() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: i18n.t('common.appName'), enabled: false },
     { type: 'separator' },
-    { label: i18n.t('tray.openIsland'), accelerator: 'Ctrl+Alt+1', registerAccelerator: false, click: openIsland },
+    { label: i18n.t('tray.openIsland'), accelerator: 'CommandOrControl+Alt+1', registerAccelerator: false, click: openIsland },
     { label: i18n.t('tray.settings'), click: () => app.emit('lumadock-open-settings') },
     { label: i18n.t('tray.startWithWindows'), type: 'checkbox', checked: startsWithWindows(), click: item => setStartsWithWindows(item.checked) },
     { type: 'separator' },
@@ -47,6 +69,7 @@ if (!app.requestSingleInstanceLock()) {
   // Legacy Start menu settings entry starts LumaDock with --settings so only the settings window opens.
   app.on('second-instance', (event, argv) => { if ((argv || []).includes('--settings')) app.emit('lumadock-open-settings'); else openIsland(); });
   app.setName('LumaDock');
+  if (process.platform === 'darwin' && app.dock) { try { app.dock.hide(); } catch {} }
   i18n.onLanguageChange(() => buildMenu());
   app.whenReady().then(() => {
     // Windows shows the name and icon of a notification from a Start menu shortcut with the same app id.
@@ -102,7 +125,8 @@ if (!app.requestSingleInstanceLock()) {
         execFile('reg.exe', ['add', key2, '/v', 'IconUri', '/t', 'REG_SZ', '/d', path.join(ROOT, 'assets', 'settings-icon.png'), '/f'], { windowsHide: true }, () => { });
       } catch { }
     }
-    const image = nativeImage.createFromPath(path.join(path.resolve(__dirname, '..', '..'), 'assets', 'tray.png'));
+    const rawImg = nativeImage.createFromPath(path.join(path.resolve(__dirname, '..', '..'), 'assets', process.platform === 'darwin' ? 'tray@2x.png' : 'tray.png'));
+    const image = process.platform === 'darwin' ? rawImg.resize({ width: 18, height: 18 }) : rawImg;
     tray = new Tray(image);
     tray.setToolTip('LumaDock');
     tray.on('click', openIsland);

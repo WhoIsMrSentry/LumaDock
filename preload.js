@@ -157,6 +157,13 @@
       ipcRenderer.send('lumadock:open-url', url),
     close: () =>
       ipcRenderer.send('window:close'),
+    restart: () =>
+      ipcRenderer.send('app:restart'),
+    loginGet: () =>
+      ipcRenderer.invoke('app:login-get'),
+    loginSet: on =>
+      ipcRenderer.invoke('app:login-set', Boolean(on)),
+    onLoginChanged: callback => subscribe('app:login-changed', callback),
     notify: (title, body, url) =>
       ipcRenderer.send('lumadock:notify', { title, body, url }),
     onPointer: callback =>

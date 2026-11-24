@@ -52,6 +52,7 @@ function debugShot(data) {
 }
 
 function ps(args, timeout = 30000) {
+  if (process.platform !== 'win32') return Promise.reject(new Error(bt('monitor.errors.workerPlatform')));
   return new Promise((resolve, reject) => {
     execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, '..', 'native', 'buddy-look.ps1'), ...args.map(String)],
       { windowsHide: true, timeout, maxBuffer: 32 * 1024 * 1024 }, (error, stdout) => {
@@ -74,7 +75,7 @@ function ps(args, timeout = 30000) {
 let eyes = null, eyesBuf = '', eyesId = 0;
 const waiting = new Map();
 function startEyes() {
-  if (eyes) return;
+  if (process.platform !== 'win32' || eyes) return;
   eyes = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, '..', 'native', 'buddy-helper.ps1'), '-Skip', String(process.pid)], { windowsHide: true });
   eyes.stdout.setEncoding('utf8');
   eyes.stdout.on('data', chunk => {
@@ -91,6 +92,7 @@ function startEyes() {
   eyes.on('exit', () => { eyes = null; for (const job of waiting.values()) { clearTimeout(job.timer); job.resolve({}); } waiting.clear(); });
 }
 function see(command, timeout = 4000) {
+  if (process.platform !== 'win32') return Promise.resolve({});
   startEyes();
   return new Promise(resolve => {
     const id = String(++eyesId);
@@ -120,7 +122,7 @@ function create() {
   layer = new BrowserWindow({
     frame: false, transparent: true, backgroundColor: '#00000000', resizable: false, movable: false, minimizable: false, maximizable: false,
     fullscreenable: false, skipTaskbar: true, alwaysOnTop: true, hasShadow: false, show: false, focusable: true, enableLargerThanScreen: true,
-    icon: path.join(ROOT, 'assets', 'icon.ico'),
+    icon: path.join(ROOT, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon-512.png'),
     webPreferences: { preload: path.join(ROOT, 'buddy-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false }
   });
   layer.setAlwaysOnTop(true, 'screen-saver');

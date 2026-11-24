@@ -1,14 +1,15 @@
 {
   "name": "lumadock-assistant-electron",
-  "version": "1.2.0-beta.2",
-  "description": "LumaDock: Dynamic Island for Windows with native AI monitor.",
+  "version": "1.2.0-beta.3",
+  "description": "LumaDock: Dynamic Island for Windows and macOS with native AI monitoring.",
   "main": "main.js",
   "scripts": {
     "test": "node --test tests/monitor.test.cjs tests/windows-check.test.cjs tests/claude-code-hooks.test.cjs tests/extras.test.cjs tests/features.test.cjs",
     "start": "electron .",
     "check:windows": "node src/main/check-windows.cjs",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder --win nsis portable zip"
+    "dist": "electron-builder --win nsis portable zip",
+    "dist:mac": "electron-builder --mac dmg zip"
   },
   "build": {
     "appId": "com.lumadock.assistant",
@@ -19,8 +20,10 @@
     "files": [
       "main.js",
       "preload.js",
+      "buddy-preload.js",
       "settings-app-preload.js",
       "mascot.html",
+      "buddy.html",
       "settings-app.html",
       "assets/**/*",
       "src/**/*"
@@ -37,17 +40,48 @@
         "portable",
         "zip"
       ],
-      "artifactName": "LumaDock-${version}-${arch}.${ext}"
+      "artifactName": "LumaDock-${version}-win-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "LumaDock"
+      "shortcutName": "LumaDock",
+      "artifactName": "LumaDock-Setup-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "LumaDock-Portable-${version}-${arch}.${ext}"
+    },
+    "mac": {
+      "icon": "assets/icon-512.png",
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "identity": null,
+      "hardenedRuntime": false,
+      "artifactName": "LumaDock-${version}-mac-${arch}.${ext}"
+    },
+    "dmg": {
+      "title": "LumaDock ${version}"
     }
   },
   "keywords": [
     "dynamic-island",
     "windows",
+    "macos",
     "ai-assistant",
     "chatgpt",
     "claude",

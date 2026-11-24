@@ -33,7 +33,10 @@ test('volume-watch.ps1 starts and exits cleanly when parent PID is gone', () => 
   if (process.platform !== 'win32') return;
   const scriptPath = path.join(ROOT, 'src', 'native', 'volume-watch.ps1');
   const out = execFileSync(POWERSHELL, ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-Parent', '999999'], { encoding: 'utf8', timeout: 8000 });
-  assert.match(out, /^\d+ [01]/m);
+  assert.match(out, /^P [01] [01]/m);
+  assert.match(out, /^F [01]/m);
+  const volLine = out.split(/\r?\n/).find(l => /^\d+\s+[01]$/.test(l.trim()));
+  if (volLine) assert.match(volLine.trim(), /^\d+ [01]$/);
 });
 
 test('calendar ICS parser extracts meeting URLs and ignores unsafe schemes', () => {
@@ -449,5 +452,54 @@ test('all C#/PowerShell native AI monitor exceptions map to localized EN/TR keys
     }
   } finally {
     setLanguage(prev);
+  }
+});
+
+test('packaging metadata includes all renderers/preloads, distinct Windows .exe artifacts, and macOS dmg/zip targets', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  for (const requiredFile of ['main.js', 'preload.js', 'buddy-preload.js', 'settings-app-preload.js', 'mascot.html', 'buddy.html', 'settings-app.html']) {
+    assert.ok(pkg.build.files.includes(requiredFile), `package.json build.files must include ${requiredFile}`);
+  }
+  assert.notEqual(pkg.build.nsis?.artifactName, pkg.build.portable?.artifactName, 'nsis and portable must not overwrite the same .exe name');
+  const macTargets = (pkg.build.mac?.target || []).map(t => t.target);
+  assert.ok(macTargets.includes('dmg'));
+  assert.ok(macTargets.includes('zip'));
+});
+
+test('preload exposes autostart login IPC and settings bridge awaits __lumadockSetLogin before saving', () => {
+  const preloadSrc = fs.readFileSync(path.join(ROOT, 'preload.js'), 'utf8');
+  assert.match(preloadSrc, /loginGet:\s*\(\)\s*=>\s*ipcRenderer\.invoke\('app:login-get'\)/);
+  assert.match(preloadSrc, /loginSet:\s*on\s*=>\s*ipcRenderer\.invoke\('app:login-set'/);
+  assert.match(preloadSrc, /onLoginChanged:/);
+  assert.match(preloadSrc, /restart:\s*\(\)\s*=>\s*ipcRenderer\.send\('app:restart'\)/);
+
+  const bridgeSrc = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'settings-bridge-ui.js'), 'utf8');
+  assert.match(bridgeSrc, /await\s+window\.__lumadockSetLogin\(/);
+});
+
+test('spotify helpers resolve build-config.json or LUMADOCK_SPOTIFY_CLIENT_ID without hardcoding secrets in git', () => {
+  const helperPath = path.join(ROOT, 'src', 'main', 'spotify-helpers.cjs');
+  const buildCfgPath = path.join(ROOT, 'src', 'main', 'build-config.json');
+  const prevEnv = process.env.LUMADOCK_SPOTIFY_CLIENT_ID;
+  const hadCfg = fs.existsSync(buildCfgPath);
+  const prevCfg = hadCfg ? fs.readFileSync(buildCfgPath, 'utf8') : null;
+  try {
+    const sampleId = '0123456789abcdef0123456789abcdef';
+    process.env.LUMADOCK_SPOTIFY_CLIENT_ID = '';
+    fs.writeFileSync(buildCfgPath, JSON.stringify({ spotifyClientId: sampleId }));
+    delete require.cache[require.resolve(helperPath)];
+    const h = require(helperPath);
+    assert.equal(h.getBundledSpotifyClientId(), sampleId);
+    assert.equal(h.getDefaultSpotifyClientId(), sampleId);
+
+    const envId = 'fedcba9876543210fedcba9876543210';
+    process.env.LUMADOCK_SPOTIFY_CLIENT_ID = envId;
+    assert.equal(h.getDefaultSpotifyClientId(), envId);
+  } finally {
+    if (prevEnv === undefined) delete process.env.LUMADOCK_SPOTIFY_CLIENT_ID;
+    else process.env.LUMADOCK_SPOTIFY_CLIENT_ID = prevEnv;
+    if (hadCfg) fs.writeFileSync(buildCfgPath, prevCfg);
+    else fs.rmSync(buildCfgPath, { force: true });
+    delete require.cache[require.resolve(helperPath)];
   }
 });

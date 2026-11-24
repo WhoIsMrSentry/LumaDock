@@ -21,6 +21,7 @@ const { spawn, exec } = require('child_process');
 const { StringDecoder } = require('string_decoder');
 const {
   DEFAULT_SPOTIFY_CLIENT_ID,
+  getDefaultSpotifyClientId,
   isValidSpotifyClientId,
   hasSpotifyPlaylistScope,
   normalizeTrackMeta,
@@ -40,9 +41,11 @@ require('./src/main/extras-main.cjs');
 require('./src/main/settings-app-main.cjs'); // LumaDock Settings: settings as their own app
 require('./src/main/license-main.cjs'); // packs bought on lumadock.app: which extra apps are open
 
-app.setAppUserModelId(
-  'com.lumadock.assistant'
-);
+if (process.platform === 'win32') {
+  app.setAppUserModelId(
+    'com.lumadock.assistant'
+  );
+}
 
 
 // ============================================================
@@ -2302,15 +2305,20 @@ function getSpotifyClientId() {
   if (isValidSpotifyClientId(envId)) return envId;
   const saved = readJson(SPOTIFY_CONFIG_FILE());
   const custom = String(saved?.clientId || '').trim();
-  return isValidSpotifyClientId(custom) ? custom : DEFAULT_SPOTIFY_CLIENT_ID;
+  if (isValidSpotifyClientId(custom)) return custom;
+  return getDefaultSpotifyClientId() || DEFAULT_SPOTIFY_CLIENT_ID;
 }
 
 function isCustomSpotifyClientId() {
-  return isValidSpotifyClientId(getSpotifyClientId());
+  const saved = readJson(SPOTIFY_CONFIG_FILE());
+  const custom = String(saved?.clientId || '').trim();
+  const baseId = getDefaultSpotifyClientId() || DEFAULT_SPOTIFY_CLIENT_ID;
+  return isValidSpotifyClientId(custom) && custom !== baseId;
 }
 
 function setSpotifyClientId(clientId) {
   const trimmed = String(clientId || '').trim();
+  const baseId = getDefaultSpotifyClientId() || DEFAULT_SPOTIFY_CLIENT_ID;
   if (!trimmed) {
     try { fs.unlinkSync(SPOTIFY_CONFIG_FILE()); } catch {}
     clearSpotifyTokens();
@@ -2326,10 +2334,11 @@ function setSpotifyClientId(clientId) {
   writeJson(SPOTIFY_CONFIG_FILE(), { clientId: trimmed });
   clearSpotifyTokens();
   playlistsCache = null;
+  const isCustom = trimmed !== baseId;
   if (mascotWindow && !mascotWindow.isDestroyed()) {
-    try { mascotWindow.webContents.send('spotify:auth-updated', { connected: false, isCustom: trimmed !== DEFAULT_SPOTIFY_CLIENT_ID }); } catch {}
+    try { mascotWindow.webContents.send('spotify:auth-updated', { connected: false, isCustom }); } catch {}
   }
-  return { ok: true, clientId: trimmed, isCustom: trimmed !== DEFAULT_SPOTIFY_CLIENT_ID };
+  return { ok: true, clientId: trimmed, isCustom };
 }
 
 
@@ -4513,7 +4522,7 @@ function setMascotInteractive(
 function createMascot() {
   mascotWindow =
     new BrowserWindow({
-      icon: path.join(__dirname, 'assets', 'icon.ico'), // Robo under the island (Alt+Tab, Task Manager)
+      icon: path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon-512.png'), // Robo under the island (Alt+Tab, Task Manager)
       width:
         PANEL_WIDTH,
 
@@ -4581,7 +4590,7 @@ function createMascot() {
 
   mascotWindow.setAlwaysOnTop(
     true,
-    'floating'
+    process.platform === 'darwin' ? 'screen-saver' : 'floating'
   );
 
 
@@ -4785,8 +4794,10 @@ ipcMain.handle('spotify:add-playlist-url', (_event, payload) => addCustomSpotify
 ipcMain.handle('spotify:remove-custom-playlist', (_event, id) => removeCustomSpotifyPlaylist(id));
 ipcMain.handle('spotify:get-config', () => {
   const tokens = loadSpotifyTokens();
+  const activeId = getSpotifyClientId();
   return {
-    clientId: getSpotifyClientId(),
+    clientId: activeId,
+    hasClientId: isValidSpotifyClientId(activeId),
     isCustom: isCustomSpotifyClientId(),
     connected: Boolean(tokens?.refresh_token),
     scope: tokens?.scope || '',

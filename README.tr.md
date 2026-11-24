@@ -5,7 +5,7 @@
 Robo; Claude Code, ChatGPT, Claude ve Codex oturumlarını izler, tek tıkla onay ister ve işlemler bittiğinde size haber verir.</p>
 
 <p align="center">
-  <b>🧪 Açık Beta</b> · Windows 10 & 11 · Ücretsiz ve Açık Kaynak<br>
+  <b>🧪 Açık Beta</b> · Windows 10 & 11 · macOS (Apple Silicon & Intel) · Ücretsiz ve Açık Kaynak<br>
   <a href="README.md">🇬🇧 English Documentation</a>
 </p>
 
@@ -31,10 +31,15 @@ LumaDock, Apple'ın popüler "Dynamic Island" (Dinamik Ada) deneyimini Windows 1
 
 ## Hızlı Başlangıç
 
-1. [Releases](../../releases/latest) sayfasından **`LumaDock-Windows.zip`** dosyasını indirin.
-2. Arşivi istediğiniz bir klasöre çıkartın (örn: `Belgeler\LumaDock`).
-3. Klasör içindeki **`LumaDock.exe`** dosyasını çalıştırın.
-4. *(Windows SmartScreen uyarısı çıkarsa **Ek bilgi → Yine de çalıştır** seçeneğine tıklayın).*
+### Windows
+1. [Releases](../../releases/latest) sayfasından **`LumaDock-Setup-1.2.0-beta.3-x64.exe`** (kurulum) veya **`LumaDock-1.2.0-beta.3-win-x64.zip`** (taşınabilir) dosyasını indirin.
+2. Kurulumu çalıştırın ya da arşivi çıkartıp **`LumaDock.exe`** dosyasını başlatın.
+3. *(Windows SmartScreen uyarısı çıkarsa **Ek bilgi → Yine de çalıştır** seçeneğine tıklayın).*
+
+### macOS
+1. [Releases](../../releases/latest) sayfasından **`LumaDock-1.2.0-beta.3-mac-arm64.dmg`** (Apple Silicon) veya **`LumaDock-1.2.0-beta.3-mac-x64.dmg`** (Intel) dosyasını indirin.
+2. **`LumaDock`** uygulamasını **Applications (Uygulamalar)** klasörüne sürükleyin.
+3. *(İmzasız derleme olduğu için ilk açılışta sağ tık → **Aç** yapın veya **Sistem Ayarları → Gizlilik ve Güvenlik** altından izin verin).*
 
 ### Kısayollar ve Kontroller
 

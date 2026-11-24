@@ -11,7 +11,7 @@ const handleIpc = (ch, fn) => ipcMain?.handle?.(ch, fn);
 const onIpc = (ch, fn) => ipcMain?.on?.(ch, fn);
 let win = null, dirty = false, closing = false;
 // Its own app for Windows: own name, own icon, own taskbar button (tray-main.cjs makes the Start menu shortcut).
-const APP_ID = 'com.lumadock.settings', APP_NAME = 'LumaDock Settings', ICON = path.join(ROOT, 'assets', 'settings-icon.ico');
+const APP_ID = 'com.lumadock.settings', APP_NAME = 'LumaDock Settings', ICON = path.join(ROOT, 'assets', process.platform === 'win32' ? 'settings-icon.ico' : 'icon-512.png');
 // light or dark, chosen in the app (the window's own buttons top right follow it)
 const THEMES = { dark: { bg: '#0e0f11', symbol: '#e6e6ea' }, light: { bg: '#f6f6f8', symbol: '#1a1b1e' } };
 const island = () => BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && /mascot\.html/.test(w.webContents.getURL()));
@@ -33,7 +33,8 @@ function open(tab) {
   win = new BrowserWindow({
     width: 1120, height: 760, minWidth: 820, minHeight: 560, show: false, title: APP_NAME,
     backgroundColor: THEMES[theme].bg, icon: ICON,
-    titleBarStyle: 'hidden', titleBarOverlay: { color: THEMES[theme].bg, symbolColor: THEMES[theme].symbol, height: 44 },
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    ...(process.platform !== 'darwin' ? { titleBarOverlay: { color: THEMES[theme].bg, symbolColor: THEMES[theme].symbol, height: 44 } } : {}),
     webPreferences: { preload: path.join(ROOT, 'settings-app-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
   win.setMenuBarVisibility(false);
@@ -310,28 +311,44 @@ async function checkAndApplyUpdate(silent = false) {
       return { ok: true, status: 'up_to_date', tag: latestTag, hash: currentHash, remoteHash };
     }
 
-    const exeAsset = (latest?.assets || []).find(a => /\.exe$/i.test(a.name));
-    if (!exeAsset?.url) {
+    const assets = latest?.assets || [];
+    const pickAsset = () => {
+      if (process.platform === 'darwin') {
+        const archTag = process.arch === 'arm64' ? 'arm64' : 'x64';
+        return assets.find(a => new RegExp(`${archTag}\\.dmg$`, 'i').test(a.name))
+          || assets.find(a => /\.dmg$/i.test(a.name));
+      }
+      if (process.platform === 'win32') {
+        return assets.find(a => /setup.*\.exe$/i.test(a.name))
+          || assets.find(a => /\.exe$/i.test(a.name));
+      }
+      return null;
+    };
+    const installerAsset = pickAsset();
+    if (!installerAsset?.url) {
       updateState = { status: 'available_web', tag: latestTag, hash: remoteHash, progress: 0, url: latest?.url || `https://github.com/${GITHUB_REPO}/releases` };
       return { ok: true, status: 'available_web', tag: latestTag, hash: remoteHash, url: updateState.url };
     }
 
     updateState = { status: 'downloading', tag: latestTag, hash: remoteHash, progress: 10, error: '' };
-    const targetFile = path.join(os.tmpdir(), `LumaDock-Setup-${latestTag.replace(/[^\w.-]/g, '_')}.exe`);
-    const resp = await net.fetch(exeAsset.url, { headers: { 'User-Agent': 'LumaDock' } });
+    const ext = path.extname(installerAsset.name) || (process.platform === 'darwin' ? '.dmg' : '.exe');
+    const targetFile = path.join(os.tmpdir(), `LumaDock-Setup-${latestTag.replace(/[^\w.-]/g, '_')}${ext}`);
+    const resp = await net.fetch(installerAsset.url, { headers: { 'User-Agent': 'LumaDock' } });
     if (!resp.ok) throw new Error(t('settings.downloadFailed', { status: resp.status }));
     const buf = Buffer.from(await resp.arrayBuffer());
 
     // Verify SHA-256 checksum if digest or .sha256 sidecar asset exists
-    let expectedSha = /^sha256:([a-f0-9]{64})$/i.exec(exeAsset.digest || '')?.[1] || '';
+    let expectedSha = /^sha256:([a-f0-9]{64})$/i.exec(installerAsset.digest || '')?.[1] || '';
     if (!expectedSha) {
-      const shaAsset = (latest?.assets || []).find(a => /\.sha256(\.txt)?$/i.test(a.name));
+      const shaAsset = assets.find(a => new RegExp(`^${installerAsset.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.sha256`, 'i').test(a.name))
+        || assets.find(a => /\.sha256(\.txt)?$/i.test(a.name) || /SHA256SUMS/i.test(a.name));
       if (shaAsset?.url) {
         try {
           const sr = await net.fetch(shaAsset.url, { headers: { 'User-Agent': 'LumaDock' } });
           if (sr.ok) {
             const txt = await sr.text();
-            expectedSha = txt.match(/\b([a-f0-9]{64})\b/i)?.[1] || '';
+            const lineMatch = txt.split(/\r?\n/).find(l => l.includes(installerAsset.name));
+            expectedSha = (lineMatch || txt).match(/\b([a-f0-9]{64})\b/i)?.[1] || '';
           }
         } catch {}
       }
@@ -346,9 +363,13 @@ async function checkAndApplyUpdate(silent = false) {
     fs.writeFileSync(targetFile, buf);
     updateState = { status: 'ready', tag: latestTag, hash: remoteHash, progress: 100, targetFile };
     if (!silent) {
-      const { spawn } = require('node:child_process');
-      spawn(targetFile, ['/SILENT'], { detached: true, stdio: 'ignore' }).unref();
-      setTimeout(() => app.quit(), 1500);
+      if (process.platform === 'darwin') {
+        await shell.openPath(targetFile);
+      } else {
+        const { spawn } = require('node:child_process');
+        spawn(targetFile, ['/SILENT'], { detached: true, stdio: 'ignore' }).unref();
+        setTimeout(() => app.quit(), 1500);
+      }
     }
     return { ok: true, status: 'ready', tag: latestTag, hash: remoteHash, targetFile };
   } catch (err) {

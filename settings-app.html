@@ -37,6 +37,8 @@
   svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
   .app{display:grid;grid-template-columns:248px 1fr;height:100vh}
   .drag{position:fixed;left:0;right:150px;top:0;height:44px;-webkit-app-region:drag;z-index:5}
+  .mac .drag{left:78px;right:18px}
+  .mac aside{padding-top:38px}
   .hidden{display:none !important}
 
   /* ---------- sidebar ---------- */
@@ -378,6 +380,7 @@
 <script src="./src/ui/i18n-ui.js"></script>
 <script>
 // @ts-nocheck
+if (/Mac/i.test(navigator.platform || '')) document.documentElement.classList.add('mac');
 const $ = s => document.querySelector(s), list = $('#list'), scroll = $('#scroll'), S = window.settingsApp;
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const icon = (name, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24"><use href="#i-${name}"/></svg>`;
@@ -891,7 +894,7 @@ list.addEventListener('click', e => {
     S.updateCheck(false).then(res => {
       if (res?.status === 'up_to_date') {
         const hashStr = res.hash ? ` (git: ${res.hash})` : '';
-        toast(st('upToDateToast', { version: news?.version || '1.2.0-beta.2', hash: hashStr }));
+        toast(st('upToDateToast', { version: news?.version || '1.2.0-beta.3', hash: hashStr }));
       }
       else if (res?.status === 'downloading') toast(st('downloadingUpdate'));
       else if (res?.status === 'ready') toast(st('updateReady'));

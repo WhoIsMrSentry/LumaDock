@@ -2,5 +2,6 @@ node_modules/
 *.log
 .env
 .claude/
+src/main/build-config.json
 
 dist/
