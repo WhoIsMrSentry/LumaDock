@@ -19,8 +19,12 @@ namespace LumaDock {
     int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid context);
     int GetMute(out bool mute);
   }
+  [Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IAudioMeterInformation {
+    int GetPeakValue(out float peak);
+  }
   [Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  interface IMMDevice { int Activate(ref Guid id, int context, int parameters, out IAudioEndpointVolume volume); }
+  interface IMMDevice { int Activate(ref Guid id, int context, int parameters, [MarshalAs(UnmanagedType.IUnknown)] out object iface); }
   [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
   interface IMMDeviceEnumerator { int f(); int GetDefaultAudioEndpoint(int flow, int role, out IMMDevice device); }
   [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] class MMDeviceEnumerator { }
@@ -30,37 +34,108 @@ namespace LumaDock {
 
   public static class Audio {
     static Guid ctx = Guid.Empty;
+    static object ActivateEndpoint(int flow, Guid iid) {
+      IMMDeviceEnumerator enumerator = null;
+      IMMDevice device = null;
+      try {
+        enumerator = (IMMDeviceEnumerator)(new MMDeviceEnumerator());
+        Marshal.ThrowExceptionForHR(enumerator.GetDefaultAudioEndpoint(flow, 1, out device));
+        object iface;
+        Marshal.ThrowExceptionForHR(device.Activate(ref iid, 23, 0, out iface));
+        return iface;
+      } finally {
+        if (device != null) Marshal.ReleaseComObject(device);
+        if (enumerator != null) Marshal.ReleaseComObject(enumerator);
+      }
+    }
     static IAudioEndpointVolume Endpoint() {
-      var enumerator = (IMMDeviceEnumerator)(new MMDeviceEnumerator());
-      IMMDevice device; Marshal.ThrowExceptionForHR(enumerator.GetDefaultAudioEndpoint(0, 1, out device));
-      IAudioEndpointVolume volume; var id = typeof(IAudioEndpointVolume).GUID;
-      Marshal.ThrowExceptionForHR(device.Activate(ref id, 23, 0, out volume));
-      return volume;
+      return (IAudioEndpointVolume)ActivateEndpoint(0, typeof(IAudioEndpointVolume).GUID);
+    }
+    public static void SetMicMute(bool mute) {
+      IAudioEndpointVolume v = null;
+      try {
+        v = (IAudioEndpointVolume)ActivateEndpoint(1, typeof(IAudioEndpointVolume).GUID);
+        Marshal.ThrowExceptionForHR(v.SetMute(mute, ref ctx));
+      } catch {} finally {
+        if (v != null) Marshal.ReleaseComObject(v);
+      }
     }
     public static string Read() {
-      var v = Endpoint(); float level; bool mute;
-      Marshal.ThrowExceptionForHR(v.GetMasterVolumeLevelScalar(out level));
-      Marshal.ThrowExceptionForHR(v.GetMute(out mute));
-      return ((int)Math.Round(level * 100)).ToString() + " " + (mute ? "1" : "0");
+      IAudioEndpointVolume v = null;
+      try {
+        v = Endpoint(); float level; bool mute;
+        Marshal.ThrowExceptionForHR(v.GetMasterVolumeLevelScalar(out level));
+        Marshal.ThrowExceptionForHR(v.GetMute(out mute));
+        return ((int)Math.Round(level * 100)).ToString() + " " + (mute ? "1" : "0");
+      } finally {
+        if (v != null) Marshal.ReleaseComObject(v);
+      }
+    }
+    public static int ReadPeak() {
+      IAudioMeterInformation m = null;
+      try {
+        m = (IAudioMeterInformation)ActivateEndpoint(0, typeof(IAudioMeterInformation).GUID);
+        float peak;
+        Marshal.ThrowExceptionForHR(m.GetPeakValue(out peak));
+        return Math.Max(0, Math.Min(100, (int)Math.Round(peak * 100)));
+      } catch {
+        return -1;
+      } finally {
+        if (m != null) Marshal.ReleaseComObject(m);
+      }
     }
     public static void Set(float pct) {
-      var v = Endpoint();
-      float clamped = Math.Max(0f, Math.Min(1f, pct / 100f));
-      Marshal.ThrowExceptionForHR(v.SetMasterVolumeLevelScalar(clamped, ref ctx));
-      if (clamped > 0f) { v.SetMute(false, ref ctx); }
+      IAudioEndpointVolume v = null;
+      try {
+        v = Endpoint();
+        float clamped = Math.Max(0f, Math.Min(1f, pct / 100f));
+        Marshal.ThrowExceptionForHR(v.SetMasterVolumeLevelScalar(clamped, ref ctx));
+        if (clamped > 0f) { v.SetMute(false, ref ctx); }
+      } finally {
+        if (v != null) Marshal.ReleaseComObject(v);
+      }
     }
     public static void Step(float deltaPct) {
-      var v = Endpoint(); float level;
-      Marshal.ThrowExceptionForHR(v.GetMasterVolumeLevelScalar(out level));
-      float next = Math.Max(0f, Math.Min(1f, level + deltaPct / 100f));
-      Marshal.ThrowExceptionForHR(v.SetMasterVolumeLevelScalar(next, ref ctx));
-      if (deltaPct > 0f) { v.SetMute(false, ref ctx); }
+      IAudioEndpointVolume v = null;
+      try {
+        v = Endpoint(); float level;
+        Marshal.ThrowExceptionForHR(v.GetMasterVolumeLevelScalar(out level));
+        float next = Math.Max(0f, Math.Min(1f, level + deltaPct / 100f));
+        Marshal.ThrowExceptionForHR(v.SetMasterVolumeLevelScalar(next, ref ctx));
+        if (deltaPct > 0f) { v.SetMute(false, ref ctx); }
+      } finally {
+        if (v != null) Marshal.ReleaseComObject(v);
+      }
     }
     public static void ToggleMute() {
-      var v = Endpoint(); bool mute;
-      Marshal.ThrowExceptionForHR(v.GetMute(out mute));
-      Marshal.ThrowExceptionForHR(v.SetMute(!mute, ref ctx));
+      IAudioEndpointVolume v = null;
+      try {
+        v = Endpoint(); bool mute;
+        Marshal.ThrowExceptionForHR(v.GetMute(out mute));
+        Marshal.ThrowExceptionForHR(v.SetMute(!mute, ref ctx));
+      } finally {
+        if (v != null) Marshal.ReleaseComObject(v);
+      }
     }
+
+    public static string ReadNetBytes() {
+      long rx = 0, tx = 0;
+      try {
+        foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()) {
+          if (ni.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up &&
+              ni.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback) {
+            var st = ni.GetIPStatistics();
+            rx += st.BytesReceived;
+            tx += st.BytesSent;
+          }
+        }
+      } catch {}
+      return "N " + rx.ToString() + " " + tx.ToString();
+    }
+
+    [DllImport("user32.dll")] public static extern uint GetClipboardSequenceNumber();
+    [DllImport("user32.dll")] static extern IntPtr GetClipboardOwner();
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder sb, int max);
 
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
@@ -70,11 +145,51 @@ namespace LumaDock {
     [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr m, ref MONITORINFO info);
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
 
+    static string ProcName(uint pid) {
+      if (pid == 0) return "";
+      try { using (var p = System.Diagnostics.Process.GetProcessById((int)pid)) return p.ProcessName ?? ""; }
+      catch { return ""; }
+    }
+
+    public static string ClipboardSeqAndOwner() {
+      uint seq = GetClipboardSequenceNumber();
+      string owner = "";
+      try {
+        IntPtr h = GetClipboardOwner();
+        if (h != IntPtr.Zero) {
+          uint pid = 0; GetWindowThreadProcessId(h, out pid);
+          owner = ProcName(pid);
+        }
+      } catch {}
+      return "C " + seq.ToString() + "|" + owner;
+    }
+
+    public static string ForegroundWindowInfo(uint skipPid) {
+      IntPtr fg = GetForegroundWindow();
+      if (fg == IntPtr.Zero || IsIconic(fg)) return "";
+      uint pid = 0; GetWindowThreadProcessId(fg, out pid);
+      if (pid == 0 || pid == skipPid) return "";
+      var cls = new StringBuilder(64);
+      GetClassName(fg, cls, 64);
+      string c = cls.ToString();
+      if (c == "Shell_TrayWnd" || c == "Progman" || c == "WorkerW" || c == "Windows.UI.Core.CoreWindow") return "";
+      var titleSb = new StringBuilder(220);
+      GetWindowText(fg, titleSb, 220);
+      string proc = ProcName(pid).Replace('|', ' ');
+      string title = titleSb.ToString().Replace('|', ' ').Replace('\r', ' ').Replace('\n', ' ');
+      return "W " + fg.ToInt64().ToString() + "|" + pid.ToString() + "|" + proc + "|" + title;
+    }
+
     public static int IsFullscreen(uint skipPid) {
       IntPtr fg = GetForegroundWindow();
       if (fg == IntPtr.Zero || IsIconic(fg)) return 0;
       uint pid = 0; GetWindowThreadProcessId(fg, out pid);
       if (pid == 0 || pid == skipPid) return 0;
+      string proc = ProcName(pid).ToLowerInvariant();
+      if (proc == "screenclippinghost" || proc == "snippingtool" || proc == "shellexperiencehost" ||
+          proc == "searchhost" || proc == "startmenuexperiencehost" || proc == "lockapp" ||
+          proc == "textinputhost" || proc == "crossdeviceresume" || proc == "pickerhost" ||
+          proc == "dwm") return 0;
       var cls = new StringBuilder(128);
       GetClassName(fg, cls, 128);
       string c = cls.ToString();
@@ -114,11 +229,15 @@ $cmdFile = "$env:TEMP\lumadock-vol-cmd.txt"
 $last = ''
 $lastPrivacy = ''
 $lastFs = ''
+$lastClip = ''
+$lastWin = ''
+$lastPeak = -1
 $tick = 0
 
 while ($true) {
+  $tick++
   # Stop together with LumaDock, also when closed abruptly.
-  if ($Parent -and (++$tick % 20 -eq 0) -and -not (Get-Process -Id $Parent -ErrorAction SilentlyContinue)) { exit 0 }
+  if ($Parent -and ($tick % 20 -eq 0) -and -not (Get-Process -Id $Parent -ErrorAction SilentlyContinue)) { exit 0 }
 
   if (Test-Path $cmdFile) {
     try {
@@ -133,6 +252,8 @@ while ($true) {
             $d = 0.0; if ([double]::TryParse($parts[1], [System.Globalization.CultureInfo]::InvariantCulture, [ref]$d)) { [LumaDock.Audio]::Step([float]$d) }
           } elseif ($parts[0] -eq 'mute') {
             [LumaDock.Audio]::ToggleMute()
+          } elseif ($parts[0] -eq 'mic-mute' -and $parts.Length -ge 2) {
+            [LumaDock.Audio]::SetMicMute($parts[1] -eq '1')
           }
         }
       }
@@ -141,6 +262,28 @@ while ($true) {
 
   try { $now = [LumaDock.Audio]::Read() } catch { $now = $last }
   if ($now -ne $last) { [Console]::Out.WriteLine($now); [Console]::Out.Flush(); $last = $now }
+
+  try {
+    $pk = [LumaDock.Audio]::ReadPeak()
+    if ($pk -ge 0 -and ($pk -ne $lastPeak)) {
+      if ($pk -eq 0 -or $lastPeak -lt 0 -or [Math]::Abs($pk - $lastPeak) -ge 2) {
+        [Console]::Out.WriteLine("A $pk")
+        [Console]::Out.Flush()
+        $lastPeak = $pk
+      }
+    }
+  } catch {}
+
+  if ($tick % 3 -eq 0) {
+    try {
+      $cNow = [LumaDock.Audio]::ClipboardSeqAndOwner()
+      if ($cNow -ne $lastClip) { [Console]::Out.WriteLine($cNow); [Console]::Out.Flush(); $lastClip = $cNow }
+    } catch {}
+    try {
+      $wNow = [LumaDock.Audio]::ForegroundWindowInfo([uint32]$Parent)
+      if ($wNow -and $wNow -ne $lastWin) { [Console]::Out.WriteLine($wNow); [Console]::Out.Flush(); $lastWin = $wNow }
+    } catch {}
+  }
 
   if ($tick % 7 -eq 0) {
     try {
@@ -153,6 +296,14 @@ while ($true) {
       $fs = [LumaDock.Audio]::IsFullscreen([uint32]$Parent)
       $fNow = "F $fs"
       if ($fNow -ne $lastFs) { [Console]::Out.WriteLine($fNow); [Console]::Out.Flush(); $lastFs = $fNow }
+    } catch {}
+  }
+
+  if ($tick % 10 -eq 0) {
+    try {
+      $nNow = [LumaDock.Audio]::ReadNetBytes()
+      [Console]::Out.WriteLine($nNow)
+      [Console]::Out.Flush()
     } catch {}
   }
 
