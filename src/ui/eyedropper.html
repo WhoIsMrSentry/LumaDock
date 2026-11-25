@@ -1,0 +1,290 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>LumaDock Eyedropper &amp; Ruler</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; user-select: none; }
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; cursor: crosshair; font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif; }
+  #bg, #fx { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #hud {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 6px; padding: 5px 8px;
+    border-radius: 999px; background: rgba(12, 15, 12, .92);
+    border: 1px solid rgba(198, 233, 148, .32); box-shadow: 0 10px 28px rgba(0,0,0,.55);
+    color: #eef3ea; font-size: 11.5px; font-weight: 600; z-index: 20; cursor: default;
+  }
+  #hud button {
+    border: 1px solid rgba(255,255,255,.12); border-radius: 999px; background: #191f19;
+    color: #dbe4d6; padding: 4px 10px; font: 600 11px "Segoe UI", sans-serif; cursor: pointer;
+  }
+  #hud button.on { background: #c6e994; color: #10180c; border-color: #c6e994; }
+  #hud span { color: #8f998d; font-size: 11px; padding: 0 6px; }
+  #loupeWrap {
+    position: fixed; pointer-events: none; z-index: 15; display: none;
+    flex-direction: column; align-items: center; gap: 6px;
+  }
+  #loupeCanvas {
+    width: 124px; height: 124px; border-radius: 50%;
+    border: 2px solid #fff; box-shadow: 0 8px 26px rgba(0,0,0,.7), 0 0 0 1px rgba(0,0,0,.6);
+    background: #000;
+  }
+  #readout {
+    display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 11px;
+    background: rgba(12, 15, 12, .94); border: 1px solid rgba(255,255,255,.16);
+    box-shadow: 0 8px 20px rgba(0,0,0,.6); color: #f4f7ef;
+  }
+  #swatch { width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(255,255,255,.28); flex: none; }
+  #vals { display: flex; flex-direction: column; line-height: 1.25; }
+  #hexLbl { font: 700 12.5px Consolas, monospace; color: #fff; }
+  #rgbLbl { font: 500 10px Consolas, monospace; color: #9aa596; }
+</style>
+</head>
+<body>
+  <canvas id="bg"></canvas>
+  <canvas id="fx"></canvas>
+  <div id="hud">
+    <button type="button" id="btn-picker" class="on">Renk Secici</button>
+    <button type="button" id="btn-ruler">Cetvel (R)</button>
+    <span id="hud-hint">Tikla: kopyala · R: cetvel · Esc: iptal</span>
+  </div>
+  <div id="loupeWrap">
+    <canvas id="loupeCanvas" width="124" height="124"></canvas>
+    <div id="readout">
+      <i id="swatch"></i>
+      <div id="vals">
+        <b id="hexLbl">#000000</b>
+        <small id="rgbLbl">rgb(0, 0, 0)</small>
+      </div>
+    </div>
+  </div>
+<script>
+(() => {
+  const api = window.lumadockOverlay;
+  const bg = document.getElementById('bg');
+  const fx = document.getElementById('fx');
+  const hud = document.getElementById('hud');
+  const btnPicker = document.getElementById('btn-picker');
+  const btnRuler = document.getElementById('btn-ruler');
+  const hudHint = document.getElementById('hud-hint');
+  const loupeWrap = document.getElementById('loupeWrap');
+  const loupeCanvas = document.getElementById('loupeCanvas');
+  const swatch = document.getElementById('swatch');
+  const hexLbl = document.getElementById('hexLbl');
+  const rgbLbl = document.getElementById('rgbLbl');
+
+  const bctx = bg.getContext('2d', { willReadFrequently: true });
+  const fctx = fx.getContext('2d');
+  const lctx = loupeCanvas.getContext('2d');
+
+  let imgEl = null;
+  let toolMode = 'picker'; // picker | ruler
+  let labels = {};
+  let cursor = { x: Math.round(innerWidth / 2), y: Math.round(innerHeight / 2) };
+  let drag = null;
+  let lastMeas = null;
+
+  function toHex(r, g, b) {
+    return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('').toUpperCase();
+  }
+
+  function toHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+      else if (max === g) h = ((b - r) / d + 2) / 6;
+      else h = ((r - g) / d + 4) / 6;
+    }
+    return `hsl(${Math.round(h * 360)}, ${Math.round(s * 100)}%, ${Math.round(l * 100)}%)`;
+  }
+
+  function setTool(next) {
+    toolMode = next === 'ruler' ? 'ruler' : 'picker';
+    btnPicker.classList.toggle('on', toolMode === 'picker');
+    btnRuler.classList.toggle('on', toolMode === 'ruler');
+    loupeWrap.style.display = toolMode === 'picker' && imgEl ? 'flex' : 'none';
+    hudHint.textContent = toolMode === 'ruler'
+      ? (labels.rulerHint || 'Drag to measure px · Esc cancel')
+      : (labels.pickerHint || 'Click pixel to copy · R ruler · Esc cancel');
+    drawRuler();
+  }
+
+  function syncCanvasSize() {
+    const w = imgEl?.naturalWidth || Math.round(innerWidth * devicePixelRatio);
+    const h = imgEl?.naturalHeight || Math.round(innerHeight * devicePixelRatio);
+    bg.width = w;
+    bg.height = h;
+    fx.width = Math.round(innerWidth * devicePixelRatio);
+    fx.height = Math.round(innerHeight * devicePixelRatio);
+    if (imgEl) {
+      bctx.setTransform(1, 0, 0, 1, 0, 0);
+      bctx.drawImage(imgEl, 0, 0, w, h);
+    }
+  }
+
+  function sampleAt(clientX, clientY) {
+    if (!imgEl || bg.width < 1 || bg.height < 1) return null;
+    const sx = bg.width / Math.max(1, innerWidth);
+    const sy = bg.height / Math.max(1, innerHeight);
+    const px = Math.max(0, Math.min(bg.width - 1, Math.round(clientX * sx)));
+    const py = Math.max(0, Math.min(bg.height - 1, Math.round(clientY * sy)));
+    const data = bctx.getImageData(px, py, 1, 1).data;
+    const r = data[0], g = data[1], b = data[2];
+    return { px, py, r, g, b, hex: toHex(r, g, b), rgb: `rgb(${r}, ${g}, ${b})`, hsl: toHsl(r, g, b) };
+  }
+
+  function updateLoupe(clientX, clientY) {
+    if (toolMode !== 'picker' || !imgEl) return;
+    const sample = sampleAt(clientX, clientY);
+    if (!sample) return;
+    loupeWrap.style.display = 'flex';
+    swatch.style.background = sample.hex;
+    hexLbl.textContent = sample.hex;
+    rgbLbl.textContent = `${sample.rgb} · ${sample.hsl}`;
+
+    // Draw 11x11 pixel grid magnified cleanly
+    const grid = 11, cell = 124 / grid, half = Math.floor(grid / 2);
+    lctx.imageSmoothingEnabled = false;
+    lctx.clearRect(0, 0, 124, 124);
+    lctx.save();
+    lctx.beginPath();
+    lctx.arc(62, 62, 61, 0, Math.PI * 2);
+    lctx.clip();
+    lctx.drawImage(bg, sample.px - half, sample.py - half, grid, grid, 0, 0, 124, 124);
+    lctx.strokeStyle = 'rgba(255,255,255,.16)';
+    lctx.lineWidth = 1;
+    for (let i = 1; i < grid; i++) {
+      const p = Math.round(i * cell) + 0.5;
+      lctx.beginPath(); lctx.moveTo(p, 0); lctx.lineTo(p, 124); lctx.stroke();
+      lctx.beginPath(); lctx.moveTo(0, p); lctx.lineTo(124, p); lctx.stroke();
+    }
+    const c0 = Math.round(half * cell);
+    lctx.strokeStyle = '#111';
+    lctx.lineWidth = 3;
+    lctx.strokeRect(c0, c0, Math.ceil(cell), Math.ceil(cell));
+    lctx.strokeStyle = '#c6e994';
+    lctx.lineWidth = 1.6;
+    lctx.strokeRect(c0, c0, Math.ceil(cell), Math.ceil(cell));
+    lctx.restore();
+
+    const lw = 160, lh = 178;
+    const ox = clientX + lw + 22 < innerWidth ? clientX + 18 : clientX - lw - 14;
+    const oy = clientY + lh + 18 < innerHeight ? clientY + 14 : clientY - lh - 10;
+    loupeWrap.style.left = Math.max(8, ox) + 'px';
+    loupeWrap.style.top = Math.max(8, oy) + 'px';
+  }
+
+  function drawRuler() {
+    fctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    fctx.clearRect(0, 0, innerWidth, innerHeight);
+    if (toolMode !== 'ruler') return;
+    // Crosshair guides
+    fctx.strokeStyle = 'rgba(198, 233, 148, .28)';
+    fctx.lineWidth = 1;
+    fctx.setLineDash([4, 4]);
+    fctx.beginPath();
+    fctx.moveTo(cursor.x + 0.5, 0); fctx.lineTo(cursor.x + 0.5, innerHeight);
+    fctx.moveTo(0, cursor.y + 0.5); fctx.lineTo(innerWidth, cursor.y + 0.5);
+    fctx.stroke();
+    fctx.setLineDash([]);
+
+    const r = drag || lastMeas;
+    if (!r) return;
+    const x = Math.min(r.x0, r.x1), y = Math.min(r.y0, r.y1);
+    const w = Math.abs(r.x1 - r.x0), h = Math.abs(r.y1 - r.y0);
+    const diag = Math.round(Math.hypot(w, h));
+    fctx.fillStyle = 'rgba(198, 233, 148, .12)';
+    fctx.fillRect(x, y, w, h);
+    fctx.strokeStyle = '#c6e994';
+    fctx.lineWidth = 1.8;
+    fctx.strokeRect(x, y, w, h);
+    fctx.beginPath();
+    fctx.moveTo(r.x0, r.y0); fctx.lineTo(r.x1, r.y1);
+    fctx.strokeStyle = 'rgba(127, 216, 255, .85)';
+    fctx.stroke();
+
+    const lbl = `${Math.round(w)} x ${Math.round(h)} px  (diag ${diag} px)`;
+    fctx.font = '700 12px Consolas, monospace';
+    const tw = Math.ceil(fctx.measureText(lbl).width) + 18;
+    const bx = Math.max(8, Math.min(innerWidth - tw - 8, x + w / 2 - tw / 2));
+    const by = y > 34 ? y - 30 : Math.min(innerHeight - 30, y + h + 10);
+    fctx.fillStyle = 'rgba(12, 15, 12, .94)';
+    fctx.beginPath(); fctx.roundRect(bx, by, tw, 24, 8); fctx.fill();
+    fctx.strokeStyle = 'rgba(198, 233, 148, .5)'; fctx.stroke();
+    fctx.fillStyle = '#dff8ba';
+    fctx.fillText(lbl, bx + 9, by + 16);
+  }
+
+  btnPicker.addEventListener('click', e => { e.stopPropagation(); setTool('picker'); });
+  btnRuler.addEventListener('click', e => { e.stopPropagation(); setTool('ruler'); });
+
+  fx.addEventListener('pointerdown', e => {
+    if (e.button === 2) { api.eyedropperCancel?.(); return; }
+    if (e.button !== 0) return;
+    if (toolMode === 'picker') {
+      const s = sampleAt(e.clientX, e.clientY);
+      if (s) api.eyedropperComplete?.(s);
+      return;
+    }
+    drag = { x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY };
+    lastMeas = null;
+    drawRuler();
+  });
+
+  window.addEventListener('pointermove', e => {
+    cursor = { x: e.clientX, y: e.clientY };
+    if (toolMode === 'picker') {
+      updateLoupe(e.clientX, e.clientY);
+    } else {
+      if (drag) {
+        drag.x1 = e.shiftKey && Math.abs(e.clientX - drag.x0) < Math.abs(e.clientY - drag.y0) ? drag.x0 : e.clientX;
+        drag.y1 = e.shiftKey && Math.abs(e.clientX - drag.x0) >= Math.abs(e.clientY - drag.y0) ? drag.y0 : e.clientY;
+      }
+      drawRuler();
+    }
+  });
+
+  window.addEventListener('pointerup', () => {
+    if (toolMode !== 'ruler' || !drag) return;
+    lastMeas = drag;
+    drag = null;
+    const w = Math.round(Math.abs(lastMeas.x1 - lastMeas.x0));
+    const h = Math.round(Math.abs(lastMeas.y1 - lastMeas.y0));
+    if (w >= 2 || h >= 2) {
+      api.rulerCopy?.(`${w} x ${h} px`);
+    }
+    drawRuler();
+  });
+
+  window.addEventListener('contextmenu', e => { e.preventDefault(); api.eyedropperCancel?.(); });
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape') api.eyedropperCancel?.();
+    if (e.key.toLowerCase() === 'r') setTool(toolMode === 'picker' ? 'ruler' : 'picker');
+  });
+  window.addEventListener('resize', () => { syncCanvasSize(); updateLoupe(cursor.x, cursor.y); drawRuler(); });
+
+  api.onEyedropperInit?.(data => {
+    labels = data?.labels || {};
+    if (labels.picker) btnPicker.textContent = labels.picker;
+    if (labels.ruler) btnRuler.textContent = `${labels.ruler} (R)`;
+    const img = new Image();
+    img.onload = () => {
+      imgEl = img;
+      syncCanvasSize();
+      setTool(data?.mode === 'ruler' ? 'ruler' : 'picker');
+      if (Number.isFinite(data?.cursorX)) cursor = { x: data.cursorX, y: data.cursorY };
+      updateLoupe(cursor.x, cursor.y);
+      drawRuler();
+    };
+    img.src = data.imageDataUrl;
+  });
+})();
+</script>
+</body>
+</html>

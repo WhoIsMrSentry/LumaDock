@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>LumaDock Pin</title>
+<style>
+  * { box-sizing: border-box; user-select: none; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent;
+    font-family: "Segoe UI Variable Text","Segoe UI",sans-serif;
+  }
+  #card {
+    position: relative; width: 100%; height: 100%; border-radius: 12px; overflow: hidden;
+    background: #0c0e0c; border: 1.5px solid rgba(198,233,148,.48);
+    box-shadow: 0 10px 28px rgba(0,0,0,.55); -webkit-app-region: drag;
+  }
+  #shot { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
+  #hud {
+    position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; opacity: 0; transition: opacity .15s;
+    -webkit-app-region: no-drag; background: rgba(12,15,12,.84); padding: 3px 5px; border-radius: 9px;
+    border: 1px solid rgba(255,255,255,.14);
+  }
+  #card:hover #hud { opacity: 1; }
+  #hud button {
+    border: 0; background: transparent; color: #e8efe4; font-size: 11px; font-weight: 700;
+    padding: 3px 6px; border-radius: 6px; cursor: pointer;
+  }
+  #hud button:hover { background: rgba(255,255,255,.16); }
+  #hud button.bad:hover { background: rgba(255,95,86,.35); color: #ffd4d0; }
+</style>
+</head>
+<body>
+  <div id="card">
+    <img id="shot" alt="Pinned Clip">
+    <div id="hud">
+      <button id="op-btn" data-act="opacity" title="Opacity">100%</button>
+      <button data-act="copy" title="Copy"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="5" width="8" height="9" rx="1.5"/><path d="M10 3H4.5A1.5 1.5 0 0 0 3 4.5V11"/></svg></button>
+      <button data-act="ocr" title="OCR">OCR</button>
+      <button class="bad" data-act="close" title="Close">x</button>
+    </div>
+  </div>
+<script>
+(() => {
+  const api = window.lumadockOverlay;
+  const shot = document.getElementById('shot');
+  const opBtn = document.getElementById('op-btn');
+  const hud = document.getElementById('hud');
+  const LEVELS = [1, 0.78, 0.48];
+  let idx = 0, pinId = '';
+
+  api.onPinInit(data => {
+    pinId = data?.id || '';
+    shot.src = data?.dataUrl || '';
+    if (data?.opacity) {
+      const f = LEVELS.findIndex(v => Math.abs(v - data.opacity) < 0.08);
+      if (f >= 0) idx = f;
+      opBtn.textContent = Math.round(LEVELS[idx] * 100) + '%';
+    }
+  });
+
+  hud.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const act = btn.dataset.act;
+    if (act === 'opacity') {
+      idx = (idx + 1) % LEVELS.length;
+      const next = LEVELS[idx];
+      opBtn.textContent = Math.round(next * 100) + '%';
+      api.pinAction({ id: pinId, action: 'opacity', value: next });
+    } else {
+      api.pinAction({ id: pinId, action: act });
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>LumaDock Snip</title>
+<style>
+  * { box-sizing: border-box; user-select: none; }
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; cursor: crosshair; font-family: "Segoe UI Variable Text","Segoe UI",sans-serif; }
+  #bg, #fx { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #hint {
+    position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+    padding: 7px 14px; border-radius: 999px; background: rgba(14,17,14,.86);
+    border: 1px solid rgba(198,233,148,.28); color: #eef3ea; font-size: 12px; font-weight: 600;
+    pointer-events: none; backdrop-filter: blur(8px);
+  }
+  #bar {
+    position: fixed; display: none; gap: 6px; padding: 6px 8px; border-radius: 14px;
+    background: rgba(16,19,16,.94); border: 1px solid rgba(255,255,255,.14);
+    box-shadow: 0 12px 32px rgba(0,0,0,.55); align-items: center; z-index: 20;
+  }
+  #bar button {
+    border: 1px solid rgba(255,255,255,.1); border-radius: 9px; background: #1a201a; color: #e8efe4;
+    padding: 6px 10px; font: 600 11.5px "Segoe UI",sans-serif; cursor: pointer; white-space: nowrap;
+  }
+  #bar button:hover { background: #263025; color: #fff; }
+  #bar button.pri { background: #c6e994; color: #10180c; border-color: #c6e994; }
+  #bar button.bad { background: rgba(255,95,86,.18); color: #ffb3ad; border-color: rgba(255,95,86,.35); }
+</style>
+</head>
+<body>
+  <canvas id="bg"></canvas>
+  <canvas id="fx"></canvas>
+  <div id="hint">Sürükleyerek alan seçin · Esc iptal</div>
+  <div id="bar">
+    <button class="pri" data-act="pin">Sabitle</button>
+    <button data-act="framed">Çerçeveli</button>
+    <button data-act="copy">Kopyala</button>
+    <button data-act="ocr">OCR</button>
+    <button data-act="ai">AI</button>
+    <button class="bad" data-act="cancel">x</button>
+  </div>
+<script>
+(() => {
+  const api = window.lumadockOverlay;
+  const bg = document.getElementById('bg');
+  const fx = document.getElementById('fx');
+  const bar = document.getElementById('bar');
+  const hint = document.getElementById('hint');
+  const bctx = bg.getContext('2d');
+  const fctx = fx.getContext('2d');
+
+  let imgEl = null, scale = 1, drag = null, sel = null, autoAction = '';
+
+  function resizeCanvases() {
+    bg.width = Math.round(innerWidth * devicePixelRatio);
+    bg.height = Math.round(innerHeight * devicePixelRatio);
+    fx.width = bg.width;
+    fx.height = bg.height;
+    if (imgEl) {
+      bctx.setTransform(1, 0, 0, 1, 0, 0);
+      bctx.drawImage(imgEl, 0, 0, bg.width, bg.height);
+    }
+    drawOverlay();
+  }
+
+  function normRect(r) {
+    if (!r) return null;
+    const x = Math.min(r.x0, r.x1), y = Math.min(r.y0, r.y1);
+    const w = Math.abs(r.x1 - r.x0), h = Math.abs(r.y1 - r.y0);
+    return { x, y, w, h };
+  }
+
+  function drawOverlay() {
+    fctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    fctx.clearRect(0, 0, innerWidth, innerHeight);
+    fctx.fillStyle = 'rgba(0, 0, 0, 0.44)';
+    fctx.fillRect(0, 0, innerWidth, innerHeight);
+    const r = normRect(sel || drag);
+    if (r && r.w > 4 && r.h > 4) {
+      fctx.clearRect(r.x, r.y, r.w, r.h);
+      fctx.strokeStyle = '#c6e994';
+      fctx.lineWidth = 2;
+      fctx.strokeRect(r.x, r.y, r.w, r.h);
+      const dim = `${Math.round(r.w)} × ${Math.round(r.h)}`;
+      fctx.fillStyle = 'rgba(14,17,14,.9)';
+      fctx.fillRect(r.x, Math.max(4, r.y - 24), 76, 20);
+      fctx.fillStyle = '#dff8ba';
+      fctx.font = '600 11px Segoe UI, sans-serif';
+      fctx.fillText(dim, r.x + 7, Math.max(18, r.y - 10));
+    }
+  }
+
+  function placeBar(r) {
+    if (!r || r.w < 12 || r.h < 12) { bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    const bw = bar.offsetWidth || 360, bh = bar.offsetHeight || 38;
+    const bx = Math.max(8, Math.min(innerWidth - bw - 8, r.x + r.w - bw));
+    const below = r.y + r.h + 10 + bh <= innerHeight - 8;
+    const by = below ? r.y + r.h + 10 : Math.max(8, r.y - bh - 10);
+    bar.style.left = bx + 'px';
+    bar.style.top = by + 'px';
+  }
+
+  function makeFramedDataUrl(r) {
+    const sx = Math.round(r.x * devicePixelRatio), sy = Math.round(r.y * devicePixelRatio);
+    const sw = Math.max(1, Math.round(r.w * devicePixelRatio)), sh = Math.max(1, Math.round(r.h * devicePixelRatio));
+    const pad = Math.round(Math.max(24, Math.min(54, Math.min(sw, sh) * 0.14)));
+    const out = document.createElement('canvas');
+    out.width = sw + pad * 2;
+    out.height = sh + pad * 2;
+    const c = out.getContext('2d');
+    const grad = c.createLinearGradient(0, 0, out.width, out.height);
+    grad.addColorStop(0, '#132419');
+    grad.addColorStop(0.5, '#19352b');
+    grad.addColorStop(1, '#1e1d36');
+    c.fillStyle = grad;
+    c.fillRect(0, 0, out.width, out.height);
+    c.save();
+    c.shadowColor = 'rgba(0,0,0,.55)';
+    c.shadowBlur = Math.round(pad * 0.7);
+    c.shadowOffsetY = Math.round(pad * 0.25);
+    const rad = Math.min(18, Math.round(pad * 0.45));
+    c.beginPath();
+    c.roundRect(pad, pad, sw, sh, rad);
+    c.fillStyle = '#000';
+    c.fill();
+    c.restore();
+    c.save();
+    c.beginPath();
+    c.roundRect(pad, pad, sw, sh, rad);
+    c.clip();
+    c.drawImage(bg, sx, sy, sw, sh, pad, pad, sw, sh);
+    c.restore();
+    return out.toDataURL('image/png');
+  }
+
+  fx.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    sel = null;
+    bar.style.display = 'none';
+    drag = { x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY };
+    drawOverlay();
+  });
+
+  window.addEventListener('pointermove', e => {
+    if (!drag) return;
+    drag.x1 = e.clientX;
+    drag.y1 = e.clientY;
+    drawOverlay();
+  });
+
+  window.addEventListener('pointerup', () => {
+    if (!drag) return;
+    const r = normRect(drag);
+    sel = drag;
+    drag = null;
+    if (!r || r.w < 12 || r.h < 12) { sel = null; drawOverlay(); return; }
+    drawOverlay();
+    if (autoAction === 'ocr') {
+      api.snipComplete({ action: 'ocr', rect: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.w), height: Math.round(r.h) } });
+      return;
+    }
+    placeBar(r);
+  });
+
+  bar.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const act = btn.dataset.act;
+    if (act === 'cancel') { api.snipCancel(); return; }
+    const r = normRect(sel);
+    if (!r) return;
+    const payload = { action: act, rect: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.w), height: Math.round(r.h) } };
+    if (act === 'framed') payload.framedDataUrl = makeFramedDataUrl(r);
+    api.snipComplete(payload);
+  });
+
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape') api.snipCancel();
+    if (e.key === 'Enter' && sel) {
+      const r = normRect(sel);
+      if (r && r.w >= 12) api.snipComplete({ action: 'pin', rect: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.w), height: Math.round(r.h) } });
+    }
+  });
+
+  window.addEventListener('resize', resizeCanvases);
+
+  api.onSnipInit(data => {
+    scale = data?.scaleFactor || 1;
+    autoAction = String(data?.autoAction || '');
+    if (data?.labels) {
+      hint.textContent = data.labels.hint || hint.textContent;
+      for (const b of bar.querySelectorAll('button[data-act]')) {
+        if (data.labels[b.dataset.act]) b.textContent = data.labels[b.dataset.act];
+      }
+    }
+    const img = new Image();
+    img.onload = () => { imgEl = img; resizeCanvases(); };
+    img.src = data.imageDataUrl;
+  });
+})();
+</script>
+</body>
+</html>
