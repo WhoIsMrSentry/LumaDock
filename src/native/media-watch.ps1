@@ -26,6 +26,8 @@ function AwaitOp($winRtOp, $resultType, $timeoutMs = 2000) {
 }
 
 [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media, ContentType = WindowsRuntime] | Out-Null
+[Windows.Storage.Streams.DataReader, Windows.Storage.Streams, ContentType = WindowsRuntime] | Out-Null
+[Windows.Storage.Streams.IRandomAccessStreamWithContentType, Windows.Storage.Streams, ContentType = WindowsRuntime] | Out-Null
 
 $mgr = $null
 function EnsureManager() {
@@ -44,6 +46,43 @@ $cmdFile = "$env:TEMP\lumadock-media-cmd.txt"
 $cachedProps = $null
 $cachedPropsTime = 0
 $lastSessionSource = ''
+$cachedThumbKey = ''
+$cachedThumbData = ''
+
+function FormatSourceLabel([string]$srcId) {
+    $s = if ($srcId) { $srcId.ToLowerInvariant() } else { '' }
+    if (-not $s -or $s.Contains('spotify')) { return 'Spotify' }
+    if ($s.Contains('chrome')) { return 'Chrome' }
+    if ($s.Contains('msedge') -or $s.Contains('edge')) { return 'Edge' }
+    if ($s.Contains('firefox')) { return 'Firefox' }
+    if ($s.Contains('brave')) { return 'Brave' }
+    if ($s.Contains('opera')) { return 'Opera' }
+    if ($s.Contains('vlc')) { return 'VLC' }
+    return ($srcId -replace '\.exe$','').Split('!')[-1]
+}
+
+function TryReadThumb($props, [string]$cacheKey) {
+    if ($cacheKey -eq $script:cachedThumbKey) { return $script:cachedThumbData }
+    $script:cachedThumbKey = $cacheKey
+    $script:cachedThumbData = ''
+    try {
+        if (-not $props -or -not $props.Thumbnail) { return '' }
+        $stream = AwaitOp ($props.Thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType]) 900
+        if (-not $stream -or $stream.Size -le 0 -or $stream.Size -gt 262144) { return '' }
+        $size = [uint32]$stream.Size
+        $reader = [Windows.Storage.Streams.DataReader]::new($stream.GetInputStreamAt(0))
+        $null = AwaitOp ($reader.LoadAsync($size)) ([uint32]) 900
+        $bytes = [byte[]]::new($size)
+        $reader.ReadBytes($bytes)
+        $reader.Dispose()
+        $stream.Dispose()
+        if ($bytes.Length -gt 0 -and $bytes.Length -le 180000) {
+            $mime = if ($bytes[0] -eq 0x89 -and $bytes[1] -eq 0x50) { 'image/png' } else { 'image/jpeg' }
+            $script:cachedThumbData = "data:$mime;base64," + [Convert]::ToBase64String($bytes)
+        }
+    } catch { $script:cachedThumbData = '' }
+    return $script:cachedThumbData
+}
 
 function InvalidatePropsCache() {
     $script:cachedPropsTime = 0
@@ -122,10 +161,13 @@ function ReadSessionInfo() {
     }
     $dur = if ($tl -and $tl.EndTime) { [long]$tl.EndTime.TotalMilliseconds } else { 0 }
     $source = if ($session.SourceAppId) { $session.SourceAppId } else { 'Spotify' }
+    $appLabel = FormatSourceLabel $source
 
     if (-not $title -and -not $artist) {
         return '{"active":false}'
     }
+
+    $thumb = if ($appLabel -ne 'Spotify') { TryReadThumb $props "$title|$artist|$source" } else { '' }
 
     $obj = @{
         active = $true
@@ -136,6 +178,8 @@ function ReadSessionInfo() {
         position = $pos
         duration = $dur
         source = $source
+        appLabel = $appLabel
+        thumb = $thumb
     }
     return ($obj | ConvertTo-Json -Compress)
 }
