@@ -147,8 +147,11 @@ function setup(electron, options = {}) {
     // the last jobs across coding agents, so a quiet page still shows what they did for you
     history: (hub?.history?.() || []).slice(0, 12).map(h => ({ at: h.at, agent: h.agent, project: h.project, prompt: String(h.prompt || '').slice(0, 300), result: h.result, files: h.files, seconds: h.seconds, tokens: h.tokens, costUsd: h.costUsd })) });
   const emit = () => {
+    const v = view();
+    const asking = (v.providers || []).some(p => p.state === 'question' || p.permission || p.ask || p.plan);
+    app.lumadockContext?.setAiAskingState?.(asking);
     for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed() && trusted({ sender: win.webContents })) win.webContents.send('ai-monitor:state', view());
+      if (!win.isDestroyed() && trusted({ sender: win.webContents })) win.webContents.send('ai-monitor:state', v);
     }
   };
   onLanguageChange(() => emit());
@@ -471,7 +474,7 @@ function setup(electron, options = {}) {
   });
   app.on('before-quit', () => { closing = true; clearInterval(interval); if (autoTimer) clearInterval(autoTimer); worker.close(); hub?.stop(); liveNotifications.clear(); });
   // The LumaDock app (settings-app-main.cjs) reads the connections and the history from here.
-  app.lumadockMonitor = { view, handlers, history: () => hub?.history() || [], projects: () => hub?.projects?.() || [] };
+  app.lumadockMonitor = { view, handlers, replyHook: (id, text) => hub?.reply?.(id, text), history: () => hub?.history() || [], projects: () => hub?.projects?.() || [] };
   return { view, handlers, poll, close: () => { closing = true; clearInterval(interval); if (autoTimer) clearInterval(autoTimer); worker.close(); } };
 }
 if (process.versions.electron) setup(require('electron'));
