@@ -123,7 +123,7 @@
     #lumadock-settings-v2 .tc-locker-stage{width:172px;flex:none;border-radius:18px;border:1px solid rgba(255,255,255,.07);pointer-events:none;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:2px;padding:0 8px 12px;text-align:center}
     #lumadock-settings-v2 .tc-locker-stage b{font-size:13px;font-weight:700;color:#fff}
     #lumadock-settings-v2 .tc-locker-stage small{font-size:10px;color:#8f998d}
-    #lumadock-settings-v2 .tc-locker-list{flex:1;min-width:0;overflow-y:auto;padding:1px 5px 8px 1px;scrollbar-width:thin;scrollbar-color:#3e4938 transparent}
+    #lumadock-settings-v2 .tc-locker-list{flex:1;min-width:0;overflow-y:auto;padding:1px 5px 8px 1px}
     #lumadock-settings-v2 .tc-locker-list .tc-group:first-child{margin-top:0}
     #lumadock-settings-v2 .tc-setting-row{cursor:pointer;user-select:none}
     #lumadock-settings-v2 .tc-setting-row input{user-select:text;cursor:text}
@@ -142,8 +142,6 @@
       overflow-y:auto;
       overscroll-behavior:contain;
       padding:1px 5px 8px 1px;
-      scrollbar-width:thin;
-      scrollbar-color:#3e4938 transparent;
       font-size:11px;
     }
 

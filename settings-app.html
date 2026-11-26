@@ -11,6 +11,7 @@
 -->
 <style>
   :root{
+    color-scheme:dark;
     --bg:#0e0f11;--side:#131416;--card:#17181b;--card2:#1c1d21;--raised:#202125;--line:rgba(255,255,255,.06);--line2:rgba(255,255,255,.1);
     --text:#ececee;--text2:#b6b7be;--strong:#ffffff;--dim:#8a8b93;--faint:#5c5d65;
     --accent:#c6e994;--accent-ink:#15200c;--accent-text:#c6e994;--accent-soft:rgba(198,233,148,.12);--accent-line:rgba(198,233,148,.35);
@@ -22,6 +23,7 @@
     --display:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;
   }
   :root[data-theme="light"]{
+    color-scheme:light;
     --bg:#f6f6f8;--side:#eeeef1;--card:#ffffff;--card2:#fafafb;--raised:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.12);
     --text:#1a1b1e;--text2:#45464d;--strong:#0b0c0e;--dim:#6e6f77;--faint:#9c9da5;
     --accent:#b5e07c;--accent-ink:#15200c;--accent-text:#4c8a1c;--accent-soft:rgba(110,180,50,.12);--accent-line:rgba(90,160,40,.4);
@@ -31,6 +33,22 @@
     --pop:0 18px 50px rgba(0,0,0,.14),0 0 0 1px var(--line);
   }
   *{box-sizing:border-box}
+  *::-webkit-scrollbar{width:6px;height:6px}
+  *::-webkit-scrollbar-track{background:transparent}
+  *::-webkit-scrollbar-thumb{background:rgba(130,134,144,.42);border-radius:999px}
+  *::-webkit-scrollbar-thumb:hover{background:rgba(155,160,172,.64)}
+  *::-webkit-scrollbar-button{display:none;width:0;height:0}
+  *::-webkit-scrollbar-corner{background:transparent}
+  .gh-heat-card{background:var(--card);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);margin-bottom:14px}
+  .gh-heat-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;font-size:13px}
+  .gh-heat-grid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,10px);gap:3px;overflow-x:auto;padding-bottom:4px}
+  .gh-cell{width:10px;height:10px;border-radius:2px;background:var(--soft2)}
+  .gh-cell[data-lv="1"]{background:#1f4d2e}.gh-cell[data-lv="2"]{background:#2c7a43}.gh-cell[data-lv="3"]{background:#42ad5d}.gh-cell[data-lv="4"]{background:#7ee787}
+  :root[data-theme="light"] .gh-cell[data-lv="1"]{background:#ccecd4}:root[data-theme="light"] .gh-cell[data-lv="2"]{background:#8fd6a0}:root[data-theme="light"] .gh-cell[data-lv="3"]{background:#48b062}:root[data-theme="light"] .gh-cell[data-lv="4"]{background:#216e39}
+  .tc-badge-ico{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:var(--soft2);color:var(--accent-text);margin-bottom:2px}
+  .tc-color-wrap{display:inline-flex;align-items:center;gap:8px;padding:4px 9px;border-radius:9px;background:var(--soft);border:1px solid var(--line)}
+  .tc-color-wrap input[type="color"]{width:24px;height:24px;border:0;padding:0;background:transparent;cursor:pointer;border-radius:6px}
+  .tc-hex{font:600 11.5px/1 "Cascadia Mono",Consolas,monospace;color:var(--text2)}
   html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font:14px/1.45 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;user-select:none}
   button,input{font:inherit;color:inherit}
   button:focus-visible,input:focus-visible{outline:2px solid var(--accent-line);outline-offset:2px}
@@ -374,8 +392,21 @@
   <symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
   <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="10" y="10" width="4" height="4"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
   <symbol id="i-picker" viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></symbol>
+  <symbol id="i-weather" viewBox="0 0 24 24"><circle cx="15" cy="9" r="3.5"/><path d="M6.5 19h10a3.5 3.5 0 0 0 .5-7 5 5 0 0 0-9.6-1.2A3.5 3.5 0 0 0 6.5 19Z"/></symbol>
+  <symbol id="i-net" viewBox="0 0 24 24"><path d="M3 15l4-5 4 4 5-7 5 5"/><path d="M4 19h16"/></symbol>
+  <symbol id="i-market" viewBox="0 0 24 24"><path d="m3 17 6-6 4 4 8-8"/><path d="M17 7h4v4"/></symbol>
+  <symbol id="i-dev" viewBox="0 0 24 24"><path d="m8 8-4 4 4 4"/><path d="m16 8 4 4-4 4"/><path d="m14 6-4 12"/></symbol>
+  <symbol id="i-command" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
   <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
   <symbol id="i-gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></symbol>
+  <symbol id="i-translate" viewBox="0 0 24 24"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m4.9 4.9 14.2 14.2"/></symbol>
+  <symbol id="i-crown" viewBox="0 0 24 24"><path d="m3 17 2-9 5 4 2-6 2 6 5-4 2 9H3Z"/><path d="M4 20h16"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></symbol>
+  <symbol id="i-glasses" viewBox="0 0 24 24"><circle cx="6" cy="15" r="4"/><circle cx="18" cy="15" r="4"/><path d="M10 15h4"/><path d="M2 15 4 7"/><path d="m22 15-2-8"/></symbol>
+  <symbol id="i-headphones" viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z"/><path d="M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3Z"/></symbol>
 </svg>
 <script src="./src/ui/i18n-ui.js"></script>
 <script>
@@ -517,27 +548,28 @@ async function press(req, button) {
 }
 
 // ---------- Wardrobe ----------
-const OUTFIT_LOOK = { auto: ['✨', 0], none: ['🚫', 0], hat: ['😇', 5], shades: ['🥽', 10], headphones: ['🎧', 15], horns: ['⚡', 20], crown: ['👑', 30] };
+const OUTFIT_ICON = { auto: 'sparkles', none: 'ban', hat: 'shirt', shades: 'glasses', headphones: 'headphones', horns: 'bolt', crown: 'crown' };
 function drawWardrobe(html) {
   const src = document.createElement('div'); src.innerHTML = html;
   const all = [...src.querySelectorAll('button')], idx = b => all.indexOf(b);
   const outfits = all.filter(b => b.dataset.pref === 'outfit'), bodies = all.filter(b => b.dataset.pref === 'body'), eyes = all.filter(b => b.dataset.pref === 'eye');
   const season = all.find(b => b.dataset.pref === 'seasonal');
   const wearing = outfits.find(b => b.classList.contains('on'));
-  const name = b => b.textContent.replace('🔒', '').trim();
-  const done = info.done ?? 0;
+  const name = b => b.textContent.trim();
+  const bodyHex = src.querySelector('.tc-color-in[data-pref="body"]')?.value || '#f2f7ff';
+  const eyeHex = src.querySelector('.tc-color-in[data-pref="eye"]')?.value || '#00e5ff';
   const outfitCards = outfits.map(b => {
-    const [look, at] = OUTFIT_LOOK[b.dataset.value] || ['👕', 0], locked = b.disabled;
-    const note = locked ? st('tasksMore', { count: Math.max(0, at - done) }) : at ? st('earned', { count: at }) : '';
-    return `<button class="outfit ${b.classList.contains('on') ? 'on' : ''}" data-i="${idx(b)}" data-value="${esc(b.dataset.value)}" ${locked ? 'disabled' : ''}><span>${look}</span><b>${esc(name(b))}</b><small>${esc(note)}</small></button>`;
+    const ic = OUTFIT_ICON[b.dataset.value] || 'shirt';
+    return `<button class="outfit ${b.classList.contains('on') ? 'on' : ''}" data-i="${idx(b)}" data-value="${esc(b.dataset.value)}"><span>${icon(ic)}</span><b>${esc(name(b))}</b></button>`;
   }).join('');
-  const paints = items => items.map(b => `<button class="paint ${b.classList.contains('on') ? 'on' : ''}" data-i="${idx(b)}" data-value="${esc(b.dataset.value)}" title="${esc(b.title)}"><i style="background:${esc(b.style.background)}"></i><small>${esc(b.title || b.dataset.value)}</small></button>`).join('');
+  const paints = (items, prefKey, curHex) => items.map(b => `<button class="paint ${b.classList.contains('on') ? 'on' : ''}" data-i="${idx(b)}" data-value="${esc(b.dataset.value)}" title="${esc(b.title)}"><i style="background:${esc(b.style.background)}"></i><small>${esc(b.title || b.dataset.value)}</small></button>`).join('')
+    + `<label class="tc-color-wrap" title="${esc(gt('fun.customColorPick'))}"><input type="color" data-color-pref="${prefKey}" value="${esc(curHex)}"><code class="tc-hex">${esc(curHex.toUpperCase())}</code></label>`;
   const html2 = `<div class="wardrobe">
     <div class="dress-stage"><div class="floor"></div><img class="face" alt=""><b class="petname">${esc(info.name || 'Robo')}</b><small>${esc(st('wearing', { gear: wearing ? name(wearing) : '—' }))}</small></div>
     <div>
-      <div class="shelf"><h3>${st('outfit')} <small>${st('tasksLeft')}</small></h3><div class="outfits">${outfitCards}</div></div>
-      <div class="shelf"><h3>${st('body')}</h3><div class="paints">${paints(bodies)}</div></div>
-      <div class="shelf"><h3>${st('eyes')}</h3><div class="paints">${paints(eyes)}</div></div>
+      <div class="shelf"><h3>${st('outfit')} <small>${esc(gt('fun.fields.wardrobeAllOpen'))}</small></h3><div class="outfits">${outfitCards}</div></div>
+      <div class="shelf"><h3>${st('body')}</h3><div class="paints">${paints(bodies, 'body', bodyHex)}</div></div>
+      <div class="shelf"><h3>${st('eyes')}</h3><div class="paints">${paints(eyes, 'eye', eyeHex)}</div></div>
       ${season ? `<div class="group"><div class="row"><span class="tile" style="--c:#ff8a65">${icon('sparkles')}</span><div class="text"><b>${st('seasonal')}</b><small>${st('seasonalHelp')}</small></div><button class="tc-toggle ${season.classList.contains('on') ? 'on' : ''}" data-toggle="1" data-i="${idx(season)}"></button></div></div>` : ''}
     </div></div>`;
   paint(html2, false);
@@ -599,7 +631,15 @@ const APPS = [
   { id: 'tray', pack: 'focus', icon: 'inbox', tint: '#7ab8ff' },
   { id: 'clips', pack: 'focus', icon: 'clipboard', tint: '#5ad1c4' },
   { id: 'note', pack: 'focus', icon: 'note', tint: '#ffd166' },
-  { id: 'cpu', icon: 'cpu', tint: '#7fd8ff' },
+  { id: 'net', icon: 'net', tint: '#5ef2b6' },
+  { id: 'github', icon: 'github', tint: '#c6e994' },
+  { id: 'ports', icon: 'dev', tint: '#ff9d6c' },
+  { id: 'translate', icon: 'translate', tint: '#7fb2ff' },
+  { id: 'devtools', icon: 'dev', tint: '#b98cff' },
+  { id: 'vault', icon: 'shield', tint: '#38f8b2' },
+  { id: 'weather', icon: 'weather', tint: '#ffd470' },
+  { id: 'market', icon: 'market', tint: '#a8ff78' },
+  { id: 'command', icon: 'command', tint: '#c6e994' },
   { id: 'picker', icon: 'picker', tint: '#ff85b3' },
   { id: 'clock', icon: 'clock', tint: '#a99bff' },
   { id: 'settings', icon: 'gear', tint: '#b8b9c0', core: true }
@@ -641,7 +681,7 @@ function drawApps() {
   const cards = APPS.map(a => {
     const [name, about] = appLabelOf(a.id), locked = isLocked(a.id), on = !locked && !appsOff.has(a.id);
     const control = a.core ? `<span class="tag">${st('always')}</span>`
-      : locked ? `<button class="btn small" data-url="${SHOP}">🔒 ${st('unlock')}</button>`
+      : locked ? `<button class="btn small" data-url="${SHOP}">${st('unlock')}</button>`
       : `<button class="switch ${on ? 'on' : ''}" data-app="${a.id}" data-on="${on ? '0' : '1'}" aria-label="${esc(name)}"></button>`;
     const state = locked ? st('locked', { pack: st('packNames.' + a.pack) || '' }) : on ? st('inApp') : st('notIn');
     return `<div class="appcard ${locked ? 'locked' : ''}"><div class="top"><span class="tile" style="--c:${a.tint}">${icon(a.icon)}</span><div><b>${esc(name)}</b><small class="${on ? 'in' : ''}">${esc(state)}</small></div>${control}</div><p>${esc(about)}</p></div>`;
@@ -701,10 +741,14 @@ function drawNews() {
 const AI_COLOUR = { claudecode: '#d97757', codex: '#3b82f6', gemini: '#4285f4', cursor: '#a855f7', claude: '#e8a87c', chatgpt: '#10a37f', webMonitor: '#7ab8ff' };
 const LAMP = { running: '#ffb35c', sending: '#ffb35c', question: '#ffb35c', done: '#8fd65a', error: '#ff6b6b', ready: '#8fd65a', off: '#8fd65a' };
 const AGENT_OF = { 'Claude Code': 'claudecode', Codex: 'codex', 'Gemini CLI': 'gemini', 'Cursor Agent': 'cursor', Claude: 'claude', ChatGPT: 'chatgpt' };
-let home = null, cxs = null;
+let home = null, cxs = null, ghHome = null;
 async function loadHome() {
-  const [h, c] = await Promise.all([S.home(), S.connections()]);
-  home = h; cxs = c; drawHome();
+  const [h, c, g] = await Promise.all([
+    S.home(),
+    S.connections(),
+    S.github?.summary?.().catch(() => null)
+  ]);
+  home = h; cxs = c; ghHome = g; drawHome();
 }
 function dayLabel(at) {
   const d = new Date(at), today = new Date(); const diff = Math.round((new Date(today.toDateString()) - new Date(d.toDateString())) / 864e5);
@@ -737,10 +781,17 @@ function drawHome() {
   const h = new Date().getHours();
   const gKey = h < 6 ? 'night' : h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
   const greeting = st('greetings.' + gKey, { name: home.user ? ', ' + home.user : '' });
+  const ghStreakVal = ghHome?.ok ? (ghHome.currentStreak || 0) : streak(all);
+  const ghStreakLbl = ghHome?.ok
+    ? `${st('statGhStreak')} (${st('statLongest')}: ${ghHome.longestStreak || 0})`
+    : st('statStreak');
+  const ghDays = (ghHome?.ok && Array.isArray(ghHome.days)) ? ghHome.days.slice(-112) : [];
+  const ghGrid = ghDays.length ? `<div class="gh-heat-card"><div class="gh-heat-head"><b>GitHub · ${esc(ghHome.username || '')}</b><span class="muted">${esc(String(ghHome.totalContributions || 0))} ${esc(st('ghContributions'))} · PR ${(ghHome.prs || []).length} · Issue ${(ghHome.issues || []).length}</span></div><div class="gh-heat-grid">${ghDays.map(d => `<i class="gh-cell" data-lv="${d.level || 0}" title="${esc(d.date)}: ${esc(String(d.count || 0))}"></i>`).join('')}</div></div>` : '';
   paint(`<div class="greet"><div><h2>${esc(greeting)}</h2><p>${esc(st('helloSub'))}</p></div><div class="agents">${agents}</div></div>
     ${on.length ? '' : `<div class="setup"><span class="tile" style="--c:#c6e994">${icon('plug')}</span><div><b>${st('setupTitle')}</b><small>${st('setupText')}</small></div><button class="btn main" data-goto="connect">${st('toConnect')}</button></div>`}
-    <div class="kpis">${kpi('check', '#c6e994', info.done ?? 0, st('statDone'))}${kpi('today', '#8fb8ff', today, st('statToday'))}${kpi('flame', '#ffb35c', streak(all), st('statStreak'))}</div>
+    <div class="kpis">${kpi('check', '#c6e994', info.done ?? 0, st('statDone'))}${kpi('today', '#8fb8ff', today, st('statToday'))}${kpi('flame', '#ffb35c', ghStreakVal, esc(ghStreakLbl))}</div>
     <div class="home"><div>
+      ${ghGrid}
       <div class="hist-head"><b>${st('history')}</b><input class="field" id="histSearch" type="search" placeholder="${esc(st('searchHistory'))}" autocomplete="off"></div>
       ${jobs ? `<div class="group">${jobs}</div>` : `<div class="card muted" style="font-size:13.5px">${st('noHistory')}</div>`}
     </div><div class="side-cards">
@@ -749,13 +800,30 @@ function drawHome() {
     </div></div>`, false);
   const box = $('#histSearch'); if (box) { box.value = keepSearch; if (focused) { box.focus(); box.setSelectionRange(keepSearch.length, keepSearch.length); } }
 }
-list.addEventListener('input', e => { if (e.target.id === 'histSearch') drawHome(); });
+list.addEventListener('input', e => {
+  if (e.target.id === 'histSearch') { drawHome(); return; }
+  const key = e.target.dataset?.colorPref || (e.target.classList?.contains('tc-color-in') ? e.target.dataset?.pref : '');
+  if (!key) return;
+  const val = e.target.value;
+  const hexEl = e.target.parentElement?.querySelector('.tc-hex');
+  if (hexEl) hexEl.textContent = val.toUpperCase();
+  S.get({ kind: 'set-pref', which: tab === 'general' ? 'general' : 'character', key, value: val }).then(r => { if (r?.ok) showInfo(r.info); }).catch(() => {});
+});
+list.addEventListener('change', e => {
+  const key = e.target.dataset?.colorPref || (e.target.classList?.contains('tc-color-in') ? e.target.dataset?.pref : '');
+  if (!key) return;
+  S.get({ kind: 'set-pref', which: tab === 'general' ? 'general' : 'character', key, value: e.target.value }).then(r => { if (r?.ok) { showInfo(r.info); render(false); } }).catch(() => {});
+});
 
 // ---------- Connections: one switch per AI, LumaDock does the rest ----------
-let cxNote = {}, spCfg = null, spBusy = false;
+let cxNote = {}, spCfg = null, spBusy = false, ghCfg = null, ghBusy = false;
 async function loadConnect() {
-  const [c, sp] = await Promise.all([S.connections(), S.spotify?.getConfig().catch(() => null)]);
-  cxs = c; spCfg = sp; drawConnect();
+  const [c, sp, gh] = await Promise.all([
+    S.connections(),
+    S.spotify?.getConfig().catch(() => null),
+    S.github?.configGet?.().catch(() => null)
+  ]);
+  cxs = c; spCfg = sp; ghCfg = gh; drawConnect();
 }
 function drawConnect() {
   if (tab !== 'connect' || !cxs?.list) return;
@@ -795,7 +863,24 @@ function drawConnect() {
       <div class="tc-step"><input class="field" id="spPlaylistUrlIn" placeholder="https://open.spotify.com/playlist/..." spellcheck="false" autocomplete="off">
       <button class="btn main" data-sp="add-pl" ${spBusy ? 'disabled' : ''}>+ ${esc(gt('common.add'))}</button></div>
     </div></div>` : '';
-  paint(`<p class="lead">${st('cxHow')}</p><p class="section">${st('cxAgents')}</p><div class="group">${agents}</div><p class="section">${st('cxChats')}</p><div class="group">${wmRow}${chats}</div>${spCard}`, false);
+  const ghStatusTag = (ghCfg?.hasToken || ghCfg?.ghCliUser) ? `<span class="tag good"><i></i>${st('cxOn')}</span>` : '';
+  const ghSubText = ghCfg?.ghCliUser
+    ? st('ghCliDetected', { user: ghCfg.ghCliUser })
+    : (ghCfg?.username ? `@${ghCfg.username}` : st('ghConnectSub'));
+  const ghCard = S.github ? `<p class="section">GitHub</p><div class="group">
+    <div class="row"><span class="tile" style="--c:#c6e994">${icon('github')}</span><div class="text"><b>GitHub</b><small>${esc(ghSubText)}</small></div>
+      ${ghStatusTag}
+      <button class="btn ghost" data-gh="refresh" ${ghBusy ? 'disabled' : ''}>${esc(gt('common.refresh'))}</button>
+      ${ghCfg?.hasToken ? `<button class="btn ghost" data-gh="clear" ${ghBusy ? 'disabled' : ''}>${esc(st('ghClearToken'))}</button>` : ''}
+    </div>
+    <div class="row"><div class="text"><b>${esc(st('ghAccountTitle'))}</b><small>${esc(st('ghAccountDesc'))}</small></div>
+      <div class="tc-step">
+        <input class="field" id="ghUserIn" style="width:150px" value="${esc(ghCfg?.username || ghCfg?.ghCliUser || '')}" placeholder="username" spellcheck="false" autocomplete="off">
+        <input class="field" id="ghTokenIn" type="password" style="width:180px" placeholder="${ghCfg?.hasToken ? esc(st('aiOpenAiSavedPh')) : 'ghp_...'}" spellcheck="false" autocomplete="off">
+        <button class="btn main" data-gh="save" ${ghBusy ? 'disabled' : ''}>${esc(gt('common.save'))}</button>
+      </div>
+    </div></div>` : '';
+  paint(`<p class="lead">${st('cxHow')}</p><p class="section">${st('cxAgents')}</p><div class="group">${agents}</div><p class="section">${st('cxChats')}</p><div class="group">${wmRow}${chats}</div>${spCard}${ghCard}`, false);
   $('#connectDot').classList.toggle('on', !cxs.list.some(c => c.on && !c.soon));
 }
 async function toggleConnect(id, on) {
@@ -854,6 +939,26 @@ list.addEventListener('click', e => {
       }
       toast(st('saved'));
     })().catch(err => toast(String(err?.message || err), true)).finally(() => { spBusy = false; loadConnect(); });
+    return;
+  }
+  if (tab === 'connect' && b.dataset.gh && S.github) {
+    const act = b.dataset.gh;
+    ghBusy = true; drawConnect();
+    (async () => {
+      if (act === 'save') {
+        const username = $('#ghUserIn')?.value.trim() || '';
+        const token = $('#ghTokenIn')?.value.trim() || '';
+        const r = await S.github.configSet({ username, token });
+        if (!r?.ok) throw new Error(r?.error || 'Error');
+      }
+      if (act === 'clear') {
+        await S.github.configSet({ clearToken: true });
+      }
+      if (act === 'refresh') {
+        await S.github.summary(true);
+      }
+      toast(st('saved'));
+    })().catch(err => toast(String(err?.message || err), true)).finally(() => { ghBusy = false; loadConnect(); });
     return;
   }
   if (tab === 'wardrobe' && b.dataset.i != null) {
