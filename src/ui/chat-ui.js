@@ -26,7 +26,7 @@
 #lumadock-chat .cr-fix{display:inline-block;margin-top:6px;border:0;border-radius:999px;padding:5px 12px;background:#fff;color:#111;font:700 11.5px "Segoe UI",sans-serif;cursor:pointer}
 #lumadock-chat .cr-new{margin-left:auto;flex:none;border:0;border-radius:999px;padding:4px 11px;background:rgba(255,255,255,.08);color:#c9c9d2;font:600 11px "Segoe UI",sans-serif;cursor:pointer}
 #lumadock-chat .cr-new:hover{background:rgba(255,255,255,.14);color:#fff}
-#lumadock-chat .cr-msgs{position:absolute;left:92px;right:14px;top:44px;bottom:58px;overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.15) transparent}
+#lumadock-chat .cr-msgs{position:absolute;left:92px;right:14px;top:44px;bottom:58px;overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px}
 #lumadock-chat .cr-me{align-self:flex-end;max-width:80%;padding:6px 13px;border-radius:14px;background:rgba(255,255,255,.1);font-weight:600;font-size:13px}
 #lumadock-chat .cr-ai{align-self:flex-start;max-width:94%;font-size:13.5px;line-height:1.5;color:#ececf2;user-select:text}
 #lumadock-chat .cr-ai p{margin:0 0 7px}#lumadock-chat .cr-ai p:last-child{margin-bottom:0}
@@ -98,12 +98,25 @@
   const AI_DOT = { claudecode: '#d97757', codex: '#3b82f6' };
   const refreshAi = () => api.buddyAi?.().then(n => { if (JSON.stringify(n) !== JSON.stringify(aiState)) { aiState = n; render(); } }).catch(() => {});
   const ct = (key, params) => (window.__lumadockT ? window.__lumadockT('buddy.chat.' + key, params) : key);
-  const CHIP_IDS = ['explain', 'spelling', 'translate', 'summary'];
+  const CHIP_IDS = ['explain', 'explain_error', 'translate', 'summary', 'spelling'];
+  const CHIP_SVG = {
+    explain: '<circle cx="8" cy="8" r="5.5"/><path d="M8 7v3.5M8 5h.01"/>',
+    explain_error: '<path d="M8 2.5L14 13H2L8 2.5zM8 6.5v3M8 11h.01"/>',
+    fix: '<path d="M10.5 3.5a3 3 0 0 0-3.7 3.7L3 11l2 2 3.8-3.8a3 3 0 0 0 3.7-3.7l-1.6 1.6-1.5-1.5 1.1-2.1z"/>',
+    fixMore: '<path d="M10.5 3.5a3 3 0 0 0-3.7 3.7L3 11l2 2 3.8-3.8a3 3 0 0 0 3.7-3.7l-1.6 1.6-1.5-1.5 1.1-2.1z"/>',
+    translate: '<circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11M8 2.5a8 8 0 0 1 0 11M8 2.5a8 8 0 0 0 0 11"/>',
+    summary: '<rect x="3" y="2.5" width="10" height="11" rx="1.5"/><path d="M5.5 6h5M5.5 8.5h5M5.5 11h3"/>',
+    spelling: '<path d="M3 13h10M5 10l3-7 3 7M6 8h4"/>',
+    ocr: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M5 7h6M5 9.5h4"/>'
+  };
+  const chipIco = k => CHIP_SVG[k]
+    ? `<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1.5px;margin-right:4px">${CHIP_SVG[k]}</svg>`
+    : '';
 
   function render() {
     const keep = root.querySelector('input')?.value || '', focused = document.activeElement === root.querySelector('input'), wasTop = root.querySelector('.cr-msgs')?.scrollTop || 0;
     const photo = context?.picture ? `<img src="${esc(context.picture)}" data-do="zoom" alt="" title="${esc(ct('seen'))}">` : '';
-    const pill = context ? `<div class="cr-ctx"><i></i>${photo}<span>${esc(context.app || ct('part'))}</span><button type="button" data-do="forget" title="${esc(ct('forget'))}">✕</button></div>` : '';
+    const pill = context ? `<div class="cr-ctx"><i></i>${photo}<span>${esc(context.app || ct('part'))}</span><button type="button" data-do="forget" title="${esc(ct('forget'))}">×</button></div>` : '';
     const agents = aiState?.agents || [];
     const via = !aiState ? '' : agents.length > 1
       ? `<div class="cr-pick" title="${esc(ct('which'))}">${agents.map(a => `<button type="button" data-ai="${a.id}" class="${a.id === aiState.current ? 'on' : ''}" style="--c:${AI_DOT[a.id]}"><i></i>${esc(a.name)}</button>`).join('')}</div>`
@@ -131,13 +144,14 @@
         html += diff(m.plan.changes);
         if (!m.decided) html += `<div class="cr-ask">${esc(ct('mayI', { files: [...new Set(m.plan.changes.map(c => c.file.split('/').pop()))].join(', ') }))}</div><div class="cr-yn"><button type="button" class="cr-act" data-do="fix-yes">${esc(ct('yes'))}</button><button type="button" class="cr-no" data-do="fix-no">${esc(ct('no'))}</button></div>`;
       }
-      if (m.fixed) html = `<div class="cr-done">✓ ${esc(ct('fixed', { project: m.project || '' }))}</div>` + html + (m.changes?.length ? diff(m.changes) : '');
-      if (m === lastAnswer && context?.project && !m.fixed && !m.fixes && !m.plan && !waiting) html += `<button type="button" class="cr-act" data-kind="fix">${ct('chips.fixMore')}</button>`;
+      if (m.fixed) html = `<div class="cr-done">${esc(ct('fixed', { project: m.project || '' }))}</div>` + html + (m.changes?.length ? diff(m.changes) : '');
+      if (m === lastAnswer && context?.project && !m.fixed && !m.fixes && !m.plan && !waiting) html += `<button type="button" class="cr-act" data-kind="fix">${chipIco('fixMore')}${ct('chips.fixMore')}</button>`;
       return `<div class="cr-ai${fresh}">${html}</div>`;
     }).join('') + (waiting ? `<div class="cr-wait"><i></i><i></i><i></i><span>${esc(waitingType ? ct('typing', { file: waitingType }) : waitingFix ? ct('fixing', { project: context?.project || '' }) : ct('thinking'))}</span></div>` : '');
     const chipsArr = CHIP_IDS.map(k => [k, ct('chips.' + k)]);
-    const chipList = context?.project ? [chipsArr[0], ['fix', ct('chips.fix')], ...chipsArr.slice(1, 3)] : chipsArr;
-    const chips = !messages.length && !waiting ? `<div class="cr-chips">${chipList.map(([k, label]) => `<button type="button" data-kind="${k}" class="${k === 'fix' ? 'cr-hot' : ''}">${label}</button>`).join('')}</div>` : '';
+    const chipList = context?.project ? [chipsArr[0], ['fix', ct('chips.fix')], ...chipsArr.slice(1, 4)] : chipsArr;
+    const ocrChip = context?.picture ? `<button type="button" data-do="ocr">${chipIco('ocr')}${ct('chips.ocr')}</button>` : '';
+    const chips = !messages.length && !waiting ? `<div class="cr-chips">${chipList.map(([k, label]) => `<button type="button" data-kind="${k}" class="${k === 'fix' ? 'cr-hot' : ''}">${chipIco(k)}${label}</button>`).join('')}${ocrChip}</div>` : '';
     const placeholder = messages.length ? ct('more') : context ? ct('about') : ct('any');
     root.innerHTML = `${ctx}${shot}<div class="cr-msgs">${msgs}</div>${chips}
       <div class="cr-input"><input type="text" maxlength="2000" placeholder="${esc(placeholder)}" aria-label="${esc(ct('label'))}"><button type="button" data-do="send" ${waiting ? 'disabled' : ''} aria-label="${esc(ct('send'))}">↑</button></div>`;
@@ -152,7 +166,7 @@
 
   async function ask(kind, text) {
     if (waiting) return;
-    const label = text || ct('chips.' + kind)?.replace(/^\S+\s/, '') || '';
+    const label = text || ct('chips.' + kind) || '';
     const history = messages.filter(m => !m.error).map(m => ({ who: m.who, text: String(m.text || '').slice(0, 2000) })).slice(-8);
     messages.push({ who: 'me', text: label, fresh: true }); waiting = true; waitingFix = kind === 'fix'; render();
     window.__lumadockChime?.('send');
@@ -175,6 +189,15 @@
     if (b.dataset.kind) return ask(b.dataset.kind, '');
     const act = b.dataset.do, input = root.querySelector('input');
     if (act === 'send') { const text = input.value.trim(); if (text) { input.value = ''; ask('free', text); } }
+    if (act === 'ocr') {
+      if (waiting) return;
+      messages.push({ who: 'me', text: ct('chips.ocr'), fresh: true }); waiting = true; render();
+      const r = await api.buddyOcr?.(true).catch(err => ({ ok: false, error: err?.message }));
+      waiting = false; readFrom = true; holdUntil = performance.now() + 10000;
+      messages.push(r?.ok ? { who: 'ai', text: r.text ? `${r.text}\n\n${ct('ocrCopied')}` : ct('ocrEmpty'), fresh: true } : { who: 'ai', error: r?.error || ct('wrong'), fresh: true });
+      window.__lumadockChime?.(r?.ok ? 'reply' : 'error');
+      render(); return;
+    }
     if (act === 'new') { messages = []; render(); input?.focus(); }
     if (act === 'forget') { context = null; zoom = false; api.buddyForget?.(); render(); }
     if (act === 'setup') api.settingsOpen?.('connect');

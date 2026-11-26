@@ -8,6 +8,7 @@
   mouse where Robo or the card is; everywhere else your clicks go straight through.
 -->
 <style>
+  :root{color-scheme:dark}
   html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;user-select:none}
   #robo{position:absolute;left:0;top:0;width:140px;height:140px;margin:-70px 0 0 -70px;opacity:0;cursor:grab;will-change:transform}
   #robo.grabbing{cursor:grabbing}
@@ -58,7 +59,7 @@
   .fixes .why{display:block;color:#8a8a96;font-size:12px;margin-top:2px}
   .row{display:flex;flex-wrap:wrap;gap:8px}
   .err{color:#ffb4a8;font-size:14px;line-height:1.45}
-  ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:#3a3a44;border-radius:3px}
+  ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:99px}::-webkit-scrollbar-button{display:none}
 </style></head>
 <body>
 <div id="lens"><span class="label" id="lensLabel"></span><div class="scan"></div></div>
@@ -107,7 +108,7 @@ function setLens(state, app) {
   lens.style.opacity = state ? 1 : 0;
   lens.classList.toggle('home', state === 'home');
   lens.classList.toggle('scanning', state === 'look');
-  if (state) $('#lensLabel').textContent = state === 'look' ? t('lensLook') : state === 'home' ? t('lensHome') : app ? '👀 ' + app : t('lensCarry');
+  if (state) $('#lensLabel').textContent = state === 'look' ? t('lensLook') : state === 'home' ? t('lensHome') : app ? app : t('lensCarry');
 }
 
 // ---------- the card next to Robo ----------
@@ -119,7 +120,7 @@ function md(text) { // **bold**, "- " lists and line breaks; everything else sta
   }
   return (list ? html + '</ul>' : html).replace(/(<br>)+$/, '');
 }
-function head() { return `<div class="head"><span>${t('at')}</span><b>${esc(info.app || t('here'))}</b><button class="x" title="${t('close')}" data-do="home">✕</button></div>`; }
+function head() { return `<div class="head"><span>${t('at')}</span><b>${esc(info.app || t('here'))}</b><button class="x" title="${t('close')}" data-do="home">×</button></div>`; }
 function placeCard() { // beside Robo, on the side with room, kept on screen
   const w = 380, h = card.offsetHeight || 300, right = aim.x + 80 + w < innerWidth - 12;
   const x = right ? aim.x + 76 : aim.x - 76 - w, y = clamp(aim.y - 70, 12, innerHeight - h - 12);
@@ -133,9 +134,10 @@ function show(state, extra = {}) {
   if (state === 'ask') {
     const seen = info.picture ? `<div class="seen"><span class="q">${t('seen')}</span><img src="${info.picture}" alt=""></div>` : '';
     card.innerHTML = head() + seen + `<div class="chips">
-      <button data-kind="explain">💡 ${t('explain')}</button><button data-kind="spelling">✏️ ${t('spelling')}</button>
-      <button data-kind="translate">🌍 ${t('translate')}</button><button data-kind="summary">📝 ${t('summary')}</button></div>
-      ${info.word ? `<div class="q">📄 ${t('wordHint')}</div>` : ''}
+      <button data-kind="explain">${t('explain')}</button><button data-kind="explain_error">${t('explainError')}</button>
+      <button data-kind="translate">${t('translate')}</button><button data-kind="summary">${t('summary')}</button>
+      <button data-kind="spelling">${t('spelling')}</button>${info.picture ? `<button data-do="ocr">${t('ocr')}</button>` : ''}</div>
+      ${info.word ? `<div class="q">${t('wordHint')}</div>` : ''}
       <div class="ask"><textarea rows="1" placeholder="${t('placeholder')}"></textarea><button class="send" data-do="send">↑</button></div>`;
   }
   if (state === 'thinking') card.innerHTML = head() + `<div class="q">${esc(lastQuestion)}</div><div class="wait"><span class="dots"><i></i><i></i><i></i></span><span id="progress">${t('thinking')}</span></div>`;
@@ -143,19 +145,19 @@ function show(state, extra = {}) {
     const r = extra; answerText = r.answer || '';
     let body = r.ok === false ? `<div class="err">${esc(r.error || '')}</div>` : `<div class="answer">${md(r.answer || '')}`;
     if (r.ok !== false && r.word) {
-      if (r.pages) body += `<div class="q" style="margin-top:6px">📄 ${t('pages', { count: r.pages })}</div>`;
+      if (r.pages) body += `<div class="q" style="margin-top:6px">${t('pages', { count: r.pages })}</div>`;
       body += r.fixes?.length ? `<ul class="fixes">${r.fixes.map(f => `<li><span class="p">p. ${esc(f.page ?? '?')}</span><del>${esc(f.find)}</del> → <ins>${esc(f.replace)}</ins>${f.why ? `<span class="why">${esc(f.why)}</span>` : ''}</li>`).join('')}</ul>` : `<div style="margin-top:6px">${t('noFixes')}</div>`;
       answerText += '\n' + (r.fixes || []).map(f => `p. ${f.page}: ${f.find} → ${f.replace}`).join('\n');
     }
     if (r.ok !== false) body += '</div>';
-    const put = r.ok !== false && r.word && r.fixes?.length ? `<button class="main" data-do="apply">✓ ${t('put')}</button>` : '';
+    const put = r.ok !== false && r.word && r.fixes?.length ? `<button class="main" data-do="apply">${t('put')}</button>` : '';
     card.innerHTML = head() + `<div class="q">${esc(lastQuestion)}</div>` + body + `<div class="row">${put}${r.ok !== false ? `<button data-do="copy">${t('copy')}</button>` : ''}<button data-do="again">${t('again')}</button><button data-do="home">${t('home')}</button></div>`;
   }
   openCard();
 }
 
 async function ask(kind, text) {
-  lastQuestion = text || card.querySelector(`[data-kind="${kind}"]`)?.textContent.replace(/^\S+\s/, '') || '';
+  lastQuestion = text || card.querySelector(`[data-kind="${kind}"]`)?.textContent || '';
   show('thinking');
   const result = await window.buddy.ask(kind, text);
   if (mode === 'parked') show('answer', result || { ok: false, error: '?' });
@@ -165,6 +167,12 @@ card.addEventListener('click', async e => {
   if (b.dataset.kind) return ask(b.dataset.kind, '');
   const act = b.dataset.do;
   if (act === 'send') { const text = card.querySelector('textarea').value.trim(); if (text) ask('free', text); }
+  if (act === 'ocr') {
+    lastQuestion = t('ocr');
+    show('thinking');
+    const res = await window.buddy.ocr?.(true).catch(err => ({ ok: false, error: err?.message }));
+    if (mode === 'parked') show('answer', res?.ok ? { ok: true, answer: res.text || t('ocrEmpty') } : { ok: false, error: res?.error || '?' });
+  }
   if (act === 'home') window.buddy.home();
   if (act === 'again') show('ask');
   if (act === 'copy') { window.buddy.copy(answerText); b.textContent = t('copied'); }
