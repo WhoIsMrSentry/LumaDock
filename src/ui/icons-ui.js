@@ -7,8 +7,16 @@
   const ICONS = {
     home(c) { c.beginPath(); c.moveTo(4, 11); c.lineTo(12, 4); c.lineTo(20, 11); c.lineTo(20, 20); c.lineTo(4, 20); c.closePath(); c.fill(); c.stroke();
       c.beginPath(); c.roundRect(10, 14, 4, 6, 1); c.stroke(); },
+    appsGrid(c) { c.beginPath(); c.roundRect(4.5, 4.5, 6, 6, 1.8); c.roundRect(13.5, 4.5, 6, 6, 1.8);
+      c.roundRect(4.5, 13.5, 6, 6, 1.8); c.roundRect(13.5, 13.5, 6, 6, 1.8); c.fill(); c.stroke(); },
     chat(c) { c.beginPath(); c.roundRect(3.5, 5, 17, 12, 5); c.fill(); c.stroke(); c.beginPath(); c.moveTo(8, 17); c.lineTo(7, 20.5); c.lineTo(11.5, 17); c.stroke(); }, // Robo's chat
     plus(c) { c.beginPath(); c.roundRect(4, 4, 16, 16, 5); c.fill(); c.stroke(); c.beginPath(); c.moveTo(12, 8.5); c.lineTo(12, 15.5); c.moveTo(8.5, 12); c.lineTo(15.5, 12); c.stroke(); },
+    pin(c) { c.beginPath(); c.moveTo(9, 4.5); c.lineTo(15, 4.5); c.lineTo(14, 10.5); c.lineTo(17.5, 14); c.lineTo(6.5, 14); c.lineTo(10, 10.5); c.closePath(); c.fill(); c.stroke();
+      c.beginPath(); c.moveTo(12, 14); c.lineTo(12, 20); c.stroke(); },
+    snip(c) { c.beginPath(); c.roundRect(5, 5, 14, 11, 2.5); c.stroke(); c.beginPath(); c.arc(8, 19, 2, 0, Math.PI * 2); c.arc(16, 19, 2, 0, Math.PI * 2); c.stroke(); },
+    mixer(c) { for (const x of [7, 12, 17]) { c.beginPath(); c.moveTo(x, 5); c.lineTo(x, 19); c.stroke(); }
+      c.beginPath(); c.arc(7, 10, 2, 0, Math.PI * 2); c.arc(12, 15, 2, 0, Math.PI * 2); c.arc(17, 9, 2, 0, Math.PI * 2); c.fill(); c.stroke(); },
+    shield(c) { c.beginPath(); c.moveTo(12, 4); c.lineTo(19, 7); c.lineTo(19, 12); c.quadraticCurveTo(19, 17.5, 12, 20); c.quadraticCurveTo(5, 17.5, 5, 12); c.lineTo(5, 7); c.closePath(); c.fill(); c.stroke(); },
     gear(c) {
       c.beginPath();
       for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2, r = i % 2 ? 7 : 9; c.lineTo(12 + Math.cos(a) * r, 12 + Math.sin(a) * r); }
@@ -34,10 +42,27 @@
       c.beginPath(); c.roundRect(10, 10, 4, 4, 0.8); c.stroke();
       for (const d of [9.5, 14.5]) { c.beginPath(); c.moveTo(d, 4); c.lineTo(d, 7); c.moveTo(d, 17); c.lineTo(d, 20); c.moveTo(4, d); c.lineTo(7, d); c.moveTo(17, d); c.lineTo(20, d); c.stroke(); } },
     picker(c) { c.beginPath(); c.moveTo(14, 5); c.lineTo(19, 10); c.lineTo(16.5, 12.5); c.lineTo(11.5, 7.5); c.closePath(); c.fill(); c.stroke();
-      c.beginPath(); c.moveTo(12.5, 8.5); c.lineTo(6, 15); c.lineTo(5, 19); c.lineTo(9, 18); c.lineTo(15.5, 11.5); c.stroke(); }
+      c.beginPath(); c.moveTo(12.5, 8.5); c.lineTo(6, 15); c.lineTo(5, 19); c.lineTo(9, 18); c.lineTo(15.5, 11.5); c.stroke(); },
+    command(c) { c.beginPath(); c.arc(10.5, 10.5, 6, 0, Math.PI * 2); c.fill(); c.stroke();
+      c.beginPath(); c.moveTo(15, 15); c.lineTo(20, 20); c.stroke(); },
+    weather(c) { c.beginPath(); c.arc(14.5, 9, 3.8, 0, Math.PI * 2); c.stroke();
+      c.beginPath(); c.roundRect(4.5, 11, 13, 7, 3.5); c.fill(); c.stroke(); },
+    net(c) { c.beginPath(); c.moveTo(4, 15); c.lineTo(8, 10); c.lineTo(12, 14); c.lineTo(16, 7); c.lineTo(20, 12); c.stroke();
+      c.beginPath(); c.roundRect(4, 17.5, 16, 2.5, 1.2); c.fill(); },
+    market(c) { c.beginPath(); c.moveTo(4, 17); c.lineTo(9, 11.5); c.lineTo(13, 14); c.lineTo(20, 6.5); c.stroke();
+      c.beginPath(); c.moveTo(15.5, 6.5); c.lineTo(20, 6.5); c.lineTo(20, 11); c.stroke(); },
+    dev(c) { c.beginPath(); c.moveTo(9, 8); c.lineTo(4.5, 12); c.lineTo(9, 16); c.moveTo(15, 8); c.lineTo(19.5, 12); c.lineTo(15, 16); c.moveTo(13, 6.5); c.lineTo(11, 17.5); c.stroke(); },
+    github(c) { c.beginPath(); c.arc(7, 6.5, 2.2, 0, Math.PI * 2); c.arc(7, 17.5, 2.2, 0, Math.PI * 2); c.arc(17, 9.5, 2.2, 0, Math.PI * 2); c.stroke();
+      c.beginPath(); c.moveTo(7, 8.8); c.lineTo(7, 15.2); c.moveTo(9, 16.5); c.quadraticCurveTo(17, 16.5, 17, 11.7); c.stroke(); },
+    ports(c) { c.beginPath(); c.roundRect(4, 5, 16, 6, 2); c.roundRect(4, 13, 16, 6, 2); c.fill(); c.stroke();
+      c.beginPath(); c.moveTo(7.5, 8); c.lineTo(9.5, 8); c.moveTo(7.5, 16); c.lineTo(9.5, 16); c.stroke(); },
+    translate(c) { c.beginPath(); c.moveTo(4, 6); c.lineTo(12.5, 6); c.moveTo(8, 4); c.lineTo(8, 6); c.moveTo(10.5, 6); c.quadraticCurveTo(9.5, 11, 5, 13.5); c.moveTo(6.5, 9); c.lineTo(11.5, 13); c.moveTo(13, 19); c.lineTo(16.5, 10.5); c.lineTo(20, 19); c.moveTo(14.3, 16.2); c.lineTo(18.7, 16.2); c.stroke(); },
+    devtools(c) { c.beginPath(); c.roundRect(4, 5, 16, 14, 3); c.fill(); c.stroke(); c.beginPath(); c.moveTo(8, 10); c.lineTo(11, 12.5); c.lineTo(8, 15); c.moveTo(13, 15); c.lineTo(16.5, 15); c.stroke(); },
+    vault(c) { c.beginPath(); c.moveTo(12, 4); c.lineTo(19, 6.8); c.lineTo(19, 12.2); c.quadraticCurveTo(19, 17.5, 12, 20); c.quadraticCurveTo(5, 17.5, 5, 12.2); c.lineTo(5, 6.8); c.closePath(); c.fill(); c.stroke();
+      c.beginPath(); c.arc(12, 11.5, 1.8, 0, Math.PI * 2); c.moveTo(12, 13.3); c.lineTo(12, 16); c.stroke(); }
   };
   // Old glyphs used by pill(...) calls → icon names.
-  const GLYPHS = { '♫': 'music', '›_': 'terminal', '◔': 'timer', '📥': 'tray', '⚙': 'gear', '⌂': 'home', '+': 'plus' };
+  const GLYPHS = { '♫': 'music', '›_': 'terminal', '◔': 'timer', '⚙': 'gear', '⌂': 'home', '+': 'plus' };
   function icon(name, x, y, size = 18, colour = LINE, arg, fill = '#000') {
     const draw = ICONS[name]; if (!draw) return false;
     ctx.save(); ctx.translate(x - size / 2, y - size / 2); ctx.scale(size / 24, size / 24);
@@ -86,10 +111,14 @@
     const left = islandBounds.x, right = left + islandBounds.width;
     ctx.save(); ctx.globalAlpha = alpha;
     ctx.strokeStyle = 'rgba(255,255,255,.055)'; ctx.beginPath(); ctx.moveTo(left + 12, 35); ctx.lineTo(right - 12, 35); ctx.stroke();
-    const homeX = left + 27, chatX = left + 61, appsX = left + 95, soundX = right - 138, settingsX = right - 102, collapseX = right - 66, powerX = right - 30;
+    const homeX = left + 27, appsMenuX = left + 59, chatX = left + 91, editX = left + 123, soundX = right - 138, settingsX = right - 102, collapseX = right - 66, powerX = right - 30;
     // the page you are on gets a soft pill behind its icon; switching pages, the pill slides over (and stretches a little on the way)
     const editing = window.__lumadockHomeEditing?.();
-    const target = currentView === 'home' && !editing ? homeX : currentView === 'chat' ? chatX : currentView === 'shortcuts' || (currentView === 'home' && editing) ? appsX : currentView === 'settings' ? settingsX : null;
+    const target = currentView === 'home' && !editing ? homeX
+      : currentView === 'apps' || (currentView === 'shortcuts' && !editing) ? appsMenuX
+      : currentView === 'chat' ? chatX
+      : (currentView === 'home' && editing) ? editX
+      : currentView === 'settings' ? settingsX : null;
     const now = performance.now(), dt = Math.min(0.05, (now - (pillAnim.at || now)) / 1000); pillAnim.at = now;
     if (target != null) {
       if (pillAnim.x == null || pillAnim.shown < 0.05) pillAnim.x = target; // appears where it belongs
@@ -100,14 +129,14 @@
       const stretch = Math.min(18, pillAnim.v / 90);
       ctx.save(); ctx.globalAlpha *= pillAnim.shown; ctx.beginPath(); ctx.roundRect(pillAnim.x - 17 - stretch / 2, 3, 34 + stretch, 30, 12); ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fill(); ctx.restore();
     }
-    icon('home', homeX, 18, 19); icon('chat', chatX, 18, 19); icon('plus', appsX, 18, 19); icon('speaker', soundX, 18, 19, LINE, volume); icon('gear', settingsX, 18, 18); icon('collapse', collapseX, 18, 19); drawPower(powerX, 18, inside(pointer.x, pointer.y, hit.power) || quitAsk > 0);
-    // editing the home widgets: a Done button (like iPhone) and a hint
+    icon('home', homeX, 18, 19); icon('appsGrid', appsMenuX, 18, 18); icon('chat', chatX, 18, 19); icon('plus', editX, 18, 19); icon('speaker', soundX, 18, 19, LINE, volume); icon('gear', settingsX, 18, 18); icon('collapse', collapseX, 18, 19); drawPower(powerX, 18, inside(pointer.x, pointer.y, hit.power) || quitAsk > 0);
+    // editing the home widgets: a Done button (like iPhone) and a hint cleanly after editX
     if (currentView === 'home' && window.__lumadockHomeEditing?.() && !window.__lumadockGalleryOpen?.() && !barOpen) {
       const t = key => (window.__lumadockT ? window.__lumadockT(key) : key);
-      const b = { x: left + 88, y: 5, width: 62, height: 26 }, over = inside(pointer.x, pointer.y, b);
+      const b = { x: left + 144, y: 5, width: 62, height: 26 }, over = inside(pointer.x, pointer.y, b);
       ctx.beginPath(); ctx.roundRect(b.x, b.y, b.width, b.height, 13); ctx.fillStyle = over ? '#d9f7b3' : '#c6e994'; ctx.fill();
       text(t('header.doneBtn'), b.x + b.width / 2, b.y + 17, 11.5, '#10180c', 700, 'center');
-      text(t('header.dragHint'), b.x + b.width + 14, b.y + 17, 11, '#7f8a7a', 500);
+      text(t('header.dragHint'), b.x + b.width + 12, b.y + 17, 11, '#7f8a7a', 500);
       hit.hmDone = b;
     }
     if (barOpen && performance.now() - barTouched > 3500 && !dragging) barOpen = false;
@@ -133,9 +162,14 @@
       ctx.restore();
       icon('speaker', soundX, 18, 19, LINE, volume); // the speaker stays on top of the pill
     }
-    if (alpha > 0.85) {
-      hit.home = { x: homeX - 16, y: 2, width: 32, height: 30 }; hit.chat = { x: chatX - 16, y: 2, width: 32, height: 30 }; hit.apps = { x: appsX - 16, y: 2, width: 32, height: 30 };
-      hit.sound = { x: soundX - 16, y: 1, width: 32, height: 31 }; hit.settings = { x: settingsX - 15, y: 2, width: 30, height: 30 }; hit.collapse = { x: collapseX - 15, y: 2, width: 30, height: 30 };
+    if (alpha > 0.35 && mode === 'expanded') {
+      hit.home = { x: homeX - 15, y: 2, width: 30, height: 30 };
+      hit.appsMenu = { x: appsMenuX - 15, y: 2, width: 30, height: 30 };
+      hit.chat = { x: chatX - 15, y: 2, width: 30, height: 30 };
+      hit.editWidgets = { x: editX - 15, y: 2, width: 30, height: 30 };
+      hit.sound = { x: soundX - 16, y: 1, width: 32, height: 31 };
+      hit.settings = { x: settingsX - 15, y: 2, width: 30, height: 30 };
+      hit.collapse = { x: collapseX - 15, y: 2, width: 30, height: 30 };
       hit.power = { x: powerX - 15, y: 2, width: 30, height: 30 };
     }
     drawQuitAsk(left, right);
@@ -176,21 +210,34 @@
     if (quitAsk && inside(e.clientX, e.clientY, hit.quitNo)) { stop(); quitAsk = 0; sound('click'); return; }
     if (mode === 'expanded' && inside(e.clientX, e.clientY, hit.power)) { stop(); quitAsk = quitAsk ? 0 : 1; quitAskAt = performance.now(); sound('click'); return; }
     if (quitAsk) { quitAsk = 0; } // a click anywhere else: never mind
-    // Home really goes home (your widgets). Already home? Then it shows all apps.
+    // Home always goes to Home; separate Apps icon always opens the full Apps grid directly.
     if (mode === 'expanded' && inside(e.clientX, e.clientY, hit.home)) {
-      stop(); const was = currentView;
-      if (was === 'monitor') window.__lumadockMonitor?.small?.();
-      if (window.__lumadockHomeEditing?.()) window.__lumadockHomeEdit?.(false);
-      setView(was === 'home' ? 'apps' : 'home'); setMode('expanded'); return;
-    }
-    if (mode === 'expanded' && inside(e.clientX, e.clientY, hit.chat)) { stop(); if (currentView === 'monitor') window.__lumadockMonitor?.small?.(); setView('chat'); setMode('expanded'); return; } // Robo's chat
-    if (mode === 'expanded' && inside(e.clientX, e.clientY, hit.apps)) {
       stop();
+      if (currentView === 'monitor') window.__lumadockMonitor?.small?.();
+      if (window.__lumadockHomeEditing?.()) window.__lumadockHomeEdit?.(false);
+      setView('home'); setMode('expanded'); return;
+    }
+    if (mode === 'expanded' && inside(e.clientX, e.clientY, hit.appsMenu)) {
+      stop();
+      if (currentView === 'monitor') window.__lumadockMonitor?.small?.();
+      if (window.__lumadockHomeEditing?.()) window.__lumadockHomeEdit?.(false);
+      setView('apps'); setMode('expanded'); return;
+    }
+    if (mode === 'expanded' && inside(e.clientX, e.clientY, hit.chat)) {
+      stop();
+      if (currentView === 'monitor') window.__lumadockMonitor?.small?.();
+      if (window.__lumadockHomeEditing?.()) window.__lumadockHomeEdit?.(false);
+      setView('chat'); setMode('expanded'); return;
+    }
+    if (mode === 'expanded' && inside(e.clientX, e.clientY, hit.editWidgets)) {
+      stop();
+      if (currentView === 'monitor') window.__lumadockMonitor?.small?.();
       if (currentView !== 'home') { setView('home'); window.__lumadockHomeEdit?.(true); }
       else if (!window.__lumadockHomeEditing?.()) window.__lumadockHomeEdit?.(true);
       else window.__lumadockGallery?.(); // already editing: + opens the widget menu
       return;
     }
+    if (mode === 'expanded' && inside(e.clientX, e.clientY, hit.settings)) { stop(); setView('settings'); return; }
     if (mode === 'expanded' && inside(e.clientX, e.clientY, hit.hmDone)) { stop(); window.__lumadockHomeEdit?.(false); return; }
     if (mode === 'expanded' && inside(e.clientX, e.clientY, hit.collapse)) { stop(); window.__lumadockMonitor?.small?.(); window.__lumadockHoldClosed?.(); setMode('rest'); return; }
     if (inside(e.clientX, e.clientY, hit.sound)) { e.preventDefault(); e.stopImmediatePropagation(); barOpen = !barOpen; barTouched = performance.now(); return; }
