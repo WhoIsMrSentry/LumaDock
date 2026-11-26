@@ -151,6 +151,11 @@
             meta: input.meta,
             shift: input.shift
           });
+          if (input.key === 'PrintScreen' || (input.meta && input.shift && String(input.key).toLowerCase() === 's')) {
+            setTimeout(() => app.lumadockEnsureVisible?.('printscreen-600'), 600);
+            setTimeout(() => app.lumadockEnsureVisible?.('printscreen-2000'), 2000);
+            setTimeout(() => app.lumadockEnsureVisible?.('printscreen-4500'), 4500);
+          }
         }
       }
     );
@@ -209,7 +214,7 @@
           }
 
           win.showInactive();
-          win.setAlwaysOnTop(true, 'floating');
+          win.setAlwaysOnTop(true, 'screen-saver');
           win.moveTop();
 
           if (crashed.has(win.webContents.id)) {

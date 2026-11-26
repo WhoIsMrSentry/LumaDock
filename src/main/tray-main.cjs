@@ -14,8 +14,13 @@ function island() {
 
 function openIsland() {
   const win = island(); if (!win) return;
-  if (win.isMinimized()) win.restore();
-  win.showInactive();
+  if (app.lumadockEnsureVisible) app.lumadockEnsureVisible('tray');
+  else {
+    if (win.isMinimized()) win.restore();
+    win.showInactive();
+    win.setAlwaysOnTop(true, 'screen-saver');
+    win.moveTop();
+  }
   win.webContents.send('extras:shortcut', 'home');
 }
 
@@ -55,6 +60,7 @@ function buildMenu() {
     { label: i18n.t('common.appName'), enabled: false },
     { type: 'separator' },
     { label: i18n.t('tray.openIsland'), accelerator: 'CommandOrControl+Alt+1', registerAccelerator: false, click: openIsland },
+    { label: i18n.t('tray.bringToFront'), click: () => app.lumadockEnsureVisible?.('tray-front') },
     { label: i18n.t('tray.settings'), click: () => app.emit('lumadock-open-settings') },
     { label: i18n.t('tray.startWithWindows'), type: 'checkbox', checked: startsWithWindows(), click: item => setStartsWithWindows(item.checked) },
     { type: 'separator' },

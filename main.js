@@ -9,7 +9,8 @@ const {
   safeStorage,
   screen,
   dialog,
-  clipboard
+  clipboard,
+  powerMonitor
 } = require('electron');
 
 const fs = require('fs');
@@ -2464,7 +2465,7 @@ function startWindowsMediaWatcher() {
               parsed.cleanTitle = clean.title || parsed.title;
               parsed.cleanArtist = clean.artist || parsed.artist || '';
               const cover = getArtworkOrFetchBackground(parsed.title, parsed.artist);
-              parsed.image_url = cover || '';
+              parsed.image_url = cover || parsed.thumb || '';
             }
             latestWindowsMedia = parsed;
             if (mascotWindow && !mascotWindow.isDestroyed()) {
@@ -3783,8 +3784,8 @@ async function getSpotifyState() {
         uri: '',
         name: clean.title || localMedia.title,
         artist: clean.artist || localMedia.artist || i18n.t('spotify.fallbackArtist'),
-        image_url: cover || '',
-        source: localMedia.source || 'Spotify'
+        image_url: cover || localMedia.thumb || '',
+        source: localMedia.appLabel || localMedia.source || 'Spotify'
       },
       device: {
         id: 'local',
@@ -4329,6 +4330,30 @@ async function fetchLyrics(title, artist, durationMs) {
 const WINDOW_PREFS_FILE = () => path.join(app.getPath('userData'), 'window-prefs.json');
 let windowPrefs = { fullscreenHide: false, displayIndex: -1 };
 let lastFullscreenActive = false;
+let captureSuppressRestore = false;
+
+function ensureMascotVisibleAndTop(_reason = '') {
+  if (!mascotWindow || mascotWindow.isDestroyed() || app.isQuitting || captureSuppressRestore) return;
+  if (windowPrefs.fullscreenHide && lastFullscreenActive) return;
+  try {
+    if (mascotWindow.isMinimized()) mascotWindow.restore();
+    if (!mascotWindow.isVisible()) mascotWindow.showInactive();
+    mascotWindow.setAlwaysOnTop(true, 'screen-saver');
+    mascotWindow.moveTop();
+    positionMascot();
+  } catch {}
+}
+
+app.lumadockEnsureVisible = ensureMascotVisibleAndTop;
+app.on('lumadock-temp-hide', hide => {
+  captureSuppressRestore = Boolean(hide);
+  if (!mascotWindow || mascotWindow.isDestroyed()) return;
+  if (captureSuppressRestore) {
+    try { mascotWindow.hide(); } catch {}
+  } else {
+    ensureMascotVisibleAndTop('temp-hide-restore');
+  }
+});
 
 function loadWindowPrefs() {
   const saved = readJson(WINDOW_PREFS_FILE());
@@ -4590,7 +4615,7 @@ function createMascot() {
 
   mascotWindow.setAlwaysOnTop(
     true,
-    process.platform === 'darwin' ? 'screen-saver' : 'floating'
+    'screen-saver'
   );
 
 
@@ -4638,8 +4663,23 @@ function createMascot() {
 
     () => {
       mascotWindow.showInactive();
+      mascotWindow.setAlwaysOnTop(true, 'screen-saver');
+      mascotWindow.moveTop();
     }
   );
+
+  mascotWindow.on('blur', () => {
+    setTimeout(() => ensureMascotVisibleAndTop('blur-300'), 300);
+    setTimeout(() => ensureMascotVisibleAndTop('blur-1200'), 1200);
+  });
+  mascotWindow.on('hide', () => {
+    if (!captureSuppressRestore && !(windowPrefs.fullscreenHide && lastFullscreenActive) && !app.isQuitting) {
+      setTimeout(() => ensureMascotVisibleAndTop('unexpected-hide'), 180);
+    }
+  });
+  mascotWindow.on('minimize', () => {
+    setTimeout(() => ensureMascotVisibleAndTop('minimize'), 120);
+  });
 
 
   mascotWindow.on(
@@ -4972,20 +5012,32 @@ app.whenReady().then(
 
     screen.on(
       'display-metrics-changed',
-      positionMascot
+      () => setTimeout(() => ensureMascotVisibleAndTop('display'), 200)
     );
 
 
     screen.on(
       'display-added',
-      positionMascot
+      () => setTimeout(() => ensureMascotVisibleAndTop('display-added'), 200)
     );
 
 
     screen.on(
       'display-removed',
-      positionMascot
+      () => setTimeout(() => ensureMascotVisibleAndTop('display-removed'), 200)
     );
+
+    powerMonitor?.on?.('resume', () => setTimeout(() => ensureMascotVisibleAndTop('resume'), 500));
+    powerMonitor?.on?.('unlock-screen', () => setTimeout(() => ensureMascotVisibleAndTop('unlock'), 500));
+
+    const visWatch = setInterval(() => {
+      if (!mascotWindow || mascotWindow.isDestroyed() || app.isQuitting || captureSuppressRestore) return;
+      if (windowPrefs.fullscreenHide && lastFullscreenActive) return;
+      if (!mascotWindow.isVisible() || mascotWindow.isMinimized() || !mascotWindow.isAlwaysOnTop()) {
+        ensureMascotVisibleAndTop('watchdog');
+      }
+    }, 2500);
+    visWatch.unref?.();
   }
 );
 
