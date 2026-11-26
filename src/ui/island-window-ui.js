@@ -9,7 +9,7 @@
     typeof currentView !== 'undefined' &&
     typeof mode !== 'undefined' &&
     mode === 'expanded' &&
-    ['project', 'settings', 'monitor', 'assistant'].includes(currentView);
+    ['project', 'settings', 'monitor', 'assistant', 'github', 'ports', 'translate', 'devtools', 'vault', 'net', 'market', 'weather', 'mixer', 'studio', 'relay', 'clips', 'note', 'focus', 'tray', 'chat'].includes(currentView);
 
   function state() {
     return {
@@ -109,6 +109,12 @@
     },
     true
   );
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      try { if (typeof resize === 'function') resize(); } catch {}
+    }
+  });
 
   window.__lumadockWindowDebug = Object.freeze({
     state,

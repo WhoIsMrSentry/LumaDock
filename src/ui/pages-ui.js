@@ -3,7 +3,7 @@
 // the title and a grey subtitle always at the same height, the content always starting on the same line.
 // LumaDock only appears where he does something (Spotify: dancing, Tray: catching files). The other UI files use window.__lumadockPage.
 (function pageLayout() {
-  const PAGES = ['apps', 'settings', 'spotify', 'monitor', 'assistant', 'tray', 'mirror', 'focus', 'clips', 'note', 'chat'];
+  const PAGES = ['apps', 'settings', 'spotify', 'monitor', 'assistant', 'tray', 'mirror', 'focus', 'clips', 'note', 'chat', 'command', 'github', 'ports', 'translate', 'devtools', 'vault', 'weather', 'net', 'market', 'mixer', 'studio', 'relay'];
   const PAGE = {
     height: 300,
     contentX: 24,   // left edge of titles and content: LumaDock only appears on pages where he does something
@@ -40,7 +40,7 @@
 
   // Smooth page changes: canvas pages fade in, DOM pages fade + slide in.
   let lastView = null, changedAt = 0;
-  const ROOTS = ['lumadock-ai-monitor', 'lumadock-settings-v2', 'lumadock-extras', 'lumadock-focus', 'lumadock-tools'];
+  const ROOTS = ['lumadock-ai-monitor', 'lumadock-settings-v2', 'lumadock-extras', 'lumadock-focus', 'lumadock-tools', 'lumadock-hub', 'lumadock-studio', 'lumadock-github', 'lumadock-power'];
   (function watch() {
     if (currentView !== lastView) {
       lastView = currentView; changedAt = performance.now();
@@ -63,7 +63,7 @@
 .tc-page-head{display:flex;align-items:flex-start;gap:10px;height:${PAGE.bodyY - 6}px;flex:none}
 .tc-page-head > div{flex:1;min-width:0}
 /* Same Windows 11 font in every panel */
-#lumadock-ai-monitor,#lumadock-ai-monitor *,#lumadock-settings-v2,#lumadock-settings-v2 *,#lumadock-extras,#lumadock-extras *,#lumadock-focus,#lumadock-focus *,#lumadock-tools,#lumadock-tools *:not(.tl-clip){font-family:"Segoe UI Variable Text","Segoe UI",sans-serif !important}
+#lumadock-ai-monitor,#lumadock-ai-monitor *,#lumadock-settings-v2,#lumadock-settings-v2 *,#lumadock-extras,#lumadock-extras *,#lumadock-focus,#lumadock-focus *,#lumadock-tools,#lumadock-tools *:not(.tl-clip),#lumadock-studio,#lumadock-studio *{font-family:"Segoe UI Variable Text","Segoe UI",sans-serif !important}
 .tc-page-title{font-family:"Segoe UI Variable Display","Segoe UI",sans-serif !important;letter-spacing:-.2px}
 .tc-enter{animation:tc-enter .24s cubic-bezier(.2,.8,.2,1)}
 @keyframes tc-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -76,7 +76,14 @@
 #lumadock-settings-v2 .tc-toggle:active,#lumadock-settings-v2 .tc-chip:active{transform:scale(.96)}
 #lumadock-settings-v2 .tc-settings-content{scroll-behavior:smooth}
 /* Buttons in panels */
-#lumadock-ai-monitor button,#lumadock-extras button,#lumadock-focus button{transition:background .15s,border-color .15s,transform .1s}
-#lumadock-ai-monitor button:active,#lumadock-extras button:active,#lumadock-focus button:active{transform:scale(.96)}`;
+#lumadock-ai-monitor button,#lumadock-extras button,#lumadock-focus button,#lumadock-studio button{transition:background .15s,border-color .15s,transform .1s}
+#lumadock-ai-monitor button:active,#lumadock-extras button:active,#lumadock-focus button:active,#lumadock-studio button:active{transform:scale(.96)}
+/* Sleek subtle dark scrollbars everywhere (never bright Windows white track) */
+*::-webkit-scrollbar{width:5px;height:5px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:99px}
+*::-webkit-scrollbar-thumb:hover{background:rgba(198,233,148,.42)}
+*::-webkit-scrollbar-button{display:none;width:0;height:0}
+*::-webkit-scrollbar-corner{background:transparent}`;
   document.head.appendChild(style);
 })();
