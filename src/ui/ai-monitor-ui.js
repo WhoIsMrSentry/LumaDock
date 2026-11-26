@@ -66,7 +66,7 @@
 #lumadock-ai-monitor .cc-limit b{color:#e8eee4}
 #lumadock-ai-monitor .cc-limit div{grid-column:1/-1;height:4px;border-radius:3px;background:#232a22;overflow:hidden}
 #lumadock-ai-monitor .cc-limit i{display:block;height:100%;border-radius:3px}
-#lumadock-ai-monitor .cc-card{background:linear-gradient(180deg,#121612,#0c0f0c);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:13px 15px;display:flex;flex-direction:column;gap:8px;min-height:0;max-height:100%;overflow:auto;scrollbar-width:thin}
+#lumadock-ai-monitor .cc-card{background:linear-gradient(180deg,#121612,#0c0f0c);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:13px 15px;display:flex;flex-direction:column;gap:8px;min-height:0;max-height:100%;overflow:auto}
 #lumadock-ai-monitor .cc-wide{align-items:flex-start}
 #lumadock-ai-monitor .cc-center{justify-content:center}
 #lumadock-ai-monitor .cc-label{color:#9aa596;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
@@ -85,7 +85,6 @@
 #lumadock-ai-monitor .cc-inline{display:flex;gap:8px;align-items:center}
 #lumadock-ai-monitor .cc-inline .am-note{flex:1;min-width:0}
 #lumadock-ai-monitor .cc-inline .am-primary{flex:none;padding:9px 18px}
-#lumadock-ai-monitor *{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent}
 #lumadock-ai-monitor ::-webkit-scrollbar{width:6px;height:6px}
 #lumadock-ai-monitor ::-webkit-scrollbar-track{background:transparent}
 #lumadock-ai-monitor ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:3px}
@@ -117,7 +116,7 @@
 #lumadock-ai-monitor .am-row{display:flex;align-items:center;gap:8px;flex:none}
 #lumadock-ai-monitor .am-dot{width:9px;height:9px;border-radius:50%;background:var(--lamp);box-shadow:0 0 10px color-mix(in srgb,var(--lamp),transparent 50%);display:inline-block;flex:none}
 #lumadock-ai-monitor .am-blink{animation:am-pulse 1.3s ease-in-out infinite}
-#lumadock-ai-monitor .am-body{flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:#536248 transparent}
+#lumadock-ai-monitor .am-body{flex:1;min-height:0;overflow:auto}
 #lumadock-ai-monitor .am-question{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;border-left:3px solid #ffa94b;padding:3px 10px}
 #lumadock-ai-monitor .am-compose{display:flex;gap:8px;align-items:flex-end;flex:none}
 #lumadock-ai-monitor textarea{resize:none;flex:1;min-width:0;height:52px;border:1px solid #536046;border-radius:12px;padding:9px;background:#141b11;color:#f5f8f1;font:12px/1.4 Arial,sans-serif;user-select:text}
@@ -559,7 +558,7 @@
   function statsLine(stats = {}) {
     const keys = ['read', 'edit', 'run', 'search', 'web', 'agent'];
     const parts = keys.filter(k => stats[k]).map(k => `${escape(t('monitor.statsLine.' + k))} <b>${stats[k]}</b>`);
-    return parts.length ? `<div class="am-hint am-usage">🛠 ${parts.join(' · ')}</div>` : '';
+    return parts.length ? `<div class="am-hint am-usage">${parts.join(' · ')}</div>` : '';
   }
   // Multiple-choice questions: click an option (or several), or type your own answer.
   let askKey = '', askPick = {}, askOther = {};
@@ -642,6 +641,11 @@
     if (signature !== lastSignature) {
       lastSignature = signature; render();
       statusReader.textContent = providers().map(p => `${p.name}: ${stateLabel(p.state)}`).join('. ');
+      const topAi = top();
+      if (topAi && ['running', 'question', 'done', 'error'].includes(topAi.state)) {
+        window.__lumadockBuddyBurst?.(topAi.state === 'error' ? 'sad' : topAi.state === 'question' ? 'curious' : 'happy',
+          `${topAi.name}: ${stateLabel(topAi.state)}`, 5000, colourOf(topAi.state));
+      }
     }
     const clock = root.querySelector('.am-clock:not([data-sid])'); if (clock) clock.textContent = `${current()?.elapsed || 0}s`;
     for (const item of current()?.list || []) {
@@ -677,8 +681,9 @@
     return Boolean(spotifyConnected && spotifyState.active && spotifyState.track && (performance.now() - lastPlayingAt) < 3500);
   };
   const needsAnswer = () => { const p = top(); return Boolean(p && (p.permission || p.state === 'question')); };
-  // Never drop into tiny pill while music is playing: keep the wide lyrics bar active
-  const medium = () => music() || Boolean(window.__lumadockFocus?.active()) || Boolean(window.__lumadockCompactMessage?.()) || Boolean(window.__lumadockNextMeeting?.()) || needsAnswer();
+  // Never drop into tiny pill while music is playing or active downloads run
+  const hasActiveDl = () => Boolean(window.__lumadockDownloads?.()?.active?.length);
+  const medium = () => music() || Boolean(window.__lumadockFocus?.active()) || Boolean(window.__lumadockCompactMessage?.()) || Boolean(window.__lumadockNextMeeting?.()) || hasActiveDl() || needsAnswer();
   window.__lumadockStatus = () => top();
   let holdClosed = false;
   window.__lumadockHoldClosed = () => { holdClosed = true; };
@@ -690,6 +695,7 @@
     const want = needsAnswer();
     const hasMusic = music();
     const hasMeet = Boolean(window.__lumadockNextMeeting?.() && !hasMusic);
+    const hasDl = Boolean(hasActiveDl() && !hasMusic && !hasMeet);
     let targetW = 300;
     if (want) {
       targetW = 440;
@@ -698,9 +704,11 @@
       targetW = 560;
     } else if (hasMeet) {
       targetW = 420;
+    } else if (hasDl) {
+      targetW = 360;
     }
 
-    const key = `${want}:${hasMusic}:${hasMeet}:${targetW}`;
+    const key = `${want}:${hasMusic}:${hasMeet}:${hasDl}:${targetW}`;
     if (key === wideFor && UI.COMPACT_W === targetW) return;
     wideFor = key;
     UI.COMPACT_W = targetW;
@@ -762,12 +770,21 @@
     const levels = window.__lumadockAudioLevels?.(), w = (x1 - x0) / count, key = count + ':' + Math.round(maxH);
     const shown = barLevels[key] ||= new Array(count).fill(0);
     const loud = levels ? Math.max(...levels) : 0;
-    ctx.save(); const colour = window.__lumadockAlbumColour || '#1ed760';
+    ctx.save();
+    const c1 = window.__lumadockAlbumColour || '#1ed760';
+    const c2 = window.__lumadockAlbumSecondary || c1;
+    let grad = c1;
+    if (c2 !== c1 && typeof ctx.createLinearGradient === 'function') {
+      grad = ctx.createLinearGradient(x0, y - maxH / 2, x1, y + maxH / 2);
+      grad.addColorStop(0, c1);
+      grad.addColorStop(1, c2);
+    }
+    ctx.fillStyle = grad;
     for (let i = 0; i < count; i++) {
-      const want = levels && loud > 0.04 ? levels[Math.floor(i * levels.length / count)] : 0;
+      const want = levels && loud > 0.03 ? levels[Math.floor(i * levels.length / count)] : 0;
       shown[i] += (want - shown[i]) * (want > shown[i] ? 0.55 : 0.18);
       const h = Math.max(2, Math.min(maxH, 2 + shown[i] * (maxH - 2)));
-      ctx.globalAlpha = 0.35 + 0.65 * Math.min(1, shown[i] * 4); ctx.fillStyle = colour;
+      ctx.globalAlpha = 0.35 + 0.65 * Math.min(1, shown[i] * 4);
       ctx.beginPath(); ctx.roundRect(x0 + i * w + w * 0.2, y - h / 2, w * 0.6, h, 1.5); ctx.fill();
     }
     ctx.restore();
@@ -916,6 +933,10 @@
       if (albumImage?.complete && albumImage.naturalWidth) {
         ctx.save(); ctx.beginPath(); ctx.roundRect(left, cy - cover / 2, cover, cover, 7); ctx.clip(); ctx.drawImage(albumImage, left, cy - cover / 2, cover, cover); ctx.restore();
       } else { box(left, cy - cover / 2, cover, cover, 7, '#1b211a'); icon('music'); }
+      const showMiniBars = Boolean(spotifyState.is_playing && window.__lumadockAudioLevels?.());
+      const barPad = showMiniBars ? 24 : 0;
+      if (showMiniBars) bars(left + cover + 6, left + cover + 26, cy, 5, 14);
+      const textStart = mid0 + barPad;
       const tr = spotifyState.track || {}, timer = focus?.active() ? 60 : 8;
       const priv = window.__lumadockPrivacy?.();
       const privW = (priv?.mic ? 10 : 0) + (priv?.cam ? 10 : 0);
@@ -953,11 +974,11 @@
         ctx.restore();
       }
       const activeLyric = window.__lumadockGetActiveLyric?.();
-      const availW = Math.max(50, mid1 - mid0 - timer - privW - ctrlW - 14);
+      const availW = Math.max(50, mid1 - textStart - timer - privW - ctrlW - 14);
       if (activeLyric && activeLyric.text) {
         ctx.save();
         ctx.beginPath();
-        ctx.rect(mid0, cy - 12, availW, 24);
+        ctx.rect(textStart, cy - 12, availW, 24);
         ctx.clip();
         if (activeLyric.text !== lastRenderedLyric) {
           prevRenderedLyric = lastRenderedLyric;
@@ -970,7 +991,7 @@
         const lrcColour = window.__lumadockAlbumColour || '#1ed760';
         if (prevRenderedLyric && swapP < 1) {
           ctx.save(); ctx.globalAlpha *= (1 - easeP) * 0.75;
-          text('♪ ' + prevRenderedLyric, mid0, cy + 4 - easeP * 6, 11.5, lrcColour, 600, 'left', availW);
+          text('♪ ' + prevRenderedLyric, textStart, cy + 4 - easeP * 6, 11.5, lrcColour, 600, 'left', availW);
           ctx.restore();
         }
         const lrcText = '♪ ' + activeLyric.text;
@@ -988,14 +1009,14 @@
           }
         }
         ctx.globalAlpha *= (0.35 + 0.65 * easeP);
-        text(lrcText, mid0 + ox, cy + 4 + (1 - easeP) * 5, 11.5, lrcColour, 600, 'left');
+        text(lrcText, textStart + ox, cy + 4 + (1 - easeP) * 5, 11.5, lrcColour, 600, 'left');
         ctx.restore();
       } else {
         lastRenderedLyric = ''; prevRenderedLyric = '';
-        const titleAvail = Math.max(40, (mid1 - mid0 - timer - privW - ctrlW) * 0.55);
-        text(tr.name || 'Spotify', mid0, cy + 4, 11.5, '#f2f5ed', 700, 'left', titleAvail);
+        const titleAvail = Math.max(40, (mid1 - textStart - timer - privW - ctrlW) * 0.55);
+        text(tr.name || 'Spotify', textStart, cy + 4, 11.5, '#f2f5ed', 700, 'left', titleAvail);
         const nameW = Math.min(titleAvail, (ctx.measureText ? (ctx.font = '700 11.5px "Segoe UI"', ctx.measureText(tr.name || 'Spotify').width) : 80));
-        if (tr.artist) text(tr.artist, mid0 + nameW + 10, cy + 4, 11, 'rgba(235,240,230,.55)', 600, 'left', Math.max(0, mid1 - timer - privW - ctrlW - mid0 - nameW - 10));
+        if (tr.artist) text(tr.artist, textStart + nameW + 10, cy + 4, 11, 'rgba(235,240,230,.55)', 600, 'left', Math.max(0, mid1 - timer - privW - ctrlW - textStart - nameW - 10));
       }
       if (focus?.active()) text(focus.label(), mid1 - 8 - privW - ctrlW, cy + 4, 11.5, '#ffd28a', 700, 'right');
       if (p) drawLamp(p, right - 18, cy);
@@ -1011,13 +1032,26 @@
       if (p?.state === 'running') text(t('monitor.claudeWorkingShort'), mid1, cy + 4, 10, '#8f998d', 600, 'right');
       return;
     }
+    const dlActive = window.__lumadockDownloads?.()?.active?.[0];
+    if (dlActive && !window.__lumadockNextMeeting?.()) {
+      const r = cover / 2 - 2, ang = (now / 450) % (Math.PI * 2);
+      ctx.save(); ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(left + cover / 2, cy, r, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(198,233,148,.16)'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(left + cover / 2, cy, r, ang, ang + Math.PI * 1.15); ctx.strokeStyle = '#c6e994'; ctx.stroke();
+      ctx.restore();
+      const mb = (dlActive.size / 1048576).toFixed(1);
+      const spd = dlActive.speedBps > 1048576 ? `${(dlActive.speedBps / 1048576).toFixed(1)} MB/s` : dlActive.speedBps > 1024 ? `${Math.round(dlActive.speedBps / 1024)} KB/s` : '';
+      text(`DL ${dlActive.name}`, mid0, cy + 4, 11.5, '#f2f5ed', 700, 'left', mid1 - mid0 - 90);
+      text(`${mb} MB${spd ? ' · ' + spd : ''}`, mid1, cy + 4, 10.5, '#c6e994', 600, 'right');
+      return;
+    }
     const meet = window.__lumadockNextMeeting?.();
     if (meet && meet.url) {
       icon('clock');
       const bw = 64, bh = 22, bx = mid1 - bw, by = cy - bh / 2;
       const overJoin = inside(pointer.x, pointer.y, { x: bx, y: by, width: bw, height: bh });
       const whenLbl = meet.mins <= 0 ? t('header.nowWord') : `${meet.mins}m`;
-      text(`📅 ${whenLbl} · ${meet.title}`, mid0, cy + 4, 11.5, '#f2f5ed', 700, 'left', bx - mid0 - 8);
+      text(`${whenLbl} · ${meet.title}`, mid0, cy + 4, 11.5, '#f2f5ed', 700, 'left', bx - mid0 - 8);
       ctx.save(); ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, bh / 2); ctx.fillStyle = overJoin ? '#d9f7b3' : '#22e05a'; ctx.fill(); ctx.restore();
       text(t('header.join'), bx + bw / 2, cy + 4, 10.5, '#09150c', 700, 'center');
       hit.cJoin = joinBox = { x: bx, y: by, width: bw, height: bh, url: meet.url };
@@ -1092,7 +1126,10 @@
   // the alarm clock shows the real time.
   const ICON_BG = { music: ['#5be38c', '#1fae55'], terminal: ['#ffb38a', '#e8744a'], timer: ['#ffd27a', '#ff9a3d'], tray: ['#8fb8ff', '#4c7ff0'], copy: ['#7fe6d8', '#22b3a3'],
     note: ['#ffe58a', '#f5b92e'], gear: ['#c9b3ff', '#8b6cf0'], clock: ['#9fc2ff', '#6c7ff0'], home: ['#d8f5a8', '#9fd45a'], pen: ['#ffb3d6', '#f0609e'],
-    cpu: ['#8ae8ff', '#2b95d6'], picker: ['#ffb3d6', '#e2498a'] };
+    cpu: ['#8ae8ff', '#2b95d6'], picker: ['#ffb3d6', '#e2498a'],
+    weather: ['#ffe38a', '#f59f2e'], net: ['#8affcf', '#1eb980'], market: ['#c9ff8a', '#55b83c'], dev: ['#ffbe8a', '#e86a3a'], command: ['#d8f5a8', '#7ac74f'],
+    github: ['#d8f5a8', '#459e36'], ports: ['#ffbe8a', '#e86a3a'], translate: ['#9ec2ff', '#427be8'], devtools: ['#d4b3ff', '#7b4be8'], vault: ['#8affdf', '#1aa878'],
+    mixer: ['#8ae8ff', '#2b95d6'], pin: ['#ffb3b8', '#e65564'], shield: ['#ffe58a', '#d89b26'] };
   // Hover: Robo climbs a bit out of his tile, grows and looks ready (happy eyes, glowing light).
   // Click: he squashes and bounces back with a few sparkles.
   const iconAnim = new Map();
@@ -1309,6 +1346,7 @@
     return arrange(swap ? [...old.slice(0, 2), claude, ...old.slice(2)] : [claude, ...old]).placed.filter(w => !w.hidden);
   }
   const getWidgets = () => widgets || (widgets = loadWidgets());
+  window.__lumadockActiveWidgetIds = () => getWidgets().map(w => w.id);
   function saveWidgets(placed) {
     widgets = placed.filter(w => !w.hidden).map(({ id, size, c, r }) => ({ id, size, c, r }));
     try { localStorage.setItem('lumadock:widgets', JSON.stringify(widgets)); } catch {}
@@ -1424,7 +1462,7 @@
   // Nothing going on: which AIs Robo is watching (or where to connect one).
   function drawIdleAi(tx, y, tw, h, live) {
     const watching = providers().filter(q => q.connected || q.hooksInstalled), last = state.history?.[0];
-    const hungry = window.__lumadockHomeTitle?.(); // "I'm hungry… finish a task 🍪" (lumadock-fun.js) instead of "Idle"
+    const hungry = window.__lumadockHomeTitle?.(); // "I'm hungry... finish a task" (lumadock-fun.js) instead of "Idle"
     text(hungry || t('status.idle'), tx, y + 30, hungry ? 13 : 14, hungry ? '#ffc27a' : '#f2f5ef', 700, 'left', tw);
     if (last) { // the last job, so a quiet card still tells you something (click it for the whole list)
       const word = { done: t('status.doneCheck'), question: t('status.questionDot'), error: t('status.errorCross') }[last.result] || '', colour = { done: '#7ef0a4', question: '#ffc27a', error: '#ff9a9a' }[last.result] || '#aab2ad';
@@ -1705,7 +1743,109 @@
       ctx.stroke(); ctx.restore();
     }
   }
-  const RENDER = { claude: claudeWidget, spotify: spotifyWidget, focus: focusWidget, note: noteWidget, clips: clipsWidget, clock: clockWidget, cpu: cpuWidget };
+  function weatherWidget(w, r, live) {
+    const wx = window.__lumadockWeather?.(), meet = window.__lumadockCalendarRaw?.();
+    const wxTag = c => c === 0 ? 'CLR' : c <= 3 ? 'CLD' : c <= 48 ? 'FOG' : c <= 67 ? 'RAIN' : c <= 77 ? 'SNOW' : c <= 82 ? 'SHW' : 'STM';
+    const tempTxt = wx ? `${wx.temp}°` : '--°';
+    const cityTxt = wx?.place || t('weatherPage.noCityShort');
+    if (w.size === 'S') {
+      window.__lumadockIcon?.('weather', r.x + 22, r.y + 20, 15, '#ffd470');
+      text(tempTxt, r.x + 40, r.y + 24, 18, '#fff', 700, 'left', r.width - 50);
+      text(meet ? meet.title : cityTxt, r.x + 14, r.y + r.height - 15, 10, '#9aa596', 500, 'left', r.width - 24);
+      return;
+    }
+    window.__lumadockIcon?.('weather', r.x + 22, r.y + 22, 16, '#ffd470');
+    text(tempTxt, r.x + 42, r.y + 30, 22, '#fff', 700);
+    text(`${cityTxt}${wx ? ' · ' + wxTag(wx.code) : ''}`, r.x + 16, r.y + 47, 10.5, '#9aa596', 500, 'left', r.width / 2 - 12);
+    if (meet) {
+      const mins = Math.round((meet.start - Date.now()) / 60000);
+      const when = mins <= 0 ? t('header.nowWord') : mins < 60 ? `${mins}m` : new Date(meet.start).toLocaleTimeString(loc(), { hour: '2-digit', minute: '2-digit' });
+      text(meet.title || t('header.meetingDefault'), r.x + r.width - 14, r.y + (w.size === 'W' ? 28 : 74), 11, '#e8ece6', 600, 'right', r.width * 0.52);
+      text(when, r.x + r.width - 14, r.y + (w.size === 'W' ? 45 : 90), 10.5, mins <= 15 ? '#22e05a' : '#8f998d', 700, 'right');
+      if (w.size === 'L' && meet.url && live) {
+        const jb = { x: r.x + 16, y: r.y + r.height - 34, width: 78, height: 22 };
+        ctx.save(); ctx.fillStyle = '#22e05a'; ctx.beginPath(); ctx.roundRect(jb.x, jb.y, jb.width, jb.height, 11); ctx.fill(); ctx.restore();
+        text(t('header.join'), jb.x + jb.width / 2, jb.y + 15, 10.5, '#09150c', 700, 'center');
+        hit.wxJoin = { ...jb, url: meet.url };
+      }
+    } else if (w.size === 'L' && wx?.forecast?.length) {
+      wx.forecast.slice(0, 3).forEach((f, i) => {
+        const fx = r.x + 16 + i * ((r.width - 32) / 3);
+        text(new Date(f.date).toLocaleDateString(loc(), { weekday: 'short' }), fx, r.y + r.height - 30, 10, '#8f998d', 600);
+        text(`${wxTag(f.code)} ${f.max}°`, fx, r.y + r.height - 14, 11.5, '#f2f5ef', 700);
+      });
+    }
+  }
+  function netWidget(w, r) {
+    const tel = window.__lumadockTelemetry?.() || { rxBps: 0, txBps: 0, diskPct: 0, diskFreeGb: 0, rxHistory: [] };
+    const st = window.__lumadockStats?.() || { cpuPct: 0, memPct: 0 };
+    const spd = b => b >= 1048576 ? `${(b / 1048576).toFixed(1)}M` : b >= 1024 ? `${Math.round(b / 1024)}K` : `${b || 0}B`;
+    if (w.size === 'S') {
+      window.__lumadockIcon?.('net', r.x + 22, r.y + 20, 15, '#5ef2b6');
+      text(`↓${spd(tel.rxBps)}`, r.x + 42, r.y + 24, 12.5, '#fff', 700, 'left', r.width - 50);
+      text(`CPU ${st.cpuPct}% · RAM ${st.memPct}%`, r.x + 14, r.y + r.height - 15, 10.5, '#9aa596', 600, 'left', r.width - 24);
+      return;
+    }
+    window.__lumadockIcon?.('net', r.x + 22, r.y + 19, 15, '#5ef2b6');
+    text(t('home.appsLabels.net'), r.x + 36, r.y + 23, 12, '#f2f5ef', 700);
+    text(`CPU ${st.cpuPct}% · RAM ${st.memPct}% · ↓ ${spd(tel.rxBps)}/s`, r.x + 16, r.y + 44, 11.5, '#dff8ba', 700, 'left', r.width - 32);
+    text(`Disk ${tel.diskPct}% (${tel.diskFreeGb || 0}G free)${tel.gpuPct != null ? ` · GPU ${tel.gpuPct}%` : ''}`, r.x + 16, r.y + 61, 10, '#8f998d', 500, 'left', r.width - 32);
+    if (w.size === 'L' && tel.rxHistory?.length > 1) {
+      const sx = r.x + 16, sy = r.y + r.height - 14, sw = r.width - 32, sh = 28;
+      const peak = Math.max(4096, ...tel.rxHistory);
+      ctx.save(); ctx.strokeStyle = 'rgba(94,242,182,.75)'; ctx.lineWidth = 1.7; ctx.beginPath();
+      tel.rxHistory.forEach((v, i) => {
+        const px = sx + (i / (tel.rxHistory.length - 1)) * sw, py = sy - Math.min(1, v / peak) * sh;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.stroke(); ctx.restore();
+    }
+  }
+  function marketWidget(w, r) {
+    const items = window.__lumadockMarket?.()?.items || [];
+    if (!items.length) return genericWidget(w, r);
+    if (w.size === 'S') {
+      const first = items[0];
+      text(first.pair, r.x + 14, r.y + 24, 10.5, '#9aa596', 600);
+      text(`${first.symbol}${first.price}`, r.x + 14, r.y + 46, 17, '#a8ff78', 700, 'left', r.width - 24);
+      return;
+    }
+    window.__lumadockIcon?.('market', r.x + 22, r.y + 19, 15, '#a8ff78');
+    text(t('home.appsLabels.market'), r.x + 36, r.y + 23, 12, '#f2f5ef', 700);
+    const maxRows = w.size === 'W' ? 2 : 4;
+    items.slice(0, maxRows).forEach((m, i) => {
+      const y = r.y + 42 + i * 22;
+      text(m.pair, r.x + 16, y, 11, '#9aa596', 600);
+      text(`${m.symbol}${m.price}`, r.x + r.width - 16, y, 12, '#e8ece6', 700, 'right');
+    });
+  }
+  function devWidget(w, r) {
+    const git = window.__lumadockGit?.(), ports = window.__lumadockPorts?.() || [];
+    if (w.size === 'S') {
+      window.__lumadockIcon?.('dev', r.x + 22, r.y + 20, 15, '#ff9d6c');
+      text(git?.branch || t('home.appsLabels.dev'), r.x + 40, r.y + 24, 11.5, '#f2f5ef', 700, 'left', r.width - 48);
+      text(ports.length ? ports.slice(0, 2).map(p => ':' + p.port).join(' ') : (git ? `${git.dirty} Δ` : t('devPage.noPortsShort')), r.x + 14, r.y + r.height - 15, 10.5, '#9aa596', 600, 'left', r.width - 24);
+      return;
+    }
+    window.__lumadockIcon?.('dev', r.x + 22, r.y + 19, 15, '#ff9d6c');
+    text(t('home.appsLabels.dev'), r.x + 36, r.y + 23, 12, '#f2f5ef', 700);
+    text(git ? `⌥ ${git.branch} · ${git.dirty} Δ` : t('devPage.noGit'), r.x + 16, r.y + 44, 11, '#ffd7ab', 600, 'left', r.width - 32);
+    const pTxt = ports.length ? ports.slice(0, 4).map(p => `:${p.port}`).join('  ') : t('devPage.noPortsShort');
+    mono(pTxt, r.x + 16, r.y + 62, 10.5, ports.length ? '#8fd65a' : '#7f8a7a', r.width - 32);
+  }
+  function commandWidget(w, r) {
+    const cols = window.__lumadockColors?.() || [];
+    if (w.size === 'S') return genericWidget(w, r);
+    window.__lumadockIcon?.('command', r.x + 22, r.y + 19, 15, '#c6e994');
+    text(t('home.appsLabels.command'), r.x + 36, r.y + 23, 12, '#f2f5ef', 700);
+    text('Ctrl + Alt + Space', r.x + r.width - 16, r.y + 23, 10, '#7f8a7a', 600, 'right');
+    cols.slice(0, 6).forEach((c, i) => {
+      ctx.save(); ctx.fillStyle = c.hex; ctx.beginPath(); ctx.arc(r.x + 24 + i * 24, r.y + 50, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+    });
+    if (!cols.length) text(t('command.placeholder'), r.x + 16, r.y + 50, 10.5, '#7f8a7a', 500, 'left', r.width - 32);
+  }
+  const RENDER = { claude: claudeWidget, spotify: spotifyWidget, focus: focusWidget, note: noteWidget, clips: clipsWidget, clock: clockWidget, cpu: cpuWidget, weather: weatherWidget, net: netWidget, market: marketWidget, dev: devWidget, github: devWidget, ports: devWidget, command: commandWidget };
   function drawWidget(w, r, live) {
     if (w.id === 'claude' && w.size === 'L') return drawClaudeCard(r.x, r.y, r.width, r.height, live);
     widgetBg(r, live ? APPS[w.id].key : null);
@@ -1808,18 +1948,18 @@
       text(t('home.presets.' + p.id), tx + tw + 10, py + ph / 2 + 4, 11.5, '#e8ece6', 700, 'left', pw - tw - 26);
       hit['hmPreset_' + i] = b;
     });
-    // left: all apps
-    const by = py + ph + 10, colW = 122, rowH = 29, onHome = getWidgets().map(w => w.id);
+    // left: all apps (3 compact columns so 18+ apps fit comfortably)
+    const by = py + ph + 8, colW = 90, rowH = 23, colsG = 3, onHome = getWidgets().map(w => w.id);
     Object.keys(APPS).filter(id => installed(id)).forEach((id, i) => {
-      const a = APPS[id], bx = x + (i % 2) * (colW + 6), byy = by + Math.floor(i / 2) * (rowH + 5), b = { x: bx, y: byy, width: colW, height: rowH }, sel = gallery.pick === id, over = inside(pointer.x, pointer.y, b);
-      ctx.save(); ctx.beginPath(); ctx.roundRect(bx, byy, colW, rowH, 10); ctx.fillStyle = sel ? 'rgba(198,233,148,.14)' : over ? '#202326' : '#16181a'; ctx.fill(); if (sel) { ctx.strokeStyle = 'rgba(198,233,148,.6)'; ctx.stroke(); } ctx.restore();
-      appIcon(bx + 5, byy + 4, 21, a.icon, a.tint(), b);
-      text(a.label, bx + 33, byy + 19, 11.5, '#eef2ec', 600, 'left', colW - 52);
-      if (onHome.includes(id)) { ctx.save(); ctx.beginPath(); ctx.arc(bx + colW - 12, byy + rowH / 2, 5, 0, Math.PI * 2); ctx.fillStyle = '#c6e994'; ctx.fill(); ctx.restore(); }
+      const a = APPS[id], bx = x + (i % colsG) * (colW + 4), byy = by + Math.floor(i / colsG) * (rowH + 3), b = { x: bx, y: byy, width: colW, height: rowH }, sel = gallery.pick === id, over = inside(pointer.x, pointer.y, b);
+      ctx.save(); ctx.beginPath(); ctx.roundRect(bx, byy, colW, rowH, 8); ctx.fillStyle = sel ? 'rgba(198,233,148,.14)' : over ? '#202326' : '#16181a'; ctx.fill(); if (sel) { ctx.strokeStyle = 'rgba(198,233,148,.6)'; ctx.stroke(); } ctx.restore();
+      appIcon(bx + 4, byy + 3, 17, a.icon, a.tint(), b);
+      text(a.label, bx + 25, byy + 15, 10, '#eef2ec', 600, 'left', colW - 36);
+      if (onHome.includes(id)) { ctx.save(); ctx.beginPath(); ctx.arc(bx + colW - 8, byy + rowH / 2, 3, 0, Math.PI * 2); ctx.fillStyle = '#c6e994'; ctx.fill(); ctx.restore(); }
       hit['hmGalApp_' + id] = b;
     });
     // right: sizes + live preview + button
-    const rx = x + colW * 2 + 26, rw = x + W - rx, sy = by;
+    const rx = x + colW * colsG + 20, rw = x + W - rx, sy = by;
     ['S', 'W', 'L'].forEach((s, i) => chip(rx + i * 80, sy, 72, 26, sizeName(s), gallery.size === s, 'hmGalSize_' + s));
     const res = galleryResult();
     const bw = 130, bb = { x: x + W - bw, y: sy, width: bw, height: 26 };
@@ -1905,45 +2045,107 @@
     } else if (inside(event.clientX, event.clientY, hit.focusQuick)) { stop(); window.__lumadockFocus?.toggle(); }
   }, true);
 
-  // ---- Apps (the + button): a grid of app tiles, each with a live status line ----
+  // ---- Apps: spacious 3-column vector Robo tiles with smooth wheel scroll so every full name & sub-tools read clearly ----
   const TILE_TINT = { music: '#1ed760', terminal: '#c6e994', timer: '#ffb35c', tray: '#8ab4ff', gear: '#b9c2b4' };
+  let appsScroll = 0, appsMaxScroll = 0;
+  canvas.addEventListener('wheel', e => {
+    if (currentView === 'apps' && mode === 'expanded' && appsMaxScroll > 0) {
+      appsScroll = Math.max(0, Math.min(appsMaxScroll, appsScroll + e.deltaY * 0.6));
+      e.preventDefault();
+    }
+  }, { passive: false });
+
   function tile(x, y, w, h, iconName, name, status, key, tint) {
     const over = card(x, y, w, h, key, tint);
-    const iy = y + (h - 40) / 2;
-    appIcon(x + 14, iy, 40, iconName, tint, { x, y, width: w, height: h });
-    text(name, x + 66, y + h / 2 - 2, 13, '#fff', 700, 'left', w - 92);
-    text(status, x + 66, y + h / 2 + 15, 10.5, '#8f998d', 500, 'left', w - 80);
-    if (over) text('›', x + w - 18, y + h / 2 + 6, 18, 'rgba(255,255,255,.55)', 400, 'center');
+    const sz = Math.min(36, Math.max(28, h - 16));
+    const iy = y + (h - sz) / 2;
+    appIcon(x + 11, iy, sz, iconName, tint, { x, y, width: w, height: h });
+    const tx = x + sz + 20;
+    text(name, tx, y + h / 2 - 3, 12.5, '#fff', 700, 'left', Math.max(60, w - (sz + 34)));
+    text(status, tx, y + h / 2 + 14, 10, '#8f998d', 500, 'left', Math.max(60, w - (sz + 30)));
+    if (over) text('›', x + w - 13, y + h / 2 + 5, 16, 'rgba(255,255,255,.55)', 400, 'center');
   }
   drawApps = function (area) {
     const PAGE = window.__lumadockPage, focus = window.__lumadockFocus, p = top();
-    PAGE.title(area, t('home.allApps'), t('home.allAppsSub'));
-    const cols = 4, x = area.x + PAGE.contentX, gap = 10, w = Math.floor((area.width - PAGE.contentX * 2 - gap * (cols - 1)) / cols);
+    PAGE.title(area, t('home.allApps'), t('appsDir.subtitle'));
     const tray = window.__lumadockTrayCount?.() || 0;
     const st = window.__lumadockStats?.();
+    const wx = window.__lumadockWeather?.(), tel = window.__lumadockTelemetry?.(), mkt = window.__lumadockMarket?.()?.items?.[0], git = window.__lumadockGit?.(), ports = window.__lumadockPorts?.() || [];
+    const spd = b => b >= 1048576 ? `${(b / 1048576).toFixed(1)}M` : b >= 1024 ? `${Math.round(b / 1024)}K` : `${b || 0}B`;
+    const gh = window.__lumadockGitHubData?.();
     const tiles = [
-      ['music', 'Spotify', spotifyState.track ? short(spotifyState.track.name, 22) : (spotifyConnected ? t('home.noMusic') : t('status.notConnected')), 'spotifyApp', window.__lumadockAlbumColour || TILE_TINT.music],
-      ['terminal', 'AI', p ? p.name + ' · ' + (p.detail || stateLabel(p.state)) : 'Claude, ChatGPT, Codex', 'monitor_claudecode', p ? colourOf(p.state) : TILE_TINT.terminal],
-      ['timer', t('focus.title'), focus?.active() ? `${focus.label()}` : t('focus.minutesUnit', { n: focus?.minutes?.() || 25 }), 'focusApp', TILE_TINT.timer],
-      ['tray', t('home.appsLabels.tray'), tray ? tn('monitor.files', tray) : t('home.empty'), 'trayApp', TILE_TINT.tray],
-      ['copy', t('home.appsLabels.clips'), t('home.recentClippings'), 'clipsApp', '#5ad1c4'],
-      ['note', t('home.appsLabels.note'), t('home.quickNote'), 'noteApp', '#ffd166'],
-      ['cpu', t('home.appsLabels.system'), st ? `CPU ${st.cpuPct}% · RAM ${st.memPct}%` : 'CPU & RAM', 'cpuApp', '#7fd8ff'],
-      ['picker', t('home.appsLabels.picker'), lastPickedColour || t('home.pickScreenColor'), 'pickerApp', lastPickedColour || '#ff85b3'],
+      ['music', 'Spotify / Medya', spotifyState.track ? short(spotifyState.track.name, 22) : (spotifyConnected ? t('home.noMusic') : t('status.notConnected')), 'spotifyApp', window.__lumadockAlbumColour || TILE_TINT.music],
+      ['terminal', t('appsDir.aiName'), p ? p.name + ' · ' + (p.detail || stateLabel(p.state)) : 'Claude, Codex, Gemini', 'monitor_claudecode', p ? colourOf(p.state) : TILE_TINT.terminal],
+      ['timer', t('appsDir.focusName'), focus?.active() ? `${focus.label()}` : t('appsDir.focusShort'), 'focusApp', TILE_TINT.timer],
+      ['tray', t('appsDir.trayName'), tray ? tn('monitor.files', tray) : t('appsDir.trayShort'), 'trayApp', TILE_TINT.tray],
+      ['copy', t('appsDir.clipsName'), t('appsDir.clipsShort'), 'clipsApp', '#5ad1c4'],
+      ['note', t('appsDir.noteName'), t('appsDir.noteShort'), 'noteApp', '#ffd166'],
+      ['mixer', t('appsDir.mixerName'), window.__lumadockContextState?.()?.ducked ? t('studio.duckShort') : t('studio.mixerShort'), 'mixerApp', '#7fd8ff'],
+      ['pin', t('appsDir.studioName'), t('appsDir.studioShort'), 'studioApp', '#ff9a9e'],
+      ['shield', t('appsDir.relayName'), t('appsDir.relayShort'), 'relayApp', '#ffd166'],
+      ['net', t('appsDir.sysNetName'), st && tel ? `${st.cpuPct}% CPU · ${st.memPct}% RAM · D ${spd(tel.rxBps)}` : 'System & Net', 'netApp', '#5ef2b6'],
+      ['github', t('appsDir.githubName'), gh?.ok ? `${gh.currentStreak || 0}d streak · ${(gh.prs || []).length} PR` : (git ? `${git.branch}` : 'Streak, PR, Git'), 'githubApp', '#c6e994'],
+      ['ports', t('appsDir.portsName'), ports.length ? `${ports.length} ports` : t('appsDir.portsShort'), 'portsApp', '#ff9d6c'],
+      ['translate', t('appsDir.translateName'), t('appsDir.translateShort'), 'translateApp', '#7fb2ff'],
+      ['devtools', t('appsDir.devtoolsName'), t('appsDir.devtoolsShort'), 'devtoolsApp', '#b98cff'],
+      ['vault', t('appsDir.vaultName'), t('appsDir.vaultShort'), 'vaultApp', '#38f8b2'],
+      ['weather', t('appsDir.weatherName'), wx ? `${wx.temp}° ${wx.place}` : t('weatherPage.noCityShort'), 'weatherApp', '#ffd470'],
+      ['market', t('appsDir.marketName'), mkt ? `${mkt.pair} ${mkt.symbol}${mkt.price}` : 'FX & Crypto', 'marketApp', '#a8ff78'],
+      ['command', t('appsDir.commandName'), 'Ctrl+Alt+Space', 'commandApp', '#c6e994'],
+      ['picker', t('appsDir.pickerName'), lastPickedColour || t('home.pickScreenColor'), 'pickerApp', lastPickedColour || '#ff85b3'],
       ['gear', t('home.appsLabels.settings'), t('home.colorsSoundMore'), 'settingsApp', TILE_TINT.gear]
     ];
-    // apps you removed in LumaDock Settings → Apps are not here (Settings itself always is)
+    // apps you removed in LumaDock Settings -> Apps are not here (Settings itself always is)
     const off = window.__lumadockAppsOff?.() || new Set(), shown = tiles.filter(tileItem => !off.has(APP_OF_KEY[tileItem[3]]));
-    const rows = Math.max(2, Math.ceil((shown.length + 1) / cols));
-    const y = area.y + PAGE.bodyY, h = Math.min(84, Math.floor((area.height - PAGE.bodyY - gap * (rows - 1) - 4) / rows));
     for (const tileItem of tiles) if (!shown.includes(tileItem)) delete hit[tileItem[3]];
-    shown.forEach(([icon, name, status, key, tint], i) => tile(x + (i % cols) * (w + gap), y + Math.floor(i / cols) * (h + gap), w, h, icon, name, status, key, tint));
-    // next free spot: the Robo tip
-    const tipAt = Math.min(shown.length, cols * rows - 1), tx = x + (tipAt % cols) * (w + gap), ty = y + Math.floor(tipAt / cols) * (h + gap);
-    ctx.save(); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.roundRect(tx + 0.5, ty + 0.5, w - 1, h - 1, 15.5); ctx.strokeStyle = 'rgba(255,255,255,.1)'; ctx.stroke(); ctx.restore();
-    text(t('home.tip'), tx + 16, ty + h / 2 - 16, 9.5, '#c6e994', 700);
-    text('Ctrl + Alt + T', tx + 16, ty + h / 2 + 2, 13, '#fff', 700, 'left', w - 32);
-    text(t('home.openAnywhere'), tx + 16, ty + h / 2 + 18, 10.5, '#8f998d', 500, 'left', w - 32);
+    const cols = 3;
+    const x = area.x + PAGE.contentX, gap = 10, w = Math.floor((area.width - PAGE.contentX * 2 - gap * (cols - 1)) / cols);
+    const rows = Math.max(2, Math.ceil((shown.length + 1) / cols));
+    const h = 52;
+    const bodyTop = area.y + PAGE.bodyY;
+    const viewH = Math.max(100, area.y + area.height - bodyTop - 6);
+    const totalH = rows * h + (rows - 1) * gap;
+    appsMaxScroll = Math.max(0, totalH - viewH);
+    appsScroll = Math.max(0, Math.min(appsMaxScroll, appsScroll));
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x - 4, bodyTop - 2, area.width - PAGE.contentX * 2 + 8, viewH + 4);
+    ctx.clip();
+
+    shown.forEach(([icon, name, status, key, tint], i) => {
+      const ty = bodyTop + Math.floor(i / cols) * (h + gap) - appsScroll;
+      if (ty + h < bodyTop - 4 || ty > bodyTop + viewH + 4) { delete hit[key]; return; }
+      tile(x + (i % cols) * (w + gap), ty, w, h, icon, name, status, key, tint);
+      const hb = hit[key];
+      if (hb) {
+        const clippedTop = Math.max(bodyTop, hb.y);
+        const clippedBottom = Math.min(bodyTop + viewH, hb.y + hb.height);
+        if (clippedBottom > clippedTop) hit[key] = { ...hb, y: clippedTop, height: clippedBottom - clippedTop };
+        else delete hit[key];
+      }
+    });
+
+    // Tip card at end
+    const tipIdx = shown.length;
+    const tx = x + (tipIdx % cols) * (w + gap), ty = bodyTop + Math.floor(tipIdx / cols) * (h + gap) - appsScroll;
+    if (ty + h >= bodyTop - 4 && ty <= bodyTop + viewH + 4) {
+      ctx.save(); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.roundRect(tx + 0.5, ty + 0.5, w - 1, h - 1, 15.5); ctx.strokeStyle = 'rgba(255,255,255,.1)'; ctx.stroke(); ctx.restore();
+      text(t('home.tip'), tx + 14, ty + 16, 9, '#c6e994', 700);
+      text('Ctrl+Alt+Space / S / P', tx + 14, ty + 32, 11.5, '#fff', 700, 'left', w - 28);
+      text(t('home.openAnywhere'), tx + 14, ty + 45, 9.5, '#8f998d', 500, 'left', w - 28);
+    }
+    ctx.restore();
+
+    if (appsMaxScroll > 2) {
+      const sbX = area.x + area.width - PAGE.contentX + 6;
+      const thumbH = Math.max(24, Math.round((viewH / totalH) * viewH));
+      const thumbY = bodyTop + Math.round((appsScroll / appsMaxScroll) * (viewH - thumbH));
+      ctx.save();
+      ctx.beginPath(); ctx.roundRect(sbX, bodyTop, 3, viewH, 2); ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fill();
+      ctx.beginPath(); ctx.roundRect(sbX, thumbY, 3, thumbH, 2); ctx.fillStyle = 'rgba(198,233,148,.45)'; ctx.fill();
+      ctx.restore();
+    }
     delete hit.todayApp; delete hit.assistantApp; delete hit.projectApp;
   };
   // ---- Your shortcuts (the + button): you choose which apps are here (max 4). The same apps are on the home card. ----
@@ -1954,15 +2156,27 @@
     tray: { icon: 'tray', get label() { return t('home.appsLabels.tray'); }, key: 'trayApp', tint: () => '#7ab8ff' },
     clips: { icon: 'copy', get label() { return t('home.appsLabels.clips'); }, key: 'clipsApp', tint: () => '#5ad1c4' },
     note: { icon: 'note', get label() { return t('home.appsLabels.note'); }, key: 'noteApp', tint: () => '#ffd166' },
-    cpu: { icon: 'cpu', get label() { return t('home.appsLabels.system'); }, key: 'cpuApp', tint: () => '#7fd8ff' },
+    net: { icon: 'net', get label() { return t('home.appsLabels.net'); }, key: 'netApp', tint: () => '#5ef2b6' },
+    github: { icon: 'github', get label() { return t('appsDir.githubName'); }, key: 'githubApp', tint: () => '#c6e994' },
+    ports: { icon: 'ports', get label() { return t('appsDir.portsName'); }, key: 'portsApp', tint: () => '#ff9d6c' },
+    translate: { icon: 'translate', get label() { return t('appsDir.translateName'); }, key: 'translateApp', tint: () => '#7fb2ff' },
+    devtools: { icon: 'devtools', get label() { return t('appsDir.devtoolsName'); }, key: 'devtoolsApp', tint: () => '#b98cff' },
+    vault: { icon: 'vault', get label() { return t('appsDir.vaultName'); }, key: 'vaultApp', tint: () => '#38f8b2' },
+    weather: { icon: 'weather', get label() { return t('home.appsLabels.weather'); }, key: 'weatherApp', tint: () => '#ffd470' },
+    market: { icon: 'market', get label() { return t('home.appsLabels.market'); }, key: 'marketApp', tint: () => '#a8ff78' },
+    command: { icon: 'command', get label() { return t('home.appsLabels.command'); }, key: 'commandApp', tint: () => '#c6e994' },
+    mixer: { icon: 'mixer', get label() { return t('home.appsLabels.mixer'); }, key: 'mixerApp', tint: () => '#7fd8ff' },
+    studio: { icon: 'pin', get label() { return t('home.appsLabels.studio'); }, key: 'studioApp', tint: () => '#ff9a9e' },
+    relay: { icon: 'shield', get label() { return t('home.appsLabels.relay'); }, key: 'relayApp', tint: () => '#ffd166' },
     picker: { icon: 'picker', get label() { return t('home.appsLabels.picker'); }, key: 'pickerApp', tint: () => lastPickedColour || '#ff85b3' },
     settings: { icon: 'gear', get label() { return t('home.appsLabels.settings'); }, key: 'settingsApp', tint: () => '#b98cff' },
     clock: { icon: 'clock', get label() { return t('home.appsLabels.clock'); }, key: 'clockApp', tint: () => '#8ab4ff' }
   };
+  const APP_ALIAS = { cpu: 'net', dev: 'github' };
   const APP_OF_KEY = Object.fromEntries(Object.entries(APPS).map(([id, a]) => [a.key, id]));
   const MAX_SHORTCUTS = 4, DEFAULT_SHORTCUTS = ['spotify', 'focus', 'tray', 'settings'];
-  const installed = id => !(window.__lumadockAppsOff?.() || new Set()).has(id);
-  const shortcuts = () => { try { const v = JSON.parse(localStorage.getItem('lumadock:shortcuts')); if (Array.isArray(v) && v.length) return v.filter(id => APPS[id] && installed(id)).slice(0, MAX_SHORTCUTS); } catch {} return DEFAULT_SHORTCUTS.filter(installed); };
+  const installed = id => !(window.__lumadockAppsOff?.() || new Set()).has(APP_ALIAS[id] || id);
+  const shortcuts = () => { try { const v = JSON.parse(localStorage.getItem('lumadock:shortcuts')); if (Array.isArray(v) && v.length) return [...new Set(v.map(id => APP_ALIAS[id] || id))].filter(id => APPS[id] && installed(id)).slice(0, MAX_SHORTCUTS); } catch {} return DEFAULT_SHORTCUTS.filter(installed); };
   const saveShortcuts = list => { try { localStorage.setItem('lumadock:shortcuts', JSON.stringify(list)); } catch {} };
   window.__lumadockShortcuts = shortcuts;
   let editShortcuts = false;
@@ -1974,7 +2188,18 @@
     if (id === 'tray') return tray ? tn('monitor.files', tray) : t('home.empty');
     if (id === 'clips') return t('home.recentClips');
     if (id === 'note') return t('home.writeNote');
-    if (id === 'cpu') return st ? `CPU ${st.cpuPct}% · RAM ${st.memPct}%` : 'CPU & RAM';
+    if (id === 'net') { const tel = window.__lumadockTelemetry?.(); return st && tel ? `CPU ${st.cpuPct}% · Disk ${tel.diskPct}%` : 'System & Net'; }
+    if (id === 'github') { const gh = window.__lumadockGitHubData?.(); return gh?.ok ? `${gh.currentStreak || 0}d · ${(gh.prs || []).length} PR` : 'GitHub & Git'; }
+    if (id === 'ports') { const pts = window.__lumadockPorts?.() || []; return pts.length ? `${pts.length} ports` : t('appsDir.portsShort'); }
+    if (id === 'translate') return t('appsDir.translateShort');
+    if (id === 'devtools') return t('appsDir.devtoolsShort');
+    if (id === 'vault') return t('appsDir.vaultShort');
+    if (id === 'weather') { const wx = window.__lumadockWeather?.(); return wx ? `${wx.temp}° ${wx.place}` : t('weatherPage.noCityShort'); }
+    if (id === 'market') { const mkt = window.__lumadockMarket?.()?.items?.[0]; return mkt ? `${mkt.pair} ${mkt.symbol}${mkt.price}` : 'FX & Crypto'; }
+    if (id === 'command') return 'Ctrl+Alt+Space';
+    if (id === 'mixer') return t('studio.mixerShort');
+    if (id === 'studio') return 'Snip & Pin';
+    if (id === 'relay') return 'AI & Build';
     if (id === 'picker') return lastPickedColour || t('home.pickColor');
     if (id === 'clock') return new Date().toLocaleTimeString(loc(), { hour: '2-digit', minute: '2-digit' });
     return t('home.colorsAndSound');
@@ -2047,12 +2272,15 @@
   canvas.addEventListener('click', event => {
     // A tap on Robo himself is for Robo (he hops, gets angry, gets dizzy), not for the card he stands on.
     if (mode === 'expanded' && inside(event.clientX, event.clientY, hit.ghost)) return;
+    if (mode === 'expanded' && !['home', 'apps', 'shortcuts'].includes(currentView)) return;
     if (mode === 'expanded' && inside(event.clientX, event.clientY, hit.pickerApp)) {
       event.preventDefault(); event.stopImmediatePropagation(); sound('click');
-      api.buddyPickColor?.().then(res => {
+      const runPicker = api.eyedropperStart ? api.eyedropperStart('picker') : api.buddyPickColor?.();
+      runPicker?.then(res => {
         if (res?.ok && res.hex) {
           lastPickedColour = res.hex;
-          window.__lumadockFlash?.('🎨 ' + t('home.copiedColor', { hex: res.hex }), 2500);
+          window.dispatchEvent(new CustomEvent('lumadock:badge', { detail: 'picker_pro' }));
+          window.__lumadockFlash?.(t('home.copiedColor', { hex: res.hex }), 2500);
           window.__lumadockChime?.('pop');
         }
       }).catch(() => {});
@@ -2060,9 +2288,25 @@
     }
     if (mode === 'expanded' && inside(event.clientX, event.clientY, hit.cpuApp)) {
       event.preventDefault(); event.stopImmediatePropagation(); sound('click');
-      const st = window.__lumadockStats?.();
-      if (st) window.__lumadockFlash?.(`💻 CPU ${st.cpuPct}% · RAM ${st.memUsedGb}/${st.memTotalGb} GB (${st.memPct}%)`, 2800);
+      setView('net');
       return;
+    }
+    if (mode === 'expanded' && hit.wxJoin?.url && inside(event.clientX, event.clientY, hit.wxJoin)) {
+      event.preventDefault(); event.stopImmediatePropagation(); sound('click');
+      api.openExternalUrl?.(hit.wxJoin.url);
+      return;
+    }
+    for (const [k, v] of [
+      ['weatherApp', 'weather'], ['netApp', 'net'], ['marketApp', 'market'],
+      ['githubApp', 'github'], ['portsApp', 'ports'], ['devApp', 'ports'],
+      ['translateApp', 'translate'], ['devtoolsApp', 'devtools'], ['vaultApp', 'vault'],
+      ['commandApp', 'command'], ['mixerApp', 'mixer'], ['studioApp', 'studio'], ['relayApp', 'relay']
+    ]) {
+      if (mode === 'expanded' && inside(event.clientX, event.clientY, hit[k])) {
+        event.preventDefault(); event.stopImmediatePropagation(); sound('click');
+        setView(v);
+        return;
+      }
     }
     // one of the little bots on the AI card: open that chat
     for (const [key, box] of Object.entries(hit)) {
