@@ -273,7 +273,7 @@
     if (r?.ok) {
       devicesOpen = false;
       devicesNote = '';
-      window.__lumadockFlash?.('🔊  ' + device.name, 1200);
+      window.__lumadockFlash?.(device.name, 1200);
       window.__lumadockChime?.('pop');
       setTimeout(() => refreshSpotify(), 250);
     } else {
@@ -298,7 +298,7 @@
     const modalOpen = playlistsOpen || devicesOpen;
     hit.ghost = null;
 
-    if (!spotifyConnected) {
+    if (!spotifyConnected && !track) {
       window.__lumadockIcon?.('music', left + 24, top + 40, 30);
       text(st('connectTitle'), left + 56, top + 36, 19, '#fff', 700);
       text(st('connectSub'), left + 56, top + 56, 12, '#9aa596');
@@ -334,7 +334,8 @@
     } else {
       const over = !modalOpen && inside(pointer.x, pointer.y, { x, y: top + 10, width: w - vizW - 16, height: 24 });
       text(track.name, x, top + 26, 17, over ? colour : '#fff', 700, 'left', w - vizW - 16);
-      text(track.artist, x, top + 44, 12, 'rgba(235,240,230,.62)', 500, 'left', w - vizW - 16);
+      const artistSub = [track.artist, spotifyState.appLabel && spotifyState.appLabel !== 'Spotify' ? spotifyState.appLabel : ''].filter(Boolean).join(' · ');
+      text(artistSub, x, top + 44, 12, 'rgba(235,240,230,.62)', 500, 'left', w - vizW - 16);
       if (!modalOpen) hit.spTitle = { x, y: top + 10, width: w - vizW, height: 24 };
 
       if (lrcEnabled) {
@@ -392,6 +393,12 @@
     control3(cx - 58, cy, 18, 'prev', 'spPrev', false, modalOpen);
     control3(cx, cy, 21, spotifyState.is_playing ? 'pause' : 'play', 'spPlay', true, modalOpen);
     control3(cx + 58, cy, 18, 'next', 'spNext', false, modalOpen);
+
+    // Live audio spectrum visualizer to the left of playback controls
+    if (spotifyState.is_playing && window.__lumadockBars) {
+      const specEnd = Math.min(cx - 88, x + 132);
+      if (specEnd - x >= 44) window.__lumadockBars(x, specEnd, cy, 14, 18);
+    }
 
     // Open in Spotify button
     const ox = right - 14, overOpen = !modalOpen && inside(pointer.x, pointer.y, { x: ox - 15, y: cy - 15, width: 30, height: 30 });
