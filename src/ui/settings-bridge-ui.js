@@ -122,11 +122,21 @@
     await new Promise(r => setTimeout(r, 120));
   }
 
-  // req: { kind: 'list' | 'click' | 'save' | 'discard' | 'apps' | 'app', ... }
+  // req: { kind: 'list' | 'click' | 'save' | 'discard' | 'apps' | 'app' | 'set-pref', ... }
   window.__lumadockRemoteSettings = async req => {
     const which = (req?.which === 'character' || req?.which === 'karakter') ? 'character' : 'general';
     if (req?.kind === 'save') await saveDraft();
     if (req?.kind === 'discard') { draft = null; window.__lumadockPreviewPrefs(null); }
+    if (req?.kind === 'set-pref') {
+      const d = begin();
+      const allowed = new Set(['body', 'eye', 'lightBusy', 'lightDone', 'lightError']);
+      const val = String(req?.value || '').trim();
+      if (allowed.has(req?.key) && /^#[0-9a-f]{6}$/i.test(val)) {
+        d.prefs[req.key] = val.toLowerCase();
+        window.__lumadockPreviewPrefs(d.prefs);
+      }
+      return { html: await list(which), info: info() };
+    }
     if (req?.kind === 'apps' || req?.kind === 'app') {
       const d = begin();
       if (req.kind === 'app' && /^[a-z]+$/.test(req.id || '')) {

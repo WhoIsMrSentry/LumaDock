@@ -12,6 +12,7 @@
   const DEFAULTS = { lang: 'en', speed: 'fast', focusMin: 25, focusSec: 1500, eye: 'mint', body: 'cloud', palette: 'classic', faces: true, blink: true,
     dance: true, confetti: true, chimes: true, notify: true, startup: true, outfit: 'auto', sleepMin: 10, warnAt: 80,
     pack: 'classic', seasonal: true, hunger: true, volumeHud: true, batteryWarn: true, appAnim: true, fullscreenHide: false, displayIndex: -1,
+    islandStyle: 'aurora', weatherFx: true, miniHud: false,
     testMode: false, name: 'LumaDock', lightBusy: '#ff9a1f', lightDone: '#22e05a', lightError: '#ff3b3b' };
   const savedPrefs = store.get('lumadock:prefs', {});
   if (!savedPrefs.newLook) { savedPrefs.body = 'cloud'; savedPrefs.newLook = true; store.set('lumadock:prefs', savedPrefs); }
@@ -44,6 +45,13 @@
   });
 
   // Cyber-Bot OLED Visor eye colours & Mecha chassis palettes
+  const isHexColor = v => /^#[0-9a-f]{6}$/i.test(String(v || '').trim());
+  const shadeHex = (hex, amt) => {
+    const n = parseInt(String(hex || '').slice(1), 16);
+    if (Number.isNaN(n)) return '#1b2634';
+    const ch = sh => Math.max(0, Math.min(255, Math.round(((n >> sh) & 255) * (1 + amt))));
+    return '#' + [ch(16), ch(8), ch(0)].map(v => v.toString(16).padStart(2, '0')).join('');
+  };
   const EYES = {
     mint: '#00e5ff',
     white: '#f0f8ff',
@@ -52,7 +60,7 @@
     purple: '#b87aff',
     gold: '#ffd23f'
   };
-  if (!EYES[prefs.eye]) prefs.eye = DEFAULTS.eye;
+  if (!EYES[prefs.eye] && !isHexColor(prefs.eye)) prefs.eye = DEFAULTS.eye;
   const BODIES = {
     cloud: ['#f2f7ff', '#b8cce4'],
     mint: ['#e8fff8', '#9ce6d0'],
@@ -65,14 +73,14 @@
     magenta: ['#822970', '#3d1135'],
     gold: ['#a87e2b', '#4d370d']
   };
-  if (!BODIES[prefs.body]) prefs.body = DEFAULTS.body;
+  if (!BODIES[prefs.body] && !isHexColor(prefs.body)) prefs.body = DEFAULTS.body;
   const SPEEDS = { fast: { t: 0.5, peek: 140, musicPeek: 900, home: 300, view: 1500, mon: 600 }, normal: { t: 0.8, peek: 260, musicPeek: 1100, home: 400, view: 2200, mon: 800 } };
 
   // All body colours use the sleek Cyber-Bot chassis ('blob' renderer in mascot.html)
   window.__lumadockLook = () => ({
-    eye: EYES[prefs.eye] || EYES.mint,
-    shell1: BODIES[prefs.body]?.[0] || BODIES.cloud[0],
-    shell2: BODIES[prefs.body]?.[1] || BODIES.cloud[1],
+    eye: isHexColor(prefs.eye) ? prefs.eye : (EYES[prefs.eye] || EYES.mint),
+    shell1: isHexColor(prefs.body) ? prefs.body : (BODIES[prefs.body]?.[0] || BODIES.cloud[0]),
+    shell2: isHexColor(prefs.body) ? shadeHex(prefs.body, -0.34) : (BODIES[prefs.body]?.[1] || BODIES.cloud[1]),
     style: 'blob'
   });
   window.__lumadockPalette = () => ({ busy: prefs.lightBusy, question: prefs.lightBusy, done: prefs.lightDone, error: prefs.lightError });
@@ -149,7 +157,7 @@
   ];
   const outfitName = o => t('fun.outfits.' + o.id);
   let doneCount = store.get('lumadock:done-count', 0);
-  const unlocked = id => doneCount >= (OUTFITS.find(o => o.id === id)?.at ?? Infinity) || (!!OUTFITS.find(o => o.id === id) && !window.__lumadockLicense?.().locked.includes('outfits'));
+  const unlocked = () => true;
   function season() {
     if (!prefs.seasonal) return null;
     const d = new Date(), m = d.getMonth() + 1, day = d.getDate();
@@ -159,61 +167,79 @@
     return null;
   }
   const outfit = () => prefs.outfit === 'none' ? null
-    : prefs.outfit !== 'auto' && unlocked(prefs.outfit) ? prefs.outfit
-    : season() || [...OUTFITS].reverse().find(o => unlocked(o.id))?.id || null;
+    : prefs.outfit !== 'auto' ? prefs.outfit
+    : season() || 'crown';
   if (!['auto', 'none', ...OUTFITS.map(o => o.id)].includes(prefs.outfit)) prefs.outfit = DEFAULTS.outfit;
   window.__lumadockOutfitOn = () => { const o = outfit(); return Boolean(o && o !== 'shades' && o !== 'headphones'); };
   window.__lumadockCurrentOutfit = () => outfit();
-  window.__lumadockOutfits = { count: () => doneCount, next: () => OUTFITS.find(o => doneCount < o.at) || null };
-  function countDone(status) {
+  window.__lumadockOutfits = { count: () => doneCount, next: () => null };
+  function countDone() {
     doneCount++; store.set('lumadock:done-count', doneCount);
     window.__lumadockMonitor?.refresh?.();
     feed(25);
-    const fresh = OUTFITS.find(o => o.at === doneCount);
-    if (fresh) {
-      say(
-        t('fun.gearUnlockedTitle'),
-        t('fun.gearUnlockedBody', { count: doneCount, name: outfitName(fresh) })
-      );
-      chime('party'); confetti(); feel('heart', 2000);
-    }
-    const hour = new Date().getHours();
-    earn('first'); if (doneCount >= 10) earn('ten'); if (doneCount >= 50) earn('fifty');
-    if (hour < 5) earn('owl'); if (hour >= 5 && hour < 7) earn('bird');
-    if ((status?.elapsed || 0) >= 900) earn('marathon');
-    if (unlocked('crown')) earn('fashion');
+    if (doneCount >= 10) earn('ai_10');
   }
 
-  // ---------- achievements ----------
+  // ---------- achievements (GitHub & LumaDock milestones — zero locks) ----------
   const BADGES = [
-    { id: 'first', icon: '🌱' },
-    { id: 'ten', icon: '🔟' },
-    { id: 'fifty', icon: '🏅' },
-    { id: 'helper', icon: '💬' },
-    { id: 'owl', icon: '🦉' },
-    { id: 'bird', icon: '🐦' },
-    { id: 'marathon', icon: '🏃' },
-    { id: 'focus', icon: '🎯' },
-    { id: 'dj', icon: '🎧' },
-    { id: 'tray', icon: '📥' },
-    { id: 'mirror', icon: '🪞' },
-    { id: 'fashion', icon: '👑' }
+    { id: 'gh_streak_3', icon: 'flame' },
+    { id: 'gh_streak_7', icon: 'fire' },
+    { id: 'gh_streak_30', icon: 'crown' },
+    { id: 'gh_contrib_100', icon: 'commit' },
+    { id: 'gh_star', icon: 'star' },
+    { id: 'gh_pr', icon: 'pr' },
+    { id: 'focus_5', icon: 'timer' },
+    { id: 'dj_10', icon: 'music' },
+    { id: 'tray_5', icon: 'tray' },
+    { id: 'snip_ocr', icon: 'scan' },
+    { id: 'ai_10', icon: 'spark' },
+    { id: 'picker_pro', icon: 'picker' }
   ];
-  const badges = new Set(store.get('lumadock:badges', []));
+  const BADGE_PATHS = {
+    flame: '<path d="M12 3c2 3 5 5 5 9a5 5 0 1 1-10 0c0-2 1-4 2.5-5.5C10 8 11 9 11 9s-.5-3 1-6Z"/>',
+    fire: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.4-.5-2-1-3 1 1 2 2 2 2s1-3 2-5c2 2.5 4 5 4 8a6 6 0 1 1-12 0c0-1 .3-2 1-3 .2 1.2.8 2.5 1.5 3.5Z"/>',
+    crown: '<path d="m3 17 2-9 5 4 2-6 2 6 5-4 2 9H3Z"/>',
+    commit: '<circle cx="12" cy="12" r="3"/><path d="M3 12h6M15 12h6"/>',
+    star: '<path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6-5.4-2.8L6.6 19.7l1-6-4.4-4.3 6.1-.9Z"/>',
+    pr: '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M6 8.5v7M14 6h1.5a2.5 2.5 0 0 1 2.5 2.5v7"/>',
+    timer: '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2 2M9 3h6"/>',
+    music: '<path d="M9 17V6l9-2v11"/><circle cx="7" cy="17" r="2"/><circle cx="16" cy="15" r="2"/>',
+    tray: '<path d="M3 13h5l2 2h4l2-2h5v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Z"/><path d="M12 4v7m-3-3 3 3 3-3"/>',
+    scan: '<path d="M4 8V5h3M17 5h3v3M4 16v3h3M17 19h3v-3M7 12h10"/>',
+    spark: '<path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z"/>',
+    picker: '<path d="m15 5 4 4-9.5 9.5H5.5v-4L15 5Z"/>'
+  };
+  const badgeSvg = icon => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${BADGE_PATHS[icon] || BADGE_PATHS.star}</svg>`;
+  const validIds = new Set(BADGES.map(b => b.id));
+  const badges = new Set(store.get('lumadock:badges', []).filter(id => validIds.has(id)));
   const counters = store.get('lumadock:counters', {});
   function earn(id) {
     if (badges.has(id)) return;
     const b = BADGES.find(x => x.id === id); if (!b) return;
     badges.add(id); store.set('lumadock:badges', [...badges]);
-    say(`${b.icon} ${t('fun.badges.achievementLabel')}: ${t(`fun.badges.${id}.name`)}`, t(`fun.badges.${id}.how`));
+    say(`${t('fun.badges.achievementLabel')}: ${t(`fun.badges.${id}.name`)}`, t(`fun.badges.${id}.how`));
     chime('badge'); confetti(50); jump(); feel('heart', 1500);
   }
   function bump(name, goal, id) { counters[name] = (counters[name] || 0) + 1; store.set('lumadock:counters', counters); if (counters[name] >= goal) earn(id); }
   window.addEventListener('lumadock:badge', e => {
     const what = String(e.detail || '');
-    if (what === 'dj') bump('dj', 10, 'dj');
-    else if (what === 'mirror') earn('mirror');
-    else if (what.startsWith('tray:') && Number(what.slice(5)) >= 5) earn('tray');
+    if (what === 'dj') bump('dj', 10, 'dj_10');
+    else if (what === 'focus') bump('focus', 5, 'focus_5');
+    else if (what === 'ai_10') bump('ai_10', 10, 'ai_10');
+    else if (what === 'snip_ocr') earn('snip_ocr');
+    else if (what === 'picker_pro') earn('picker_pro');
+    else if (what === 'mirror') earn('picker_pro');
+    else if (what.startsWith('tray:') && Number(what.slice(5)) >= 5) earn('tray_5');
+  });
+  window.addEventListener('lumadock:github-stats', e => {
+    const g = e.detail;
+    if (!g) return;
+    if ((g.currentStreak || 0) >= 3 || (g.longestStreak || 0) >= 3) earn('gh_streak_3');
+    if ((g.currentStreak || 0) >= 7 || (g.longestStreak || 0) >= 7) earn('gh_streak_7');
+    if ((g.currentStreak || 0) >= 30 || (g.longestStreak || 0) >= 30) earn('gh_streak_30');
+    if ((g.totalContributions || 0) >= 100) earn('gh_contrib_100');
+    if ((g.stargazers || []).length >= 1) earn('gh_star');
+    if ((g.prs || []).length >= 1) earn('gh_pr');
   });
 
   // ---------- hunger: finishing tasks recharges LumaDock ----------
@@ -248,15 +274,16 @@
     start(sec = prefs.focusSec) {
       focusLength = sec * 1000; focusEnd = Date.now() + focusLength;
       store.set('lumadock:focus-end', focusEnd); store.set('lumadock:focus-length', focusLength);
+      window.lumadock?.focusSync?.(true, 0);
       chime('pop'); feel('heart', 1200); wake(); window.__lumadockSettleSize?.();
     },
     add(sec) { if (!focus.active()) return; focusEnd += sec * 1000; focusLength += sec * 1000; store.set('lumadock:focus-end', focusEnd); store.set('lumadock:focus-length', focusLength); },
-    stop() { focusEnd = 0; store.set('lumadock:focus-end', 0); chime('error'); window.__lumadockSettleSize?.(); },
+    stop() { focusEnd = 0; store.set('lumadock:focus-end', 0); window.lumadock?.focusSync?.(false, 0); chime('error'); window.__lumadockSettleSize?.(); },
     toggle() { focus.active() ? focus.stop() : focus.start(); }
   };
   window.__lumadockFocus = focus;
   canvas.addEventListener('click', event => {
-    if (inside(event.clientX, event.clientY, hit.focusApp)) { event.preventDefault(); event.stopImmediatePropagation(); setView('focus'); }
+    if (mode === 'expanded' && ['home', 'apps', 'shortcuts'].includes(currentView) && inside(event.clientX, event.clientY, hit.focusApp)) { event.preventDefault(); event.stopImmediatePropagation(); setView('focus'); }
   }, true);
 
   // ---------- confetti ----------
@@ -288,12 +315,15 @@
   // ---------- feelings ----------
   let feeling = null, feelingUntil = 0, bounceAt = -1e9;
   const pv = { prefs: null, feeling: null, feelingUntil: 0, bounceAt: -1e9, danceUntil: 0, waveUntil: 0, nextBlink: 0 };
-  function feel(mood, ms) { pv.feeling = mood; pv.feelingUntil = now() + ms; feeling = mood; feelingUntil = now() + ms; }
+  function feel(mood, ms) {
+    pv.feeling = mood; pv.feelingUntil = now() + ms; feeling = mood; feelingUntil = now() + ms;
+    if (!drafting && ms >= 900) window.__lumadockBuddyBurst?.(mood, '', 5000);
+  }
   function jump() { pv.bounceAt = now(); bounceAt = now(); }
   window.__lumadockFeel = feel;
-  window.__lumadockCelebrate = (kind = 'done', bits = 40) => { chime(kind); jump(); confetti(bits); };
+  window.__lumadockCelebrate = (kind = 'done', bits = 40) => { chime(kind); jump(); confetti(bits); window.__lumadockBuddyBurst?.('happy', '', 5000); };
   window.__lumadockChime = kind => chime(kind);
-  window.__lumadockCheer = () => { jump(); feel('happy', 800); chime('pop'); };
+  window.__lumadockCheer = () => { jump(); feel('happy', 1000); chime('pop'); window.__lumadockBuddyBurst?.('happy', '', 5000); };
 
   // ---------- sleeping ----------
   let lastWake = Date.now();
@@ -424,24 +454,44 @@
   window.__lumadockCompactMessage = () => (now() < pokeMessageUntil ? pokeMessage : '') || startMessage?.() || '';
 
   // ---------- watch AI status ----------
-  let lastState = null, lastDetail = '', wasFocus = focus.active();
+  let lastState = null, lastDetail = '', wasFocus = focus.active(), statusSadUntil = 0, petScore = 0, petCooldown = 0, lastPetX = 0;
   setInterval(() => {
     const status = window.__lumadockStatus?.(), state = status?.state || null;
-    if (pointer.known && inside(pointer.x, pointer.y, islandBounds)) wake();
+    if (pointer.known && inside(pointer.x, pointer.y, islandBounds)) {
+      wake();
+      if (hit?.ghost && inside(pointer.x, pointer.y, hit.ghost)) {
+        const dx = Math.abs(pointer.x - lastPetX);
+        if (dx > 8 && lastPetX > 0) petScore += 1;
+        else petScore = Math.max(0, petScore - 0.5);
+        lastPetX = pointer.x;
+        if (petScore >= 4 && now() > petCooldown) {
+          petScore = 0;
+          petCooldown = now() + 4500;
+          feel('heart', 1800); jump(); chime('pop'); feed(10);
+        }
+      } else {
+        petScore = 0; lastPetX = 0;
+      }
+    }
     if (state !== lastState) {
       if (state) wake();
-      if (state === 'done') { chime('done'); jump(); countDone(status); if ((status.elapsed || 0) >= 300) confetti(); }
+      if (state === 'done') { chime('done'); jump(); countDone(); if ((status.elapsed || 0) >= 300) confetti(); }
       if (state === 'question') chime('question');
-      if (state === 'error') chime('error');
+      if (state === 'error' || state === 'stopped' || state === 'unavailable') {
+        statusSadUntil = now() + 15000;
+        if (state === 'error') chime('error');
+      } else {
+        statusSadUntil = 0;
+      }
       lastState = state;
     }
     const detail = status?.detail || '';
-    if (detail !== lastDetail && /Allowed|answer was sent|İzin verildi|Yanıtınız gönderildi/i.test(detail)) { feel('heart', 1400); chime('pop'); bump('helper', 10, 'helper'); }
+    if (detail !== lastDetail && /Allowed|answer was sent|İzin verildi|Yanıtınız gönderildi/i.test(detail)) { feel('heart', 1400); chime('pop'); bump('helper', 10, 'ai_10'); }
     lastDetail = detail;
     if (wasFocus && !focus.active()) {
       say(t('notifications.focusCompleteTitle'), t('notifications.focusCompleteBody', { duration: clock(focusLength) }));
       chime('party'); confetti(); jump(); feel('happy', 2000);
-      bump('focus', 5, 'focus'); feed(10);
+      bump('focus', 5, 'focus_5'); feed(10);
       window.__lumadockSettleSize?.();
     }
     wasFocus = focus.active();
@@ -463,13 +513,18 @@
     chime('warn'); feel('surprised', 1500);
   }
 
-  // ---------- random life: blinking and occasional wink ----------
-  let nextBlink = now() + 2500;
+  // ---------- random life: blinking, occasional wink and curious idle peek ----------
+  let nextBlink = now() + 2500, nextPeek = now() + 16000;
   function idleLife(t, mood) {
-    if (!prefs.blink || mood) return mood;
+    if (mood) return mood;
+    if (t > nextPeek) {
+      if (t > nextPeek + 1100) nextPeek = t + 16000 + Math.random() * 14000;
+      else return 'curious';
+    }
+    if (!prefs.blink) return null;
     if (t > nextBlink) {
-      if (t > nextBlink + 140) nextBlink = t + 2500 + Math.random() * 3500;
-      else return Math.random() < 0.004 ? 'wink' : 'blink';
+      if (t > nextBlink + 140) nextBlink = t + 2400 + Math.random() * 3400;
+      else return Math.random() < 0.005 ? 'wink' : 'blink';
     }
     return null;
   }
@@ -478,20 +533,24 @@
   const MOODS = { running: 'focus', sending: 'focus', question: 'curious', done: 'happy', error: 'sad', stopped: 'sad', unavailable: 'sad' };
   function fx() {
     const t = now(), status = window.__lumadockStatus?.();
-    let dy = 0, tilt = 0, scale = 1;
-    let mood = prefs.faces && !inLocker() ? (status?.permission ? 'surprised' : MOODS[status?.state] || null) : null;
+    let dy = Math.sin(t / 1100) * 1.1, tilt = 0, scale = 1;
+    const rawMood = status?.permission ? 'surprised' : MOODS[status?.state] || null;
+    let mood = prefs.faces && !inLocker()
+      ? (rawMood === 'sad' && t >= statusSadUntil ? null : rawMood)
+      : null;
     if (feeling && t < feelingUntil) mood = feeling;
     const hop = (t - bounceAt) / 700;
     if (hop >= 0 && hop < 1) { dy -= Math.abs(Math.sin(hop * Math.PI)) * 11 * (1 - hop * 0.5); scale = 1 + Math.sin(hop * Math.PI) * 0.06; }
-    else if ((prefs.dance && spotifyState.is_playing && window.__lumadockHearing || now() < danceDemoUntil) && !mood) {
+    else if ((prefs.dance && spotifyState.is_playing && (window.__lumadockHearing || Number(window.__lumadockBeatEnergy) > 0) || now() < danceDemoUntil) && !mood) {
       const id = spotifyState.track?.id || spotifyState.track?.name || '';
       const move = [...id].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7) % 4;
-      if (move === 0) { dy -= Math.abs(Math.sin(t / 250)) * 3; tilt = Math.sin(t / 500) * 0.07; }
-      if (move === 1) { tilt = Math.sin(t / 380) * 0.16; dy -= Math.abs(Math.sin(t / 380)) * 1.5; }
-      if (move === 2) { dy -= Math.abs(Math.sin(t / 180)) * 4; scale = 1 + Math.abs(Math.sin(t / 180)) * 0.04; }
-      if (move === 3) { tilt = Math.sin(t / 120) * 0.08; dy -= Math.abs(Math.sin(t / 240)) * 2; }
+      const pulse = Number(window.__lumadockBeatEnergy) || 0.35;
+      if (move === 0) { dy -= Math.abs(Math.sin(t / 250)) * (2.2 + pulse * 3); tilt = Math.sin(t / 500) * 0.08; }
+      if (move === 1) { tilt = Math.sin(t / 380) * (0.12 + pulse * 0.08); dy -= Math.abs(Math.sin(t / 380)) * 2; }
+      if (move === 2) { dy -= Math.abs(Math.sin(t / 180)) * (2.5 + pulse * 3); scale = 1 + Math.abs(Math.sin(t / 180)) * (0.02 + pulse * 0.04); }
+      if (move === 3) { tilt = Math.sin(t / 120) * 0.09; dy -= Math.abs(Math.sin(t / 240)) * (1.8 + pulse * 2.5); }
     }
-    if (!mood && hungry() && prefs.faces) mood = 'sad';
+    if (!mood && focus.active() && prefs.faces && !inLocker()) mood = 'focus';
     if (mood === 'sad') dy += 2;
     if (!mood && asleep()) { mood = 'sleep'; dy += Math.sin(t / 900) * 1.5; }
     mood = idleLife(t, mood);
@@ -661,6 +720,36 @@
       const t = now() / 1000;
       ['z', 'Z', 'Z'].forEach((letter, i) => { const k = (t * 0.5 + i / 3) % 1; c.globalAlpha = 1 - k; c.fillText(letter, 30 + k * 18, -20 - k * 34); });
     }
+    // Live contextual reactions: auto headset while listening + sweat drop on high CPU/RAM
+    if (!inLocker() && spotifyState?.is_playing && prefs.dance && !['headphones', 'crown', 'santa', 'witch'].includes(wear)) {
+      const pulseCol = window.__lumadockAlbumColour || '#38f8b2';
+      c.save();
+      c.strokeStyle = '#1e293b'; c.lineWidth = 4.5; c.lineCap = 'round';
+      c.beginPath(); c.arc(0, -2, 39, Math.PI * 1.12, Math.PI * 1.88); c.stroke();
+      c.strokeStyle = pulseCol; c.lineWidth = 1.8; c.shadowColor = pulseCol; c.shadowBlur = 7;
+      c.beginPath(); c.arc(0, -2, 39, Math.PI * 1.2, Math.PI * 1.8); c.stroke();
+      for (const side of [-1, 1]) {
+        c.fillStyle = '#0f172a'; c.beginPath(); c.roundRect(side * 39 - 5, -9, 10, 20, 5); c.fill(); c.stroke();
+      }
+      const noteP = (now() / 1200) % 1;
+      c.globalAlpha = 1 - noteP; c.fillStyle = pulseCol; c.font = '700 13px Arial';
+      c.fillText('♪', 42 + Math.sin(noteP * 6) * 3, -18 - noteP * 18);
+      c.restore();
+    }
+    const sys = window.__lumadockStats?.();
+    if (!inLocker() && sys && (sys.cpuPct >= 85 || sys.memPct >= 90)) {
+      const dropPhase = (now() / 900) % 1;
+      c.save();
+      c.globalAlpha = 1 - dropPhase * 0.5;
+      c.fillStyle = '#5ee0ff';
+      c.beginPath();
+      const dy = -18 + dropPhase * 12;
+      c.moveTo(26, dy - 6);
+      c.quadraticCurveTo(30, dy, 26, dy + 3);
+      c.quadraticCurveTo(22, dy, 26, dy - 6);
+      c.fill();
+      c.restore();
+    }
     if (focus.active() && mode !== 'expanded' && !previewing) {
       const part = 1 - focus.left() / focusLength;
       c.globalAlpha = 1; c.lineWidth = 5; c.lineCap = 'round';
@@ -725,13 +814,17 @@
 
   const esc = s => String(s).replace(/[&<>"]/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[x]));
   const row = (title, help, control, demo = '') => `<div class="tc-setting-row${demo ? ' tc-demo' : ''}"${demo ? ` data-demo="${demo}"` : ''}><div><strong>${title}</strong><small>${help}</small></div>${control}</div>`;
-  const chips = (key, options) => `<div class="tc-chips">${options.map(([value, label, locked]) =>
-    `<button type="button" class="tc-chip ${prefs[key] === value ? 'on' : ''}" data-pref="${key}" data-value="${esc(value)}" ${locked ? `disabled title="${esc(t('fun.notEarnedYet'))}"` : ''}>${locked ? '🔒 ' : ''}${label}</button>`).join('')}</div>`;
+  const chips = (key, options) => `<div class="tc-chips">${options.map(([value, label]) =>
+    `<button type="button" class="tc-chip ${prefs[key] === value ? 'on' : ''}" data-pref="${key}" data-value="${esc(value)}">${label}</button>`).join('')}</div>`;
   const toggle = key => `<button type="button" class="tc-toggle ${prefs[key] ? 'on' : ''}" data-pref="${key}" data-toggle="1" aria-pressed="${prefs[key]}">${prefs[key] ? t('common.on') : t('common.off')}</button>`;
-  const swatches = (key, colours, group) => `<div class="tc-chips">${Object.entries(colours).map(([name, c]) => {
-    const label = t(`fun.${group}.${name}`);
-    return `<button type="button" class="tc-swatch ${prefs[key] === name ? 'on' : ''}" style="background:${Array.isArray(c) ? `linear-gradient(135deg,${c[0]},${c[1]})` : c}" data-pref="${key}" data-value="${name}" title="${esc(label)}" aria-label="${esc(label)}"></button>`;
-  }).join('')}</div>`;
+  const currentHexOf = (key, colours) => isHexColor(prefs[key]) ? prefs[key] : (() => { const v = colours[prefs[key]]; return Array.isArray(v) ? v[0] : (v || '#00e5ff'); })();
+  const swatches = (key, colours, group) => {
+    const curHex = currentHexOf(key, colours);
+    return `<div class="tc-chips">${Object.entries(colours).map(([name, c]) => {
+      const label = t(`fun.${group}.${name}`);
+      return `<button type="button" class="tc-swatch ${prefs[key] === name ? 'on' : ''}" style="background:${Array.isArray(c) ? `linear-gradient(135deg,${c[0]},${c[1]})` : c}" data-pref="${key}" data-value="${name}" title="${esc(label)}" aria-label="${esc(label)}"></button>`;
+    }).join('')}<input type="color" class="tc-color-in" data-pref="${key}" value="${esc(curHex)}" title="${esc(t('fun.customColorPick'))}" style="width:28px;height:26px;padding:0;border:1px solid rgba(255,255,255,.22);border-radius:6px;background:transparent;cursor:pointer"><code class="tc-hex" style="font-size:11px;opacity:.75;align-self:center">${esc(curHex.toUpperCase())}</code></div>`;
+  };
   const preview = p => `<span class="tc-preview">${[p.busy, p.done, p.error].map(c => `<i style="background:${c};box-shadow:0 0 6px ${c}"></i>`).join('')}</span>`;
 
   const LIGHT_OPTIONS = {
@@ -746,22 +839,22 @@
   };
   const lightsBlock = () => `<div class="tc-setting-row tc-demo tc-lights" data-demo="lights"><div class="tc-lights-head"><div><strong>${t('fun.lightsTitle')}</strong><small>${t('fun.lightsSub')}</small></div>
     <div class="tc-chips">${Object.entries(LIGHT_PRESETS).map(([k, [b, d, e]]) => `<button type="button" class="tc-chip ${prefs.lightBusy === b && prefs.lightDone === d && prefs.lightError === e ? 'on' : ''}" data-lightpreset="${k}">${preview({ busy: b, done: d, error: e })}${esc(t('fun.lightPresets.' + k))}</button>`).join('')}</div></div>
-    ${[['lightBusy', t('fun.lightBusy')], ['lightDone', t('fun.lightDone')], ['lightError', t('fun.lightError')]].map(([key, label]) => `<div class="tc-light-line"><span><i style="background:${prefs[key]};box-shadow:0 0 8px ${prefs[key]}"></i>${esc(label)}</span><div class="tc-chips">${LIGHT_OPTIONS[key].map(c => `<button type="button" class="tc-swatch ${prefs[key] === c ? 'on' : ''}" style="background:${c}" data-pref="${key}" data-value="${c}" aria-label="${esc(label)}: ${c}"></button>`).join('')}</div></div>`).join('')}</div>`;
+    ${[['lightBusy', t('fun.lightBusy')], ['lightDone', t('fun.lightDone')], ['lightError', t('fun.lightError')]].map(([key, label]) => `<div class="tc-light-line"><span><i style="background:${prefs[key]};box-shadow:0 0 8px ${prefs[key]}"></i>${esc(label)}</span><div class="tc-chips">${LIGHT_OPTIONS[key].map(c => `<button type="button" class="tc-swatch ${prefs[key] === c ? 'on' : ''}" style="background:${c}" data-pref="${key}" data-value="${c}" aria-label="${esc(label)}: ${c}"></button>`).join('')}<input type="color" class="tc-color-in" data-pref="${key}" value="${esc(isHexColor(prefs[key]) ? prefs[key] : '#ffffff')}" style="width:24px;height:24px;padding:0;border:1px solid rgba(255,255,255,.22);border-radius:6px;background:transparent;cursor:pointer"></div></div>`).join('')}</div>`;
 
   const ALL_MOODS = ['happy', 'focus', 'curious', 'surprised', 'angry', 'cool', 'wink', 'heart', 'sad', 'dizzy', 'sleep'];
   const MOOD_DEMO = () => ['all', ...ALL_MOODS].map(m => [m, t('fun.moods.' + m)]);
 
   window.__lumadockSettingsCharacter = (sleepRow = '') => [
-    `<div class="tc-group" data-icon="🏷️" style="--g:#5ad1c4">${t('fun.groups.name')}</div>`,
+    `<div class="tc-group" style="--g:#5ad1c4">${t('fun.groups.name')}</div>`,
     row(t('fun.fields.petName'), t('fun.fields.petNameSub'), `<div class="tc-step"><input class="tc-input tc-name" id="tc-in-petname" maxlength="18" placeholder="LumaDock" value="${esc(prefs.name || '')}"><button type="button" class="tc-chip on" data-setname="1">${t('common.save')}</button></div>`),
-    `<div class="tc-group" data-icon="🎨" style="--g:#ff86c2">${t('fun.groups.appearance')}</div>`,
+    `<div class="tc-group" style="--g:#ff86c2">${t('fun.groups.appearance')}</div>`,
     row(t('fun.fields.eyes'), t('fun.fields.eyesSub'), swatches('eye', EYES, 'eyes'), 'look'),
     row(t('fun.fields.body'), t('fun.fields.bodySub'), swatches('body', BODIES, 'bodies'), 'look'),
     lightsBlock(),
-    row(t('fun.fields.wardrobe'), t('fun.fields.wardrobeSub', { count: doneCount }),
-      chips('outfit', [['auto', t('common.best')], ['none', t('common.none')], ...OUTFITS.map(o => [o.id, outfitName(o), !unlocked(o.id)])]), 'look'),
+    row(t('fun.fields.wardrobe'), t('fun.fields.wardrobeAllOpen'),
+      chips('outfit', [['auto', t('common.best')], ['none', t('common.none')], ...OUTFITS.map(o => [o.id, outfitName(o)])]), 'look'),
     row(t('fun.fields.seasonal'), t('fun.fields.seasonalSub'), toggle('seasonal'), 'look'),
-    `<div class="tc-group" data-icon="🤖" style="--g:#7fb2ff">${t('fun.groups.behaviour')}</div>`,
+    `<div class="tc-group" style="--g:#7fb2ff">${t('fun.groups.behaviour')}</div>`,
     row(t('fun.fields.faces'), t('fun.fields.facesSub'), toggle('faces'), 'faces'),
     row(t('fun.fields.moodDemo'), t('fun.fields.moodDemoSub'), `<div class="tc-chips">${MOOD_DEMO().map(([m, label]) => `<button type="button" class="tc-chip" data-mood="${m}">${esc(label)}</button>`).join('')}</div>`),
     row(t('fun.fields.blink'), t('fun.fields.blinkSub'), toggle('blink'), 'blink'),
@@ -770,8 +863,8 @@
     row(t('fun.fields.standbyAfter'), t('fun.fields.standbyAfterSub'), chips('sleepMin', [[5, t('fun.minutesShort', { n: 5 })], [10, t('fun.minutesShort', { n: 10 })], [30, t('fun.minutesShort', { n: 30 })]]), 'sleep'),
     row(t('fun.fields.startup'), t('fun.fields.startupSub'), toggle('startup'), 'hello'),
     row(t('fun.fields.hunger'), prefs.hunger ? t('fun.fields.hungerOnSub', { name: petName(), pct: window.__lumadockHunger?.() ?? 0 }) : t('fun.fields.hungerOffSub'), toggle('hunger'), 'hunger'),
-    `<div class="tc-group" data-icon="🏆" style="--g:#ffc93c">${t('fun.groups.achievements')} · ${badges.size}/${BADGES.length}</div>`,
-    `<div class="tc-badges">${BADGES.map(b => `<div class="tc-badge ${badges.has(b.id) ? 'on' : ''}" title="${esc(t(`fun.badges.${b.id}.how`))}"><span>${badges.has(b.id) ? b.icon : '🔒'}</span><b>${esc(t(`fun.badges.${b.id}.name`))}</b><small>${esc(t(`fun.badges.${b.id}.how`))}</small></div>`).join('')}</div>`,
+    `<div class="tc-group" style="--g:#ffc93c">${t('fun.groups.achievements')} · ${badges.size}/${BADGES.length}</div>`,
+    `<div class="tc-badges">${BADGES.map(b => `<div class="tc-badge ${badges.has(b.id) ? 'on' : ''}" title="${esc(t(`fun.badges.${b.id}.how`))}"><span>${badgeSvg(b.icon)}</span><b>${esc(t(`fun.badges.${b.id}.name`))}</b><small>${esc(t(`fun.badges.${b.id}.how`))}</small></div>`).join('')}</div>`,
   ].join('');
 
   window.__lumadockLocker = () => ({ name: petName(), done: doneCount, badges: badges.size, total: BADGES.length });
@@ -779,33 +872,36 @@
   // Settings → General
   const TESTS = () => ['hello', 'bye', 'busy', 'question', 'done', 'error', 'music', 'focus', 'clear'].map(k => [k, t('fun.tests.' + k)]);
   window.__lumadockSettingsExtra = () => [
-    `<div class="tc-group" data-icon="🌍" style="--g:#7fb2ff">${t('fun.groups.language')}</div>`,
+    `<div class="tc-group" style="--g:#7fb2ff">${t('fun.groups.language')}</div>`,
     row(t('fun.fields.language'), t('fun.fields.languageSub'), chips('lang', [['en', 'English'], ['tr', 'Türkçe']])),
-    `<div class="tc-group" data-icon="🧪" style="--g:#b98cff">${t('fun.groups.testing')}</div>`,
+    `<div class="tc-group" style="--g:#b98cff">${t('fun.groups.testing')}</div>`,
     row(t('fun.fields.testMode'), t('fun.fields.testModeSub'), toggle('testMode')),
     prefs.testMode ? `<div class="tc-tests">${TESTS().map(([k, label]) => `<button type="button" class="tc-chip" data-test="${k}">${esc(label)}</button>`).join('')}</div>` : '',
-    `<div class="tc-group" data-icon="✨" style="--g:#ffb35c">${t('fun.groups.animations')}</div>`,
+    `<div class="tc-group" style="--g:#ffb35c">${t('fun.groups.animations')}</div>`,
     row(t('fun.fields.speed'), t('fun.fields.speedSub'), chips('speed', [['fast', t('fun.fields.speedFast')], ['normal', t('fun.fields.speedNormal')]])),
     row(t('fun.fields.appAnim'), t('fun.fields.appAnimSub'), toggle('appAnim')),
     row(t('fun.fields.confetti'), t('fun.fields.confettiSub'), toggle('confetti'), 'confetti'),
-    `<div class="tc-group" data-icon="🔔" style="--g:#ff6b6b">${t('fun.groups.notifications')}</div>`,
+    `<div class="tc-group" style="--g:#ff6b6b">${t('fun.groups.notifications')}</div>`,
     row(t('fun.fields.chimes'), t('fun.fields.chimesSub'), toggle('chimes'), 'chimes'),
     row(t('fun.fields.winNotify'), t('fun.fields.winNotifySub'), toggle('notify')),
     row(t('fun.fields.warnAt'), t('fun.fields.warnAtSub'), chips('warnAt', [[70, '70%'], [80, '80%'], [90, '90%'], [0, t('common.never')]])),
     row(t('fun.fields.soundPack'), t('fun.fields.soundPackSub'), chips('pack', Object.keys(PACKS).map(k => [k, t('fun.packs.' + k)]))),
-    `<div class="tc-group" data-icon="🏝️" style="--g:#c6e994">${t('fun.groups.extras')}</div>`,
+    `<div class="tc-group" style="--g:#c6e994">${t('fun.groups.extras')}</div>`,
     row(t('fun.fields.weather'), extrasCfg.city ? t('fun.fields.weatherCurrent', { city: esc(extrasCfg.city) }) : t('fun.fields.weatherEmpty'),
       `<div class="tc-step"><input class="tc-input" id="tc-in-city" maxlength="80" placeholder="${esc(t('fun.fields.cityPlaceholder'))}" value="${esc(extrasCfg.city || '')}"><button type="button" class="tc-chip" data-pref="city" data-save="1">${t('common.save')}</button></div>`),
     row(t('fun.fields.calendar'), extrasCfg.calendarUrl ? t('fun.fields.calendarConnected') : t('fun.fields.calendarEmpty'),
       `<div class="tc-step"><input class="tc-input" id="tc-in-calendarUrl" maxlength="2000" placeholder="https://… .ics" value="${esc(extrasCfg.calendarUrl || '')}"><button type="button" class="tc-chip" data-pref="calendarUrl" data-save="1">${t('common.save')}</button></div>`),
     extrasError ? `<p class="tc-ai-error" role="alert">${esc(extrasError)}</p>` : '',
     row(t('fun.fields.volumeHud'), t('fun.fields.volumeHudSub'), toggle('volumeHud')),
+    row(t('fun.fields.miniHud'), t('fun.fields.miniHudSub'), toggle('miniHud')),
     row(t('fun.fields.batteryWarn'), t('fun.fields.batteryWarnSub'), toggle('batteryWarn')),
+    row(t('fun.fields.islandStyle'), t('fun.fields.islandStyleSub'), chips('islandStyle', [['aurora', t('fun.fields.styleAurora')], ['glass', t('fun.fields.styleGlass')], ['obsidian', t('fun.fields.styleObsidian')]])),
+    row(t('fun.fields.weatherFx'), t('fun.fields.weatherFxSub'), toggle('weatherFx')),
     row(t('fun.fields.fullscreenHide'), t('fun.fields.fullscreenHideSub'), toggle('fullscreenHide')),
     row(t('fun.fields.displayMonitor'), t('fun.fields.displayMonitorSub'),
       chips('displayIndex', [[-1, t('common.primary')], ...displaysList.map((d, i) => [d.index, `${i + 1}: ${d.width}×${d.height}`])])),
     `<div class="tc-setting-row"><div><strong>${t('fun.fields.resetDefaults')}</strong><small>${t('fun.fields.resetDefaultsSub')}</small></div><button type="button" class="tc-toggle" data-pref="reset">${t('common.reset')}</button></div>`,
-    `<div class="tc-group" data-icon="⏻" style="--g:#ff8a8a">LumaDock</div>`,
+    `<div class="tc-group" style="--g:#ff8a8a">LumaDock</div>`,
     row(t('fun.fields.startWithWindows'), t('fun.fields.startWithWindowsSub'), `<button type="button" class="tc-toggle ${loginOn ? 'on' : ''}" data-login="1" aria-pressed="${loginOn}">${loginOn ? t('common.on') : t('common.off')}</button>`),
     row(t('fun.fields.restartApp'), t('fun.fields.restartAppSub'), `<button type="button" class="tc-chip" data-restart="1">${t('common.restart')}</button>`),
     row(t('fun.fields.quitApp'), t('fun.fields.quitAppSub'), `<button type="button" class="tc-chip" data-quit="1">${t('common.quit')}</button>`)
@@ -917,12 +1013,20 @@
     if (key === 'reset') Object.assign(prefs, DEFAULTS);
     else if (target.dataset.toggle) prefs[key] = !prefs[key];
     else if (target.dataset.step) prefs[key] = Math.min(120, Math.max(5, prefs[key] + Number(target.dataset.step)));
+    else if (target.type === 'color') { if (!isHexColor(target.value)) return false; prefs[key] = target.value.toLowerCase(); }
     else { const raw = target.dataset.value; prefs[key] = typeof DEFAULTS[key] === 'number' ? Number(raw) : raw; }
     save();
     if (key === 'eye' || key === 'body' || key === 'palette' || key === 'outfit' || key === 'seasonal') { jump(); feel('happy', 700); }
     if (key === 'pack') chime('done');
     if (/^light(Busy|Done|Error)$/.test(key) && !drafting) lightPreview = { color: prefs[key], until: now() + 1400 };
     return true;
+  };
+  window.__lumadockFeed = feed;
+  window.__lumadockTogglePref = key => {
+    if (!Object.prototype.hasOwnProperty.call(DEFAULTS, key)) return false;
+    prefs[key] = !prefs[key];
+    save();
+    return prefs[key];
   };
 
   // ---------- LumaDock Settings preview & draft handling ----------
