@@ -85,12 +85,14 @@ async function relay(req) {
   catch (error) { const msg = error instanceof Error ? error.message : String(error); return { ok: false, error: msg.slice(0, 200) }; }
 }
 const clean = req => ({
-  kind: ['click', 'apps', 'app', 'save', 'discard'].includes(req?.kind) ? req.kind : 'list',
+  kind: ['click', 'apps', 'app', 'save', 'discard', 'set-pref'].includes(req?.kind) ? req.kind : 'list',
   id: typeof req?.id === 'string' ? req.id.slice(0, 20) : undefined,
   on: req?.on === true,
   which: (req?.which === 'character' || req?.which === 'karakter') ? 'character' : 'general',
   index: Number.isInteger(req?.index) ? req.index : undefined,
   row: Number.isInteger(req?.row) ? req.row : undefined,
+  key: typeof req?.key === 'string' ? req.key.slice(0, 32) : undefined,
+  value: typeof req?.value === 'string' ? req.value.slice(0, 40) : undefined,
   values: Object.fromEntries(Object.entries(req?.values || {}).filter(([k, v]) => /^tc-in-[\w-]+$/.test(k) && typeof v === 'string').map(([k, v]) => [k, v.slice(0, 2000)]))
 });
 

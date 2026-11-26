@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('buddy', {
   onFrame: callback => subscribe('buddy:frame', callback),
   onProgress: callback => subscribe('buddy:progress', callback),
   ask: (kind, text) => ipcRenderer.invoke('buddy:ask', { kind, text }),
+  ocr: (copy = true) => ipcRenderer.invoke('buddy:ocr', { copy }),
   apply: () => ipcRenderer.invoke('buddy:apply'),
   copy: text => ipcRenderer.send('buddy:copy', text),
   interactive: on => ipcRenderer.send('buddy:interactive', !!on),

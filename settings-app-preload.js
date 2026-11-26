@@ -35,6 +35,11 @@ contextBridge.exposeInMainWorld('settingsApp', {
     chatgptLogout: () => ipcRenderer.invoke('ai-settings:chatgpt-logout')
   },
   displays: () => ipcRenderer.invoke('island:displays'),
+  github: {
+    summary: force => ipcRenderer.invoke('github:summary', { force: Boolean(force) }),
+    configGet: () => ipcRenderer.invoke('github:config-get'),
+    configSet: payload => ipcRenderer.invoke('github:config-set', payload)
+  },
   spotify: {
     getConfig: () => ipcRenderer.invoke('spotify:get-config'),
     setClientId: id => ipcRenderer.invoke('spotify:set-client-id', id),
