@@ -21,7 +21,7 @@
 #lumadock-extras button{border:1px solid #394333;border-radius:12px;padding:7px 11px;color:#eef3e8;background:#252c22;font:600 11px Arial,sans-serif;cursor:pointer}
 #lumadock-extras button:hover{background:#343e2d}
 #lumadock-extras .ex-hint{color:#aab4a5;font-size:11px}
-#lumadock-extras .ex-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;max-height:170px;padding:5px 3px 3px;margin:-5px -3px 0;overflow:auto;scrollbar-width:thin;border-radius:16px;transition:max-height .2s}
+#lumadock-extras .ex-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;max-height:170px;padding:5px 3px 3px;margin:-5px -3px 0;overflow:auto;border-radius:16px;transition:max-height .2s}
 #lumadock-extras.dragging .ex-grid{max-height:78px}
 #lumadock-extras .ex-file{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 6px 8px;border-radius:14px;background:#151a13;border:1px solid #262e23;cursor:grab;text-align:center;animation:ex-pop .35s cubic-bezier(.2,1.6,.4,1)}
 #lumadock-extras .ex-file:hover{border-color:#c6e994;transform:translateY(-2px)}
@@ -43,19 +43,84 @@
 @keyframes ex-float{50%{transform:translateY(-4px)}}
 #lumadock-extras .ex-drop.extra{display:none;height:56px;margin-bottom:8px}
 #lumadock-extras.dragging .ex-drop.extra{display:flex}
-@keyframes ex-pop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}#lumadock-extras video{width:100%;height:176px;object-fit:cover;border-radius:16px;transform:scaleX(-1);background:#0d100c}`;
+@keyframes ex-pop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}#lumadock-extras video{width:100%;height:176px;object-fit:cover;border-radius:16px;transform:scaleX(-1);background:#0d100c}
+#lumadock-extras .ex-head-act{margin-top:10px;border:1px solid rgba(198,233,148,.35) !important;background:rgba(198,233,148,.12) !important;color:#d6f5ab !important}
+#lumadock-extras .ex-qr-box{display:flex;align-items:center;gap:16px;padding:12px 14px;border-radius:16px;background:#121612;border:1px solid rgba(198,233,148,.35);height:164px}
+#lumadock-extras .ex-qr-box img{width:136px;height:136px;border-radius:12px;background:#fff;padding:5px;flex:none}
+#lumadock-extras .ex-qr-info{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
+#lumadock-extras .ex-qr-info b{font-size:14px;color:#fff}
+#lumadock-extras .ex-qr-info code{font:11px Consolas,monospace;background:rgba(255,255,255,.07);padding:5px 8px;border-radius:8px;color:#c6e994;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;user-select:text}
+#lumadock-extras .ex-qr-row{display:flex;gap:8px;margin-top:4px}`;
   document.head.appendChild(style);
 
-  let trayFiles = [], trayError = '';
-  async function loadTray() { const r = await api.trayGet(); if (r.ok) trayFiles = r.files; render(); }
+  let trayFiles = [], trayError = '', qrShare = { active: false };
+  async function loadTray() {
+    const [r, s] = await Promise.all([api.trayGet(), api.lanShareStatus?.().catch(() => null)]);
+    if (r.ok) trayFiles = r.files;
+    if (s?.ok && s.share) qrShare = s.share;
+    render();
+  }
   window.__lumadockTrayReload = loadTray;
   window.__lumadockTrayCount = () => trayFiles.length;
   function render() {
     if (currentView === 'tray') {
-      root.innerHTML = `<div class="tc-page-head"><div><p class="tc-page-title">${esc(t('trayApp.title'))}</p><p class="tc-page-sub">${esc(trayFiles.length ? t('trayApp.subHasFiles') : t('trayApp.subEmpty'))}</p></div></div>${
-        trayFiles.length ? `<div class="ex-drop extra"><span class="on">🧺 ${esc(t('trayApp.dropRelease'))}</span></div><div class="ex-grid">${trayFiles.map((f, i) => `<div class="ex-file" draggable="true" data-i="${i}" title="${esc(f.path)}">${f.icon ? `<img src="${f.icon}" alt="">` : '📄'}<span>${esc(f.name)}</span><button type="button" class="ex-x" data-x="${i}" aria-label="${esc(t('trayApp.removeLabel', { name: f.name }))}">×</button></div>`).join('')}</div>`
-          : `<div class="ex-drop ex-empty"><span class="off"><svg width="34" height="34" viewBox="0 0 24 24" fill="#000" stroke="#e8eee4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13 7 5h10l3 8v6H4z"/><path d="M4 13h5l1 2h4l1-2h5" fill="none"/></svg><b>${esc(t('trayApp.emptyTitle'))}</b><small>${esc(t('trayApp.emptySub'))}</small></span><span class="on"><svg width="34" height="34" viewBox="0 0 24 24" fill="#000" stroke="#e8eee4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13 7 5h10l3 8v6H4z"/><path d="M4 13h5l1 2h4l1-2h5" fill="none"/></svg><b>${esc(t('trayApp.dropRelease'))}</b></span></div>`
+      const hasImg = trayFiles.some(f => /\.(?:png|jpe?g|webp|bmp)$/i.test(f.path));
+      const shareBtn = `<div style="display:flex;gap:5px;margin-top:8px;flex-wrap:wrap"><button type="button" class="ex-head-act" id="ex-add-btn" style="margin-top:0">+ ${esc(t('trayApp.pickFilesBtn'))}</button>${trayFiles.length ? `${hasImg ? `<button type="button" class="ex-head-act" id="ex-webp-btn" style="margin-top:0">WebP</button><button type="button" class="ex-head-act" id="ex-jpg-btn" style="margin-top:0">${esc(t('studio.actCompress'))}</button><button type="button" class="ex-head-act" id="ex-exif-btn" style="margin-top:0">${esc(t('studio.actStripExif'))}</button>` : ''}<button type="button" class="ex-head-act" id="ex-zip-btn" style="margin-top:0">ZIP</button><button type="button" class="ex-head-act" id="ex-qr-toggle" style="margin-top:0">${esc(qrShare.active ? t('trayApp.qrStop') : t('trayApp.qrShareBtn'))}</button>` : ''}</div>`;
+      const qrPanel = qrShare.active ? `<div class="ex-qr-box">
+        <img src="${esc(qrShare.qrDataUrl)}" alt="QR">
+        <div class="ex-qr-info">
+          <b>${esc(t('trayApp.qrTitle'))}</b>
+          <span class="ex-hint">${esc(t('trayApp.qrSub', { count: qrShare.files?.length || 0 }))}</span>
+          <code>${esc(qrShare.url)}</code>
+          <div class="ex-qr-row">
+            <button type="button" id="ex-qr-copy">${esc(t('trayApp.qrCopyUrl'))}</button>
+            <button type="button" id="ex-qr-stop">${esc(t('trayApp.qrStop'))}</button>
+          </div>
+        </div>
+      </div>` : '';
+      const fileSvg = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#c6e994" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>';
+      root.innerHTML = `<div class="tc-page-head"><div><p class="tc-page-title">${esc(t('trayApp.title'))}</p><p class="tc-page-sub">${esc(trayFiles.length ? t('trayApp.subHasFiles') : t('trayApp.subEmpty'))}</p></div>${shareBtn}</div>${
+        qrPanel ? qrPanel : trayFiles.length ? `<div class="ex-drop extra"><span class="on">${esc(t('trayApp.dropRelease'))}</span></div><div class="ex-grid">${trayFiles.map((f, i) => `<div class="ex-file" draggable="true" data-i="${i}" title="${esc(f.path)}">${f.icon ? `<img src="${f.icon}" alt="">` : fileSvg}<span>${esc(f.name)}</span><button type="button" class="ex-x" data-x="${i}" aria-label="${esc(t('trayApp.removeLabel', { name: f.name }))}">×</button></div>`).join('')}</div>`
+          : `<div class="ex-drop ex-empty"><span class="off"><svg width="34" height="34" viewBox="0 0 24 24" fill="#000" stroke="#e8eee4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13 7 5h10l3 8v6H4z"/><path d="M4 13h5l1 2h4l1-2h5" fill="none"/></svg><b>${esc(t('trayApp.emptyTitle'))}</b><small>${esc(t('trayApp.emptySub'))}</small><button type="button" class="ex-head-act" id="ex-empty-add" style="margin-top:4px">+ ${esc(t('trayApp.pickFilesBtn'))}</button></span><span class="on"><svg width="34" height="34" viewBox="0 0 24 24" fill="#000" stroke="#e8eee4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13 7 5h10l3 8v6H4z"/><path d="M4 13h5l1 2h4l1-2h5" fill="none"/></svg><b>${esc(t('trayApp.dropRelease'))}</b></span></div>`
       }${trayError ? `<p class="ex-hint" style="color:#ffaba3">${esc(trayError)}</p>` : ''}`;
+      const doPickFiles = async () => {
+        const r = await api.trayPickFiles?.();
+        if (r?.ok && !r.cancelled) {
+          trayFiles = r.files || []; trayError = '';
+          window.__lumadockCheer?.(); badge('tray:' + trayFiles.length);
+          render();
+        }
+      };
+      root.querySelector('#ex-add-btn')?.addEventListener('click', doPickFiles);
+      root.querySelector('#ex-empty-add')?.addEventListener('click', doPickFiles);
+      root.querySelector('#ex-webp-btn')?.addEventListener('click', async () => {
+        const imgFile = trayFiles.find(f => /\.(?:png|jpe?g|webp|bmp)$/i.test(f.path));
+        if (imgFile) await window.__lumadockConvertWebp?.(imgFile.path);
+      });
+      root.querySelector('#ex-jpg-btn')?.addEventListener('click', async () => {
+        const imgFile = trayFiles.find(f => /\.(?:png|jpe?g|webp|bmp)$/i.test(f.path));
+        if (imgFile) await api.mediaConvert?.(imgFile.path, 'compress');
+      });
+      root.querySelector('#ex-exif-btn')?.addEventListener('click', async () => {
+        const imgFile = trayFiles.find(f => /\.(?:png|jpe?g|webp|bmp)$/i.test(f.path));
+        if (imgFile) await api.mediaConvert?.(imgFile.path, 'strip');
+      });
+      root.querySelector('#ex-zip-btn')?.addEventListener('click', async () => {
+        await api.mediaZip?.(trayFiles.map(f => f.path)).catch(e => { trayError = e?.message || t('common.error'); render(); });
+      });
+      root.querySelector('#ex-qr-toggle')?.addEventListener('click', async () => {
+        if (qrShare.active) { await api.lanShareStop?.(); qrShare = { active: false }; render(); return; }
+        const r = await api.lanShareStart?.(trayFiles.map(f => f.path)).catch(e => ({ ok: false, error: e?.message }));
+        if (r?.ok && r.share) { qrShare = r.share; trayError = ''; } else { trayError = r?.error || t('common.error'); }
+        render();
+      });
+      root.querySelector('#ex-qr-copy')?.addEventListener('click', async () => {
+        if (qrShare.url) await api.copyText?.(qrShare.url);
+        window.__lumadockFlash?.(t('common.copiedCheck'), 1400);
+      });
+      root.querySelector('#ex-qr-stop')?.addEventListener('click', async () => {
+        await api.lanShareStop?.(); qrShare = { active: false }; render();
+      });
       for (const el of root.querySelectorAll('.ex-file')) {
         const f = trayFiles[Number(el.dataset.i)];
         el.addEventListener('dragstart', e => { e.preventDefault(); api.trayDrag(f.path); });
@@ -190,6 +255,7 @@
   }
   requestAnimationFrame(position);
   canvas.addEventListener('click', event => {
+    if (mode !== 'expanded' || !['home', 'apps', 'shortcuts'].includes(currentView)) return;
     for (const [key, view] of [['trayApp', 'tray'], ['mirrorApp', 'mirror'], ['settingsApp', 'settings']]) {
       if (inside(event.clientX, event.clientY, hit[key])) { event.preventDefault(); event.stopImmediatePropagation(); setView(view); return; }
     }
@@ -214,6 +280,7 @@
     if (!paths.length) return;
     incoming = { names: paths.map(p => p.split(/[\\/]/).pop()), chimed: false };
     const r = await api.trayAdd(paths); if (r.ok) { trayFiles = r.files; trayError = ''; } else trayError = r.error;
+    window.__lumadockOnNotchDrop?.(paths);
     render(); window.__lumadockCheer?.(); badge('tray:' + trayFiles.length);
   });
 
@@ -231,13 +298,13 @@
   const baseMessage = window.__lumadockCompactMessage;
   window.__lumadockCompactMessage = () => (hud && performance.now() < hud.until ? hud.text : '') || baseMessage?.() || '';
 
-  // Volume bar: "🔊 ▮▮▮▮▮▮▯▯▯▯ 62%"
+  // Volume bar: "VOL ▮▮▮▮▮▮▯▯▯▯ 62%"
   let firstVolume = true;
   api.onVolume(({ level, muted }) => {
     if (firstVolume) { firstVolume = false; return; } // the first report is just the starting value
     if (prefs().volumeHud === false) return;
     const blocks = Math.round(level / 10);
-    flash(muted ? t('header.muted') : `${level > 60 ? '🔊' : level > 20 ? '🔉' : '🔈'} ${'▮'.repeat(blocks)}${'▯'.repeat(10 - blocks)} ${level}%`, 1400);
+    flash(muted ? t('header.muted') : `VOL ${'▮'.repeat(blocks)}${'▯'.repeat(10 - blocks)} ${level}%`, 1400);
   });
 
   // Sync language to extras main process (weather localization etc.)
@@ -263,7 +330,7 @@
   });
   window.__lumadockDownloads = () => dlState;
 
-  // System stats (CPU & RAM), polled gently when expanded or widget is visible
+  // System stats (CPU & RAM), polled live at 1.5s when expanded or miniHud is active
   let sysStats = { cpuPct: 0, memPct: 0, memUsedGb: 0, memTotalGb: 0, history: [] };
   async function pollStats() {
     try {
@@ -271,12 +338,19 @@
       if (r?.ok) {
         const hist = [...(sysStats.history || []), r.cpuPct].slice(-18);
         sysStats = { ...r, history: hist };
+        const tel = window.__lumadockTelemetry?.() || {};
+        window.__lumadockLiveStats = { ...sysStats, rxBps: tel.rxBps || 0, txBps: tel.txBps || 0 };
+        window.dispatchEvent(new CustomEvent('lumadock:stats', { detail: sysStats }));
       }
     } catch {}
   }
   pollStats();
-  setInterval(() => { if (mode === 'expanded') pollStats(); }, 2500);
-  setInterval(() => { if (mode !== 'expanded') pollStats(); }, 8000);
+  setInterval(() => {
+    if ((mode === 'expanded' && ['home', 'apps', 'net'].includes(currentView)) || prefs().miniHud) pollStats();
+  }, 1500);
+  setInterval(() => {
+    if (mode !== 'expanded' && !prefs().miniHud) pollStats();
+  }, 15000);
   window.__lumadockStats = () => sysStats;
 
   // Battery of this laptop
@@ -295,11 +369,22 @@
     battery.addEventListener('levelchange', check); battery.addEventListener('chargingchange', check); check();
   }).catch(() => {});
 
-  // Bluetooth devices (headphones, mouse): warn once a day when one is low
+  // Bluetooth devices (headphones, mouse): warn once a day when low & popup card on new connection
+  let prevBtNames = null;
   api.onBluetooth(({ devices }) => {
-    window.__lumadockBluetooth = devices;
+    const list = Array.isArray(devices) ? devices : [];
+    window.__lumadockBluetooth = list;
+    if (prevBtNames !== null) {
+      const joined = list.find(d => !prevBtNames.has(d.name));
+      if (joined) {
+        flash(`${joined.name} · ${joined.battery}%`, 3200);
+        window.__lumadockChime?.('pop');
+        window.__lumadockFeel?.('happy', 1400);
+      }
+    }
+    prevBtNames = new Set(list.map(d => d.name));
     if (prefs().batteryWarn === false) return;
-    for (const d of devices) {
+    for (const d of list) {
       const key = 'lumadock:bt-warned:' + d.name + ':' + new Date().toDateString();
       if (d.battery <= 20 && !localStorage.getItem(key)) {
         localStorage.setItem(key, '1');
@@ -311,13 +396,14 @@
 
   // ---------- weather + calendar line on the home screen ----------
   let weather = null, nextEvent = null;
-  const ICONS = c => c === 0 ? '☀' : c <= 3 ? '⛅' : c <= 48 ? '🌫' : c <= 67 ? '🌧' : c <= 77 ? '❄' : c <= 82 ? '🌦' : '⛈';
   async function refreshInfo() {
     try { const w = await api.weatherNow(); weather = w.ok ? w.weather : null; } catch {}
     try { const c = await api.calendarNext(); nextEvent = c.ok ? c.next : null; } catch {}
   }
   refreshInfo(); setInterval(refreshInfo, 2 * 60000);
   window.__lumadockRefreshInfo = refreshInfo;
+  window.__lumadockWeather = () => weather;
+  window.__lumadockCalendarRaw = () => nextEvent;
   window.__lumadockNextMeeting = () => {
     if (!nextEvent || !nextEvent.url) return null;
     const mins = Math.round((nextEvent.start - Date.now()) / 60000);
@@ -325,7 +411,7 @@
   };
   window.__lumadockHomeInfo = () => {
     const parts = [];
-    if (weather) parts.push(`${weather.code === 0 && !weather.day ? '🌙' : ICONS(weather.code)} ${weather.temp}° ${weather.place}`);
+    if (weather) parts.push(`${weather.temp}° ${weather.place}`);
     if (nextEvent) {
       const start = new Date(nextEvent.start), mins = Math.round((nextEvent.start - Date.now()) / 60000);
       const todayW = t('header.todayWord');
@@ -333,67 +419,107 @@
       const inMins = t('header.inMinutes', { mins });
       const defTitle = t('header.meetingDefault');
       const when = nextEvent.allDay ? todayW : mins <= 0 ? nowW : mins < 60 ? inMins : start.toLocaleTimeString(loc(), { hour: '2-digit', minute: '2-digit' });
-      parts.push(`📅 ${when}: ${nextEvent.title || defTitle}`);
+      parts.push(`${when}: ${nextEvent.title || defTitle}`);
       if (mins === 10 && !warned.has('cal' + nextEvent.start)) {
         warned.add('cal' + nextEvent.start);
-        flash(`📅 ${t('notifications.calendarInTenFlash', { title: nextEvent.title })}`, 5000);
+        flash(t('notifications.calendarInTenFlash', { title: nextEvent.title }), 5000);
         say(t('notifications.calendarInTenTitle'), nextEvent.title);
       }
     }
     return parts.join('  ·  ');
   };
 
-  // ---------- sound wave: smooth visualizer while music is playing ----------
+  // ---------- system Core Audio peak reactive equalizer (no DXGI/WGC screen capture!) ----------
   const BARS = 18;
-  const audio = { stream: null, ctx: null, analyser: null, data: null, levels: new Array(BARS).fill(0), starting: false, offSince: 0 };
-  async function startListening() {
-    audio.failed = true;
-    return;
-  }
-  function stopListening() {
-    Object.assign(audio, { stream: null, ctx: null, analyser: null }); audio.levels.fill(0); window.__lumadockHearing = false;
-  }
-  setInterval(() => {
-    const playing = Boolean(spotifyConnected && spotifyState.is_playing);
-    if (!playing && audio.stream) { stopListening(); }
-    window.__lumadockAudioLevels?.();
-  }, 1000);
-  // Levels 0..1 per bar, or null when not listening.
-  const peaks = new Array(BARS).fill(0.08);
-  let loudPeak = 0.1;
-  window.__lumadockAudioLevels = () => {
-    if (spotifyConnected && spotifyState.is_playing) {
-      const t = performance.now() / 1000;
-      window.__lumadockHearing = true;
-      for (let i = 0; i < BARS; i++) {
-        const beat = 0.5 + 0.5 * Math.sin(t * 7.2 - i * 0.35);
-        const sub = 0.5 + 0.5 * Math.cos(t * 4.3 + i * 0.7);
-        const env = Math.sin((i / (BARS - 1)) * Math.PI) * 0.75 + 0.25;
-        audio.levels[i] = Math.max(0.08, Math.min(0.96, (beat * 0.6 + sub * 0.4) * env));
-      }
-      return audio.levels;
+  const audio = { levels: new Array(BARS).fill(0), peak: 0, peakAt: 0, smoothed: 0, lastAt: 0 };
+  api.onAudioPeak?.(d => {
+    const p = Number(d?.peak);
+    if (Number.isFinite(p)) {
+      audio.peak = Math.max(0, Math.min(1, p / 100));
+      audio.peakAt = performance.now();
     }
-    window.__lumadockHearing = false;
-    return null;
+  });
+
+  window.__lumadockAudioLevels = () => {
+    const playing = Boolean(spotifyConnected && spotifyState.is_playing);
+    if (!playing) {
+      window.__lumadockHearing = false;
+      window.__lumadockBeatEnergy = 0;
+      return null;
+    }
+    const tmMs = performance.now();
+    if (tmMs - audio.lastAt < 14) return audio.levels;
+    audio.lastAt = tmMs;
+    const tm = tmMs / 1000;
+    const age = tmMs - audio.peakAt;
+    const rawPeak = age < 1200 ? audio.peak : 0;
+    audio.smoothed = audio.smoothed * 0.65 + rawPeak * 0.35;
+    const liveDrive = spotifyState.track?.id === 'test'
+      ? (0.55 + 0.4 * Math.sin(tm * 7.2))
+      : rawPeak > 0.015 ? Math.min(1, 0.24 + audio.smoothed * 1.15) : 0.38;
+
+    window.__lumadockHearing = true;
+    window.__lumadockBeatEnergy = Math.max(0.1, Math.min(1, liveDrive * 0.9));
+    for (let i = 0; i < BARS; i++) {
+      const waveA = 0.5 + 0.5 * Math.sin(tm * 7.4 - i * 0.42);
+      const waveB = 0.5 + 0.5 * Math.cos(tm * 4.5 + i * 0.68);
+      const arch = Math.sin((i / (BARS - 1)) * Math.PI) * 0.72 + 0.28;
+      const lvl = (waveA * 0.58 + waveB * 0.42) * arch * Math.max(0.28, liveDrive);
+      audio.levels[i] = Math.max(0.06, Math.min(0.98, lvl));
+    }
+    return audio.levels;
   };
 
-  // ---------- album colour (soft, readable version of the cover's main colour) ----------
+  // ---------- dual-color album palette (dominant + complementary accent) ----------
   let colourFor = '';
+  const rgbStr = ([r, g, b]) => `rgb(${r},${g},${b})`;
+  const boostRgb = (r, g, b) => {
+    const k = 212 / Math.max(68, Math.max(r, g, b));
+    return [r, g, b].map(v => Math.min(255, Math.round(v * k)));
+  };
   setInterval(() => {
-    if (spotifyState.track?.id === 'test') return;
+    if (spotifyState.track?.id === 'test') {
+      window.__lumadockAlbumPalette = { primary: '#00e5ff', secondary: '#b87aff' };
+      return;
+    }
     const url = spotifyState.track?.image_url || '';
     if (url === colourFor) return; colourFor = url;
-    if (!url) { window.__lumadockAlbumColour = null; return; }
+    if (!url) {
+      window.__lumadockAlbumColour = null;
+      window.__lumadockAlbumSecondary = null;
+      window.__lumadockAlbumPalette = null;
+      return;
+    }
     const img = new Image(); img.crossOrigin = 'anonymous';
     img.onload = () => {
       try {
         const c = document.createElement('canvas'); c.width = c.height = 12; const x = c.getContext('2d'); x.drawImage(img, 0, 0, 12, 12);
-        const d = x.getImageData(0, 0, 12, 12).data; let r = 0, g = 0, b = 0, n = 0;
-        for (let i = 0; i < d.length; i += 4) { const sat = Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2]); const w = 1 + sat / 16; r += d[i] * w; g += d[i + 1] * w; b += d[i + 2] * w; n += w; }
-        [r, g, b] = [r / n, g / n, b / n];
-        const boost = 200 / Math.max(60, Math.max(r, g, b)); // bright enough on black
-        window.__lumadockAlbumColour = `rgb(${[r, g, b].map(v => Math.min(255, Math.round(v * boost))).join(',')})`;
-      } catch { window.__lumadockAlbumColour = null; }
+        const d = x.getImageData(0, 0, 12, 12).data;
+        const pixels = [];
+        let pr = 0, pg = 0, pb = 0, pn = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          const r = d[i], g = d[i + 1], b = d[i + 2];
+          const sat = Math.max(r, g, b) - Math.min(r, g, b);
+          const w = 1 + sat / 14;
+          pr += r * w; pg += g * w; pb += b * w; pn += w;
+          pixels.push({ r, g, b, sat });
+        }
+        const c1 = boostRgb(pr / pn, pg / pn, pb / pn);
+        let best = null, bestScore = -1;
+        for (const px of pixels) {
+          const diff = Math.abs(px.r - c1[0]) + Math.abs(px.g - c1[1]) + Math.abs(px.b - c1[2]);
+          const score = diff * (0.4 + px.sat / 180);
+          if (score > bestScore) { bestScore = score; best = px; }
+        }
+        const c2 = best ? boostRgb(best.r, best.g, best.b) : c1;
+        window.__lumadockAlbumColour = rgbStr(c1);
+        window.__lumadockAlbumSecondary = rgbStr(c2);
+        window.__lumadockAlbumPalette = { primary: rgbStr(c1), secondary: rgbStr(c2) };
+      } catch {
+        window.__lumadockAlbumColour = null;
+        window.__lumadockAlbumSecondary = null;
+        window.__lumadockAlbumPalette = null;
+      }
     };
     img.src = url;
   }, 1000);
