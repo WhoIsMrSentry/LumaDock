@@ -44,7 +44,8 @@
     "quit": "Çıkış",
     "thisPc": "Bu Bilgisayar",
     "accessDenied": "Erişim reddedildi.",
-    "notFound": "Bulunamadı."
+    "notFound": "Bulunamadı.",
+    "generate": "Üret"
   },
   "tray": {
     "openIsland": "Adayı Aç",
@@ -53,7 +54,8 @@
     "restart": "Yeniden Başlat",
     "quit": "LumaDock'u Kapat",
     "appDescription": "LumaDock: Windows için Dinamik Ada",
-    "settingsDescription": "LumaDock Ayarları: bağlantılar, Robo, gardırop ve fazlası"
+    "settingsDescription": "LumaDock Ayarları: bağlantılar, Robo, gardırop ve fazlası",
+    "bringToFront": "Adayı Öne Getir"
   },
   "status": {
     "working": "Çalışıyor",
@@ -371,10 +373,10 @@
     "buddyLimitRest": "Biraz dinlenebilirsiniz.",
     "batteryLowTitle": "Pil azaldı: %{pct}",
     "batteryLowBody": "Şarj cihazınızı takın.",
-    "batteryFlash": "🪫 %{pct} pil kaldı. Şarj cihazınızı takın!",
+    "batteryFlash": "%{pct} pil kaldı. Şarj cihazınızı takın!",
     "btLowTitle": "{name} pili azaldı",
     "btLowBody": "%{pct} pil kaldı.",
-    "btFlash": "🎧 {name}: %{pct} kaldı",
+    "btFlash": "{name}: %{pct} kaldı",
     "calendarInTenTitle": "10 dakika sonra",
     "calendarInTenFlash": "10 dk sonra: {title}",
     "downloaded": "⬇ İndirildi: {name}",
@@ -387,7 +389,7 @@
     "quitTitle": "LumaDock kapatılsın mı?",
     "quitYes": "Evet, kapat",
     "quitNo": "Hayır",
-    "muted": "🔇 Ses kapalı",
+    "muted": "Ses kapalı",
     "join": "Katıl",
     "nowWord": "Şimdi",
     "todayWord": "bugün",
@@ -469,6 +471,14 @@
       "clips": "Pano",
       "note": "Notlar",
       "system": "Sistem",
+      "net": "Ağ & Disk",
+      "weather": "Hava",
+      "market": "Piyasa",
+      "dev": "Geliştirici",
+      "command": "Komut",
+      "mixer": "Ses Mikseri",
+      "studio": "Pencere & Kesit",
+      "relay": "AI & Build",
       "picker": "Renk Seç",
       "settings": "Ayarlar",
       "clock": "Saat",
@@ -562,7 +572,21 @@
     "startFocus": "Odağı başlat",
     "doneAt": "Bitiş: {time}",
     "ofMinutes": "toplam {mins} dk",
-    "minutesUnit": "{n} dk"
+    "minutesUnit": "{n} dk",
+    "ambient": {
+      "title": "Ortam Sesi",
+      "volume": "Ortam sesi seviyesi",
+      "rain": "Yağmur",
+      "cafe": "Kafe",
+      "brown": "Kahve Gürültüsü",
+      "alpha": "Alfa"
+    },
+    "timersTab": "Sayaçlar & Mola",
+    "countdowns": "Hızlı Geri Sayımlar",
+    "timersEmpty": "Yukarıdan hızlı bir geri sayım başlatın.",
+    "eyeBreakLabel": "20-20-20 Göz Molası",
+    "eyeBreakFlash": "20-20-20: 20 sn uzağa bak ve su iç",
+    "stopwatch": "Kronometre"
   },
   "trayApp": {
     "title": "Çekmece",
@@ -579,17 +603,94 @@
     "mirrorTitle": "Ayna",
     "mirrorSub": "Görüntülü görüşme öncesi hızlı kontrol · çıkınca kamera kapanır",
     "noCameraError": "Kamera bulunamadı veya Windows erişime izin vermiyor (Ayarlar → Gizlilik → Kamera).",
-    "notInTray": "Bu dosya çekmecede değil."
+    "notInTray": "Bu dosya çekmecede değil.",
+    "qrShareBtn": "QR Drop",
+    "qrStop": "Paylaşımı Durdur",
+    "qrTitle": "Wi-Fi ile Telefona Gönder",
+    "qrSub": "İndirmek için telefon kamerasıyla okutun ({count} dosya)",
+    "qrCopyUrl": "Linki Kopyala",
+    "pickFilesBtn": "Dosya Ekle"
   },
   "toolsPage": {
     "clipboardTitle": "Pano",
-    "clipboardSub": "Son kopyalanan metinler · yeniden kopyalamak için tıklayın",
+    "clipboardSub": "Son kopyalanan metin ve görseller · kopyalamak için tıklayın",
     "clipboardEmptyTitle": "Henüz bir şey kopyalanmadı",
     "clipboardEmptySub": "Bir şey kopyalayın (Ctrl + C), burada görünecektir.",
     "noteTitle": "Not",
     "noteSub": "Hızlı not alın · otomatik olarak kaydedilir",
     "notePlaceholder": "Buraya yazın…",
-    "clipNotFound": "Bulunamadı."
+    "clipNotFound": "Bulunamadı.",
+    "imageLabel": "Görsel",
+    "ocrBtn": "Yazıyı Al (OCR)",
+    "ocrCopied": "Metin okundu ve kopyalandı ✓",
+    "ocrEmpty": "Görselde okunabilir metin bulunamadı.",
+    "recentTab": "Sonlar",
+    "vaultTab": "Kasa",
+    "vaultEmpty": "Kasa boş",
+    "vaultEmptySub": "Kalıcı sabitlemek için son kopyalardaki simgesine tıklayın.",
+    "noteTab": "Not",
+    "promptsTab": "Şablonlar",
+    "todoPh": "Hızlı görev ekle…",
+    "promptBodyPh": "Yeniden kullanılabilir prompt şablonu yazın…",
+    "qrGenPh": "QR oluşturmak için metin veya URL yazın...",
+    "qrAlwaysTitle": "Anında Çevrimdışı QR Üretici",
+    "qrAlwaysSub": "Pano boşken bile anında QR oluşturun veya görsellerden okuyun.",
+    "ocrSnipBtn": "Ekrandan Alan Seç & OCR",
+    "ocrPickFileBtn": "Görsel Dosya Seç",
+    "ocrEmptyPlaceholder": "Görselden veya ekrandan okunan metin burada görünecek..."
+  },
+  "command": {
+    "title": "Hızlı Komut",
+    "sub": "Hesap makinesi, döviz (250 usd to try), çeviri (tr...) veya başlatıcı",
+    "placeholder": "Hesaplama, kur, 'tr metin' veya uygulama adı yazın…",
+    "openView": "Aç",
+    "launcherSub": "Uygulamalar, SSH, projeler, hesaplama, birim ve renkler"
+  },
+  "devPage": {
+    "title": "Geliştirici Merkezi",
+    "sub": "Git dalı, açık localhost portları ve anlık çeviri",
+    "gitTitle": "Git Deposu",
+    "clean": "Çalışma dizini temiz",
+    "dirtyCount": "{count} değişiklik",
+    "noGit": "Git deposu olan bir proje açın veya Claude/Codex çalıştırın.",
+    "translateTitle": "Hızlı Çeviri (EN ↔ TR)",
+    "translatePh": "Kelime veya cümle yazın…",
+    "portsTitle": "Localhost Portları",
+    "noPorts": "Şu an açık yerel geliştirici portu algılanmadı.",
+    "noPortsShort": "Açık port yok",
+    "portsSub": "Dinleyen portlar, Docker konteynerleri ve dosya kilitleri",
+    "translateOnlySub": "Anlık çok dilli metin çevirisi",
+    "sourceLabel": "Kaynak Metin",
+    "resultLabel": "Çeviri",
+    "translateBtn": "Çevir",
+    "translateHint": "Çeviri sonucu burada görünecek..."
+  },
+  "weatherPage": {
+    "title": "Hava Durumu & Takvim",
+    "sub": "Tahminler ve sıradaki toplantı bağlantısı",
+    "noCityShort": "Şehir ekle",
+    "noCity": "Hava durumu için Ayarlar → Genel kısmından şehrinizi girin.",
+    "noEvent": "Yaklaşan takvim etkinliği bulunamadı.",
+    "feelsLike": "Hissedilen {temp}°",
+    "worldClocksTab": "Dünya Saatleri",
+    "clocksSub": "Saat farkı kaydırıcısı ile şehir saatlerini karşılaştır",
+    "offsetLabel": "Saat Farkı"
+  },
+  "netPage": {
+    "title": "Ağ, Disk & GPU",
+    "sub": "Canlı indirme/yükleme hızı, depolama ve donanım",
+    "download": "İndirme",
+    "upload": "Yükleme",
+    "disk": "Disk Kullanımı",
+    "tabSummary": "Özet",
+    "tabNetwork": "Ağ & Hız",
+    "topProcsTitle": "En Çok RAM Kullananlar",
+    "runPing": "Ping & IP Ölç",
+    "runSpeed": "Hız Testi (5 MB)"
+  },
+  "marketPage": {
+    "title": "Döviz & Kripto",
+    "sub": "Canlı döviz kurları ve kripto fiyat takibi"
   },
   "extras": {
     "invalidCalendarUrl": "Lütfen https veya webcal takvim bağlantısı yapıştırın.",
@@ -600,14 +701,17 @@
   },
   "buddy": {
     "overlay": {
-      "lensCarry": "👀 Robo buraya bakıyor",
-      "lensLook": "👀 İnceleniyor…",
-      "lensHome": "🏠 Bırakın: eve dönsün",
+      "lensCarry": "Robo buraya bakıyor",
+      "lensLook": "İnceleniyor…",
+      "lensHome": "Bırakın: eve dönsün",
       "seen": "Gördüğüm:",
       "at": "Robo inceliyor:",
       "here": "ekranın bu kısmı",
       "placeholder": "Buradaki içerik hakkında bir şey sorun…",
       "explain": "Açıkla",
+      "explainError": "Hatayı açıkla",
+      "ocr": "Metni kopyala",
+      "ocrEmpty": "Ekranda okunabilir metin bulunamadı.",
       "spelling": "Yazımı kontrol et",
       "translate": "Çevir",
       "summary": "Özetle",
@@ -618,7 +722,7 @@
       "home": "Eve dön",
       "put": "Word'e uygula",
       "putting": "Word'de uygulanıyor…",
-      "noFixes": "Hiçbir hata görünmüyor. Harika! 🎉",
+      "noFixes": "Hiçbir hata görünmüyor. Harika!",
       "pages": "{count} sayfa okundu",
       "putDone": "{total} düzeltmeden {applied} tanesi Word'e değişiklik olarak eklendi.",
       "wordHint": "Sadece görünen kısmı değil, tüm sayfaları okurum.",
@@ -626,13 +730,17 @@
     },
     "chat": {
       "chips": {
-        "explain": "💡 Açıkla",
-        "fix": "🛠️ Düzelt",
-        "fixMore": "🛠️ Benim için düzelt",
-        "spelling": "✏️ Yazımı kontrol et",
-        "translate": "🌍 Çevir",
-        "summary": "📝 Özetle"
+        "explain": "Açıkla",
+        "explain_error": "Hatayı açıkla",
+        "fix": "Düzelt",
+        "fixMore": "Benim için düzelt",
+        "spelling": "Yazımı kontrol et",
+        "translate": "Çevir",
+        "summary": "Özetle",
+        "ocr": "Metni kopyala"
       },
+      "ocrCopied": "Okunan metin panoya kopyalandı",
+      "ocrEmpty": "Okunabilir metin algılanamadı.",
       "seen": "Robo'nun gördüğü ekran",
       "part": "Ekranın bu kısmı",
       "forget": "Buna bakmayı bırak",
@@ -643,7 +751,7 @@
       "sent": "Robo bunu gördü ve yapay zekaya gönderdi · kapatmak için tıklayın",
       "login": "ChatGPT ile giriş yap",
       "openCx": "Bağlantıları Aç",
-      "clean": "Hiçbir hata görünmüyor. Harika! 🎉",
+      "clean": "Hiçbir hata görünmüyor. Harika!",
       "toWord": "✓ Word'e uygula (değişiklik olarak)",
       "more": "Devam et…",
       "about": "Buradaki içerik hakkında bir şey sorun…",
@@ -652,7 +760,7 @@
       "send": "Gönder",
       "wrong": "Bir şeyler ters gitti.",
       "browser": "Tarayıcınıza bakın…",
-      "loggedIn": "Başarılı! Sorunuzu tekrar sorun. 🎉",
+      "loggedIn": "Başarılı! Sorunuzu tekrar sorun.",
       "noLogin": "Giriş yapılamadı.",
       "fixed": "{project} içinde düzeltildi",
       "fixing": "Robo {project} içinde çözümü arıyor…",
@@ -932,23 +1040,59 @@
     },
     "badges": {
       "achievementLabel": "Başarım",
-      "first": { "name": "İlk Görev", "how": "Bir yapay zeka görevini tamamla" },
-      "ten": { "name": "On Görev", "how": "10 görev tamamlandı" },
-      "fifty": { "name": "Elli Görev", "how": "50 görev tamamlandı" },
-      "helper": { "name": "Yardımsever", "how": "Adadan 10 kez yanıt ver" },
-      "owl": { "name": "Gece Kuşu", "how": "Gece yarısından sonra görev bitir" },
-      "bird": { "name": "Erkenci Kuş", "how": "Sabah 07:00 öncesi görev bitir" },
-      "marathon": { "name": "Maratoncu", "how": "15 dakikadan uzun bir görev tamamla" },
-      "focus": { "name": "Odak Ustası", "how": "5 odak oturumu tamamla" },
-      "dj": { "name": "Siber DJ", "how": "Spotify'ı adadan 10 kez kontrol et" },
-      "tray": { "name": "Koleksiyoncu", "how": "Çekmecede 5 dosya biriktir" },
-      "mirror": { "name": "Ayna Kontrolü", "how": "Hızlı aynayı kullan" },
-      "fashion": { "name": "Stil İkonu", "how": "Tüm gardırop ekipmanlarını kazan" }
+      "gh_streak_3": {
+        "name": "3 Günlük Seri",
+        "how": "GitHub üzerinde 3 günlük katkı serisi yakala"
+      },
+      "gh_streak_7": {
+        "name": "Haftalık Seri",
+        "how": "GitHub üzerinde 7 günlük katkı serisine ulaş"
+      },
+      "gh_streak_30": {
+        "name": "Aylık Efsane",
+        "how": "GitHub üzerinde 30 günlük seriye ulaş"
+      },
+      "gh_contrib_100": {
+        "name": "100+ Katkı",
+        "how": "Son 1 yılda 100+ GitHub katkısına ulaş"
+      },
+      "gh_star": {
+        "name": "İlk Yıldız",
+        "how": "Bir GitHub reponda yeni yıldız al"
+      },
+      "gh_pr": {
+        "name": "Aktif PR",
+        "how": "Açık bir Pull Request takip et"
+      },
+      "focus_5": {
+        "name": "Derin Odak",
+        "how": "5 Odaklanma oturumu tamamla"
+      },
+      "dj_10": {
+        "name": "Ada DJ",
+        "how": "LumaDock üzerinden 10 kez müzik yönet"
+      },
+      "tray_5": {
+        "name": "Dosya Kutusu",
+        "how": "Tepsiye 5 veya daha fazla dosya ekle"
+      },
+      "snip_ocr": {
+        "name": "Metin Okuyucu",
+        "how": "Ekran veya görselden OCR ile metin çıkar"
+      },
+      "ai_10": {
+        "name": "YZ Ortağı",
+        "how": "10 adet izlenen YZ görevini tamamla"
+      },
+      "picker_pro": {
+        "name": "Renk Uzmanı",
+        "how": "Ekran renk seçicisiyle bir piksel kopyala"
+      }
     },
     "gearUnlockedTitle": "LumaDock yeni bir ekipman açtı!",
     "gearUnlockedBody": "{count} görev tamamlandı: {name} kazandınız.",
-    "hungryTitle": "Acıktım… bir görev tamamla 🍪",
-    "pokeDizzy": "Ah! Çok fazla dokundun… başım döndü 😵",
+    "hungryTitle": "Acıktım… bir görev tamamla",
+    "pokeDizzy": "Ah! Çok fazla dokundun… başım döndü",
     "notEarnedYet": "Henüz kazanılmadı",
     "lightPresets": {
       "classic": "Klasik",
@@ -961,18 +1105,18 @@
     "lightDone": "Tamamlandı",
     "lightError": "Hata",
     "moods": {
-      "all": "▶️ Tümünü Oynat",
-      "happy": "😊 Mutlu",
-      "focus": "🎯 Odaklı",
-      "curious": "🤨 Meraklı",
-      "surprised": "✨ Şaşkın",
-      "angry": "😠 Kızgın",
-      "cool": "😎 Havalı",
-      "wink": "😉 Göz Kırpma",
-      "heart": "😍 Sevgi Dolu",
-      "sad": "😢 Üzgün",
-      "dizzy": "😵 Baş Dönmesi",
-      "sleep": "😴 Uyku Modu"
+      "all": "▶ Tümünü Oynat",
+      "happy": "Mutlu",
+      "focus": "Odaklı",
+      "curious": "Meraklı",
+      "surprised": "Şaşkın",
+      "angry": "Kızgın",
+      "cool": "Havalı",
+      "wink": "Göz Kırpma",
+      "heart": "Sevgi Dolu",
+      "sad": "Üzgün",
+      "dizzy": "Baş Dönmesi",
+      "sleep": "Uyku Modu"
     },
     "groups": {
       "name": "İsim",
@@ -1009,7 +1153,7 @@
       "startup": "Başlangıç Animasyonu",
       "startupSub": "LumaDock açıldığında el sallar ve selam verir",
       "hunger": "Enerji & Açlık",
-      "hungerOnSub": "{name} %{pct} dolu. Her tamamlanan görev enerji verir 🍪",
+      "hungerOnSub": "{name} %{pct} dolu. Her tamamlanan görev enerji verir",
       "hungerOffSub": "Uzun süre görev tamamlanmadığında acıkır",
       "language": "Dil · Language",
       "languageSub": "Ada ve ayarlar penceresinin arayüz dili",
@@ -1042,6 +1186,13 @@
       "volumeHudSub": "Sesi değiştirdiğinizde adada ses seviyesini göster",
       "batteryWarn": "Pil Uyarısı",
       "batteryWarnSub": "Bilgisayar veya Bluetooth cihazlarının pili azaldığında uyar",
+      "islandStyle": "Ada Stili",
+      "islandStyleSub": "Parlayan Aurora, buzlu Cam veya saf Obsidian görünümü seçin",
+      "styleAurora": "Aurora",
+      "styleGlass": "Buzlu Cam",
+      "styleObsidian": "Obsidian",
+      "weatherFx": "Hava Efektleri",
+      "weatherFxSub": "Hava durumuna göre ada içinde hafif yağmur, kar veya güneş parıltısı",
       "fullscreenHide": "Tam Ekranda Gizle",
       "fullscreenHideSub": "Tam ekran oyun veya videolarda adayı otomatik gizle",
       "displayMonitor": "Ekran Monitörü",
@@ -1053,24 +1204,28 @@
       "restartApp": "Yeniden Başlat",
       "restartAppSub": "LumaDock'u kapatıp hemen yeniden başlatır",
       "quitApp": "Çıkış Yap",
-      "quitAppSub": "LumaDock'u tamamen kapatır (saatin yanındaki simgeden de yapılabilir)"
+      "quitAppSub": "LumaDock'u tamamen kapatır (saatin yanındaki simgeden de yapılabilir)",
+      "miniHud": "Mini Performans HUD",
+      "miniHudSub": "Bekleme çubuğunda Buddy yanında canlı CPU, RAM ve indirme hızı göster",
+      "wardrobeAllOpen": "Tüm aksesuar ve renkler açık"
     },
     "tests": {
-      "hello": "👋 Başlangıç",
-      "bye": "😴 Kapanış",
-      "busy": "🟠 YZ çalışıyor",
-      "question": "❓ YZ soruyor",
-      "done": "🟢 YZ tamamlandı",
-      "error": "🔴 YZ hatası",
-      "music": "🎵 Demo müzik",
-      "focus": "⏱️ Odak 1 dk",
-      "clear": "🧹 Tümünü durdur"
+      "hello": "Başlangıç",
+      "bye": "Kapanış",
+      "busy": "YZ çalışıyor",
+      "question": "YZ soruyor",
+      "done": "YZ tamamlandı",
+      "error": "YZ hatası",
+      "music": "Demo müzik",
+      "focus": "⏱ Odak 1 dk",
+      "clear": "Tümünü durdur"
     },
     "sleepEffect": "Uyku Efekti",
     "sleepEffectSub": "Bir süre hiçbir şey olmadığında uyku moduna geçer",
     "soundEffects": "Ses efektleri",
     "demoTrack": "Siber Synth Demo",
-    "minutesShort": "{n} dk"
+    "minutesShort": "{n} dk",
+    "customColorPick": "Özel renk seç"
   },
   "settings": {
     "title": "LumaDock Ayarları",
@@ -1155,13 +1310,34 @@
       "off": "kapalı"
     },
     "cx": {
-      "claudecode": ["Claude Code", "Terminal veya VS Code'daki Claude Code oturumlarınızı takip eder."],
-      "codex": ["Codex", "OpenAI Codex kodlama yaparken takip eder."],
-      "gemini": ["Gemini CLI", "Terminaldeki Gemini CLI oturumlarını hafif kancalarla takip eder."],
-      "cursor": ["Cursor Agent", "Cursor kodlama ajanının oturumlarını anlık takip eder."],
-      "claude": ["Claude", "Claude uygulaması veya claude.ai: Yanıt hazır olduğunda Robo haber verir."],
-      "chatgpt": ["ChatGPT", "ChatGPT uygulaması veya chatgpt.com: Yanıt hazır olduğunda Robo haber verir."],
-      "webMonitor": ["Tarayıcı YZ İzleyici (Beta)", "ChatGPT ve Claude web/masaüstü pencerelerini takip etme kilidini açar."]
+      "claudecode": [
+        "Claude Code",
+        "Terminal veya VS Code'daki Claude Code oturumlarınızı takip eder."
+      ],
+      "codex": [
+        "Codex",
+        "OpenAI Codex kodlama yaparken takip eder."
+      ],
+      "gemini": [
+        "Gemini CLI",
+        "Terminaldeki Gemini CLI oturumlarını hafif kancalarla takip eder."
+      ],
+      "cursor": [
+        "Cursor Agent",
+        "Cursor kodlama ajanının oturumlarını anlık takip eder."
+      ],
+      "claude": [
+        "Claude",
+        "Claude uygulaması veya claude.ai: Yanıt hazır olduğunda Robo haber verir."
+      ],
+      "chatgpt": [
+        "ChatGPT",
+        "ChatGPT uygulaması veya chatgpt.com: Yanıt hazır olduğunda Robo haber verir."
+      ],
+      "webMonitor": [
+        "Tarayıcı YZ İzleyici (Beta)",
+        "ChatGPT ve Claude web/masaüstü pencerelerini takip etme kilidini açar."
+      ]
     },
     "cxOn": "Bağlı",
     "cxOff": "Kapalı",
@@ -1266,7 +1442,7 @@
     "codePh": "Kodunuz mu var? Buraya yapıştırın",
     "codeBtn": "Etkinleştir",
     "codeChecking": "Kontrol ediliyor…",
-    "codeOk": "Başarılı! Paketiniz açıldı. 🎉",
+    "codeOk": "Başarılı! Paketiniz açıldı.",
     "codeOffline": "İnternet bağlantısı yok. Lütfen tekrar deneyin.",
     "codeRemove": "Kodu bu bilgisayardan kaldır",
     "seePacks": "Paketleri İncele",
@@ -1280,23 +1456,96 @@
     "added": "{name} LumaDock'a eklendi",
     "removed": "{name} kaldırıldı",
     "appsCatalog": {
-      "claude": ["Yapay Zeka Asistanları", "Claude Code ve Codex: Robo yapay zekanın meşgul, soru soruyor veya tamamlandı durumunu gösterir."],
-      "buddy": ["Robo Buddy", "Robo'yu adadan tutup ekrandaki bir öğeye bırakın ve ne yazdığını sorun."],
-      "spotify": ["Spotify", "Çalan müzik ve kontroller. Robo eşlik eder."],
-      "focus": ["Odak", "Odaklanma sayacı. Robo dikkatinizin dağılmasını önler."],
-      "tray": ["Çekmece", "Dosyaları adaya bırakın ve daha sonra kolayca alın."],
-      "clips": ["Pano", "Son kopyalananlar. Yeniden kopyalamak için tıklayın."],
-      "note": ["Not", "Her an elinizin altında hızlı bir not defteri."],
-      "cpu": ["Sistem Monitörü", "Ana ekranda canlı CPU ve RAM kullanım göstergesi."],
-      "picker": ["Renk Seçici", "Ekrandaki herhangi bir pikselin HEX renk kodunu tek tıkla kopyalar."],
-      "clock": ["Saat", "Ana ekranda saat görünümü."],
-      "settings": ["Ayarlar", "Bu uygulama. Çark simgesiyle her zaman elinizin altında."]
+      "claude": [
+        "Yapay Zeka Asistanları",
+        "Claude Code ve Codex: Robo yapay zekanın meşgul, soru soruyor veya tamamlandı durumunu gösterir."
+      ],
+      "buddy": [
+        "Robo Buddy",
+        "Robo'yu adadan tutup ekrandaki bir öğeye bırakın ve ne yazdığını sorun."
+      ],
+      "spotify": [
+        "Spotify",
+        "Çalan müzik ve kontroller. Robo eşlik eder."
+      ],
+      "focus": [
+        "Odak",
+        "Odaklanma sayacı. Robo dikkatinizin dağılmasını önler."
+      ],
+      "tray": [
+        "Çekmece",
+        "Dosyaları adaya bırakın ve daha sonra kolayca alın."
+      ],
+      "clips": [
+        "Pano",
+        "Son kopyalananlar. Yeniden kopyalamak için tıklayın."
+      ],
+      "note": [
+        "Not",
+        "Her an elinizin altında hızlı bir not defteri."
+      ],
+      "cpu": [
+        "Sistem Monitörü",
+        "Ana ekranda canlı CPU ve RAM kullanım göstergesi."
+      ],
+      "net": [
+        "Sistem & Ağ",
+        "Canlı CPU, RAM, GPU, disk, ağ hızı, Ping, Hız Testi ve en çok RAM kullananlar."
+      ],
+      "weather": [
+        "Hava & Takvim",
+        "Canlı sıcaklık, 3 günlük tahmin ve tek tıkla toplantıya katılma."
+      ],
+      "market": [
+        "Piyasalar",
+        "Canlı USD/TRY, EUR/TRY ve kripto para kurları."
+      ],
+      "dev": [
+        "Geliştirici Merkezi",
+        "Aktif Git dalı durumu, açık localhost portları ve anlık çevirmen."
+      ],
+      "command": [
+        "Hızlı Komut",
+        "Hesap makinesi, döviz çevirici ve renk geçmişi için Ctrl+Alt+Space."
+      ],
+      "picker": [
+        "Renk Seçici",
+        "Ekrandaki herhangi bir pikselin HEX renk kodunu tek tıkla kopyalar."
+      ],
+      "clock": [
+        "Saat",
+        "Ana ekranda saat görünümü."
+      ],
+      "settings": [
+        "Ayarlar",
+        "Bu uygulama. Çark simgesiyle her zaman elinizin altında."
+      ],
+      "github": [
+        "GitHub & Git",
+        "Günlük katkı serisi, heatmap, aktif PR/Issue, yıldızlar ve yerel Git durumu."
+      ],
+      "ports": [
+        "Açık Portlar & Altyapı",
+        "Dinleyen TCP portları, Docker kontrolü ve Dosya Kilit Açıcı."
+      ],
+      "translate": [
+        "Çeviri",
+        "Özel çok dilli anlık metin çeviri ekranı."
+      ],
+      "devtools": [
+        "Dev Araçları",
+        "HTTP API istemcisi, Webhook dinleyici, JWT, JSON, Base64, Diff ve SHA-256."
+      ],
+      "vault": [
+        "2FA & Güvenli Kasa",
+        "Şifreli 2FA TOTP kodları, gizli kasa ve parola üretici."
+      ]
     },
     "updateAvailable": "Yeni sürüm / commit mevcut: {version}",
     "upToDateVersion": "Güncelsiniz: v{version}{hash}",
     "currentUpdating": "Mevcut: v{version}{hash} · Otomatik güncelleniyor",
     "syncedWithGithub": "GitHub WhoIsMrSentry/LumaDock ile senkronize{remoteHash}",
-    "remoteHashTag": " (uzak: {hash})",
+    "remoteHashTag": "(uzak: {hash})",
     "updateNowBtn": "Şimdi Güncelle",
     "checkUpdatesBtn": "Güncelleme Kontrol",
     "checkingGithubToast": "GitHub kontrol ediliyor (sürüm & commit hash)…",
@@ -1311,6 +1560,203 @@
     "retry": "Tekrar Dene",
     "beta": "beta",
     "newest": "En Yeni",
-    "loading": "Yükleniyor…"
+    "loading": "Yükleniyor…",
+    "statGhStreak": "GitHub Serisi",
+    "statLongest": "En Uzun",
+    "ghContributions": "katkı",
+    "ghConnectSub": "Seri, aktif PR ve takip akışı için GitHub kullanıcı adı veya token bağlayın",
+    "ghCliDetected": "gh CLI @{user} olarak bağlı",
+    "ghClearToken": "Token Temizle",
+    "ghAccountTitle": "Hesap & Token",
+    "ghAccountDesc": "Kaydedilen token Windows DPAPI ile şifrelenir"
+  },
+  "snip": {
+    "hint": "Sürükleyerek alan seçin · Esc iptal",
+    "pin": "Sabitle",
+    "framed": "Çerçeveli",
+    "framedCopied": "Çerçeveli ekran görüntüsü kopyalandı ✓",
+    "ocrCopied": "Kesit metni kopyalandı ✓"
+  },
+  "studio": {
+    "mixerTitle": "Uygulama Bazlı Ses Mikseri",
+    "mixerSub": "Her uygulamanın sesini ayrı yönetin ve çıkış cihazını değiştirin",
+    "mixerShort": "Uygulama Sesleri",
+    "duckActiveSub": "Akıllı Ses Kısma aktif — müzik otomatik kısıldı",
+    "duckShort": "Ses Kısık",
+    "appsAudioTitle": "Ses Çalan Uygulamalar",
+    "winOnlyFeature": "Uygulama bazlı Core Audio kontrolü Windows'ta desteklenir.",
+    "noAudioApps": "Şu an ses üreten bir uygulama bulunamadı.",
+    "outputDevicesTitle": "Ses Çıkış Cihazı",
+    "noDevices": "Etkin ses çıkış cihazı bulunamadı.",
+    "smartDuckTitle": "Akıllı Ses Kısma",
+    "smartDuckSub": "Toplantıda veya AI sorusunda müziği kıs",
+    "undoAuto": "Otomatik İşlemi Geri Al",
+    "duckedToast": "Görüşme / AI için müzik kısıldı",
+    "restoredAudioToast": "Müzik sesi geri açıldı",
+    "studioTitle": "Pencere Stüdyosu & Kesit",
+    "studioSub": "Üstte sabitle, hayalet mod, çalışma kapsülleri ve ekran kesiti",
+    "tabActions": "Stüdyo",
+    "tabWindows": "Pencereler",
+    "tabRules": "Otopilot",
+    "screenAndPower": "Ekran & Güç Araçları",
+    "btnSnip": "Kesit & Sabitle",
+    "btnPinActive": "Pencere Sabitle",
+    "btnShield": "Paylaşım Kalkanı",
+    "shieldShort": "Kalkan",
+    "clearPins": "Pinleri Kapat ({count})",
+    "lastWindow": "Hedef",
+    "workspacesTitle": "Tek-Tık Çalışma Kapsülleri",
+    "launch": "Başlat",
+    "windowsListTitle": "Açık Pencereler (Sabit · Opaklık · Hayalet)",
+    "noWindows": "Listelenebilecek pencere bulunamadı.",
+    "rulesTitle": "Bağlam Otopilotu & Gizlilik",
+    "ruleMeetingDuck": "Teams / Zoom / Discord veya mikrofonda müziği kıs",
+    "ruleAiDuck": "AI soru veya izin beklerken müziği kıs",
+    "ruleIdeMode": "IDE & Terminal açılınca bağlam rozeti göster",
+    "ruleFlowGuard": "Odak modunda Robo Dikkat Kalkanı",
+    "ruleAutoStrip": "Pano ve dosya bırakmada 8sn Akıllı Şerit",
+    "relayTitle": "Cross-AI Aktarım & Build Gözcüsü",
+    "relaySub": "AI'lar arası bağlam gönder, build izle ve gün sonu özeti al",
+    "tabStandup": "Gün Özeti",
+    "crossAiSendTitle": "Cross-AI Bağlam Aktarımı",
+    "relayPlaceholder": "Başka bir AI'ya aktarılacak hata, log veya istemi yazın…",
+    "flightRadarTitle": "Son AI Hareketleri",
+    "noAiHistory": "Henüz kodlama asistanı kaydı yok.",
+    "savedScriptsTitle": "Hızlı Komutlar & Watchdog",
+    "liveOutputTitle": "Canlı Çıktı",
+    "idleScript": "Çalıştırılacak komut bekleniyor",
+    "sendErrToAi": "Hatayı AI'ya Aktar",
+    "cmdNamePh": "Ad",
+    "standupTitle": "Günlük Özet",
+    "focusLabel": "Odak & Dikkat Kesintisi",
+    "aiBuildsLabel": "AI Tur & Build",
+    "filesEditedLabel": "Bugün Değişen Dosyalar",
+    "standupCopied": "Günlük Özet Markdown kopyalandı ✓",
+    "askAi": "AI'ya Sor",
+    "openRelay": "Aktarım",
+    "flowWarnTitle": "Odakta Kal!",
+    "flowWarnBody": "Odak sayacı aktif ({app})",
+    "actInspectPort": "Port :{port}",
+    "actCopyDecoded": "Çözümleneni Kopyala",
+    "actFormatJson": "JSON Güzelleştir",
+    "actMinifyJson": "Sıkıştır",
+    "actCopyDate": "Tarihi Kopyala",
+    "actSaveColor": "Rengi Kaydet",
+    "actCopyClean": "Temiz Kopyala",
+    "actCompress": "JPG Küçült",
+    "actStripExif": "EXIF Temizle",
+    "dropReady": "Hızlı dosya işlemi",
+    "noTargetWindow": "Sabitlemek için önce hedef uygulamaya tıklayın.",
+    "pinnedToast": "Üstte sabitlendi: {title}",
+    "unpinnedToast": "Sabitleme kalktı: {title}",
+    "zipCreated": "Arşiv kaydedildi: {name}",
+    "convertedToast": "Kaydedildi: {name} (-%{pct})",
+    "relayedToast": "{target} hedefine gönderildi ✓",
+    "relayedCopyToast": "Kopyalandı ve {target} açıldı",
+    "brightnessTitle": "Ekran Parlaklığı",
+    "brightnessEmpty": "Parlaklığı kontrol edilebilen ekran bulunamadı",
+    "rulerBtn": "Ekran Cetveli",
+    "pickerHint": "Tıkla: HEX Kopyala · R: Cetvel · ESC: İptal",
+    "rulerHint": "Piksel ölçmek için sürükle · R: Renk Seçici",
+    "startRecBtn": "Ekran Kaydet",
+    "stopRecBtn": "Kaydı Durdur",
+    "recSavedToast": "Ekran kaydı kaydedildi",
+    "shieldOnToast": "Gizlilik Kalkanı AÇIK",
+    "shieldOffToast": "Gizlilik Kalkanı KAPALI"
+  },
+  "appsDir": {
+    "subtitle": "Tüm uygulamalar ve alt araçlar — istediğin özelliğe tek tıkla atla",
+    "searchPh": "Uygulama veya özellik ara…",
+    "spotifyDesc": "Çalan şarkı, anlık LRC sözleri, çalma listeleri & cihazlar",
+    "aiName": "AI Asistanlar",
+    "aiDesc": "Claude Code, Codex, Gemini, Cursor & ChatGPT pencere takibi",
+    "actMonitor": "Monitör",
+    "actChat": "Robo Sohbet",
+    "relayName": "AI Aktarım & Watchdog",
+    "relayDesc": "Cross-AI bağlam gönderimi, script izleyici & günlük özet",
+    "studioName": "Pencere Stüdyosu & Kesit",
+    "studioDesc": "Ekrana kesit sabitle, üstte kilitle/Hayalet mod, Caffeine & kalkan",
+    "mixerName": "Uygulama Ses Mikseri",
+    "mixerDesc": "Uygulama bazlı ses barları, çıkış değiştirme & oto-kısma",
+    "clipsName": "Pano & Akıllı Kasa",
+    "clipsDesc": "JWT/JSON/Port tanıma, sabitli kasa, görsel OCR & QR",
+    "noteName": "Notlar, To-Do & Promptlar",
+    "noteDesc": "Otomatik not, çoklu görev listesi & hazır AI şablonları",
+    "focusName": "Odak & Ortam Sesleri",
+    "focusDesc": "Pomodoro sayacı, Flow Odak Kalkanı & yağmur/kafe/brown sesi",
+    "trayName": "Çekmece, ZIP & Dönüştür",
+    "trayDesc": "Dosya tutucu, Wi-Fi QR paylaşım, WebP/JPG küçültme & EXIF sil",
+    "devName": "Geliştirici Merkezi",
+    "devDesc": "Git dalı durumu, localhost port kapatma & anlık EN↔TR çeviri",
+    "commandName": "Hızlı Komut Paleti",
+    "commandDesc": "Hesap makinesi, canlı döviz çeviri, renk geçmişi & başlatıcı",
+    "weatherName": "Hava Durumu & Takvim",
+    "weatherDesc": "3 günlük hava tahmini, ICS takvim & tek tık toplantı",
+    "netName": "Ağ, Disk & Sistem",
+    "netDesc": "Canlı CPU/RAM, indirme/yükleme hızları & disk doluluğu",
+    "marketName": "Döviz & Piyasalar",
+    "marketDesc": "Anlık USD/TRY, EUR/TRY, GBP/TRY & BTC/ETH takibi",
+    "pickerName": "Ekran Renk Seçici",
+    "pickerDesc": "Ekrandaki herhangi bir pikselin HEX kodunu anında kopyalar",
+    "settingsDesc": "Görünüm, Robo gardırobu, bağlantılar, güncelleme & başlangıç",
+    "focusShort": "Sayaç · Ortam sesleri",
+    "trayShort": "Dosya · ZIP · WebP · QR",
+    "clipsShort": "Kasa · OCR · QR",
+    "noteShort": "Not · To-Do · Şablon",
+    "studioShort": "Kesit · Pin · Hayalet",
+    "relayShort": "Cross-AI · Build · Özet",
+    "devShort": "Git · Port · Çeviri",
+    "sysNetName": "Sistem & Ağ",
+    "githubName": "GitHub & Git",
+    "portsName": "Açık Portlar & Altyapı",
+    "portsShort": "Port, Docker & Dosya Kilidi",
+    "translateName": "Çeviri",
+    "translateShort": "Hızlı EN / TR çeviri",
+    "devtoolsName": "Dev Araçları",
+    "devtoolsShort": "API, Webhook, JWT & Diff",
+    "vaultName": "2FA & Güvenli Kasa",
+    "vaultShort": "2FA Kodları, Sırlar & Şifre"
+  },
+  "githubPage": {
+    "sub": "Katkı serisi, aktif PR, son yıldızlar ve takip akışı",
+    "tabOverview": "Özet & Seri",
+    "tabActivity": "Sosyal Akış",
+    "connectHint": "Ayarlar -> Bağlantılar üzerinden GitHub hesabınızı bağlayın.",
+    "openSettings": "Bağlantıları Aç",
+    "contributionsTitle": "Katkılar",
+    "currentStreak": "Günlük Seri",
+    "longestStreak": "En Uzun",
+    "yearTotal": "Yıllık Toplam",
+    "noPrs": "Aktif Pull Request bulunamadı.",
+    "noIssues": "Aktif Issue bulunamadı.",
+    "recentStars": "Son Yıldız Verenler",
+    "followingTitle": "Takip Edilenler Akışı",
+    "noStars": "Son yıldız veren bulunamadı.",
+    "noFollowing": "Takip edilenlerde yeni hareket yok.",
+    "noCi": "Son GitHub Actions çalışması yok."
+  },
+  "powerTools": {
+    "vaultSub": "Şifreli çevrimdışı 2FA kodları, sırlar ve şifre üretici",
+    "secretsTab": "Gizli Kasa",
+    "pwGenTab": "Şifre Üretici",
+    "totpCodes": "2FA Kodları",
+    "totpAdd": "Yeni 2FA Ekle",
+    "totpEmpty": "Henüz 2FA yok. otpauth:// adresi veya Secret ekleyin.",
+    "orManual": "veya manuel servis ve secret girin:",
+    "secretsEmpty": "Henüz kayıtlı sır yok.",
+    "lengthLabel": "Uzunluk",
+    "devtoolsSub": "HTTP API istemcisi, Webhook dinleyici ve çevrimdışı araçlar",
+    "webhookOff": "Webhook dinleyici kapalı",
+    "webhookSub": "Gelen yerel HTTP webhook isteklerini anlık yakalayın",
+    "webhookEmpty": "Gelen HTTP isteği bekleniyor...",
+    "dockerEmpty": "Docker konteyneri bulunamadı veya Docker çalışmıyor.",
+    "dockerSub": "Konteynerleri başlat, durdur, yeniden başlat ve log oku",
+    "dockerLogsHint": "Son logları görmek için konteynerden Logs seçin.",
+    "locksTab": "Dosya Kilidi",
+    "locksSub": "Bir dosyayı kilitleyen işlemi bulun ve sonlandırın",
+    "locksEmpty": "Dosya seçip Tarama yapın.",
+    "browse": "Gözat",
+    "scan": "Tara",
+    "uptimeEmpty": "Henüz izlenen servis yok."
   }
 }

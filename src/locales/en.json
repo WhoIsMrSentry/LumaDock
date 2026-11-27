@@ -44,7 +44,8 @@
     "quit": "Quit",
     "thisPc": "This PC",
     "accessDenied": "Access denied.",
-    "notFound": "Not found."
+    "notFound": "Not found.",
+    "generate": "Generate"
   },
   "tray": {
     "openIsland": "Open Island",
@@ -53,7 +54,8 @@
     "restart": "Restart",
     "quit": "Quit LumaDock",
     "appDescription": "LumaDock: Dynamic Island for Windows",
-    "settingsDescription": "LumaDock Settings: connections, Robo, wardrobe and more"
+    "settingsDescription": "LumaDock Settings: connections, Robo, wardrobe and more",
+    "bringToFront": "Bring Island to Front"
   },
   "status": {
     "working": "Working",
@@ -371,10 +373,10 @@
     "buddyLimitRest": "Take it easy for a bit.",
     "batteryLowTitle": "Battery low: {pct}%",
     "batteryLowBody": "Plug in your charger.",
-    "batteryFlash": "🪫 {pct}% battery left. Plug in your charger!",
+    "batteryFlash": "{pct}% battery left. Plug in your charger!",
     "btLowTitle": "{name} is almost empty",
     "btLowBody": "{pct}% battery remaining.",
-    "btFlash": "🎧 {name}: {pct}% left",
+    "btFlash": "{name}: {pct}% left",
     "calendarInTenTitle": "In 10 minutes",
     "calendarInTenFlash": "In 10 min: {title}",
     "downloaded": "⬇ Downloaded: {name}",
@@ -387,7 +389,7 @@
     "quitTitle": "Quit LumaDock?",
     "quitYes": "Yes, quit",
     "quitNo": "No",
-    "muted": "🔇 Muted",
+    "muted": "Muted",
     "join": "Join",
     "nowWord": "Now",
     "todayWord": "today",
@@ -469,6 +471,14 @@
       "clips": "Clipboard",
       "note": "Notes",
       "system": "System",
+      "net": "Network",
+      "weather": "Weather",
+      "market": "Markets",
+      "dev": "Dev Hub",
+      "command": "Command",
+      "mixer": "Audio Mixer",
+      "studio": "Window & Snip",
+      "relay": "AI & Build",
       "picker": "Color Picker",
       "settings": "Settings",
       "clock": "Clock",
@@ -562,7 +572,21 @@
     "startFocus": "Start focus",
     "doneAt": "Done at {time}",
     "ofMinutes": "of {mins} min",
-    "minutesUnit": "{n} min"
+    "minutesUnit": "{n} min",
+    "ambient": {
+      "title": "Ambient Mix",
+      "volume": "Ambient volume",
+      "rain": "Rain",
+      "cafe": "Cafe",
+      "brown": "Brown",
+      "alpha": "Alpha"
+    },
+    "timersTab": "Timers & Break",
+    "countdowns": "Quick Countdowns",
+    "timersEmpty": "Start a quick countdown above.",
+    "eyeBreakLabel": "20-20-20 Eye Break",
+    "eyeBreakFlash": "20-20-20: Look 20ft away for 20s",
+    "stopwatch": "Stopwatch"
   },
   "trayApp": {
     "title": "Tray",
@@ -579,17 +603,94 @@
     "mirrorTitle": "Mirror",
     "mirrorSub": "Quick check before your call · camera stops when you leave",
     "noCameraError": "No camera found, or Windows denied access (Settings → Privacy → Camera).",
-    "notInTray": "This file is not in your tray."
+    "notInTray": "This file is not in your tray.",
+    "qrShareBtn": "QR Drop",
+    "qrStop": "Stop sharing",
+    "qrTitle": "Send to Phone via Wi-Fi",
+    "qrSub": "Scan with your camera to download ({count} files)",
+    "qrCopyUrl": "Copy link",
+    "pickFilesBtn": "Add Files"
   },
   "toolsPage": {
     "clipboardTitle": "Clipboard",
-    "clipboardSub": "Your recent copied text · click to copy again",
+    "clipboardSub": "Your recent copied text & images · click to copy",
     "clipboardEmptyTitle": "Nothing copied yet",
     "clipboardEmptySub": "Copy something (Ctrl + C) and it will appear here.",
     "noteTitle": "Note",
     "noteSub": "Jot something down · saved automatically",
     "notePlaceholder": "Type here…",
-    "clipNotFound": "Not found."
+    "clipNotFound": "Not found.",
+    "imageLabel": "Image",
+    "ocrBtn": "Copy text (OCR)",
+    "ocrCopied": "Text extracted & copied ✓",
+    "ocrEmpty": "No readable text found.",
+    "recentTab": "Recent",
+    "vaultTab": "Vault",
+    "vaultEmpty": "Vault is empty",
+    "vaultEmptySub": "Star items in Recent clips to pin them permanently here.",
+    "noteTab": "Note",
+    "promptsTab": "Prompts",
+    "todoPh": "Add a quick task…",
+    "promptBodyPh": "Write reusable prompt template…",
+    "qrGenPh": "Enter URL or text to generate QR...",
+    "qrAlwaysTitle": "Instant Offline QR Generator",
+    "qrAlwaysSub": "Generate QR codes anytime or scan copied images.",
+    "ocrSnipBtn": "Snip Screen & OCR",
+    "ocrPickFileBtn": "Pick Image File",
+    "ocrEmptyPlaceholder": "Extracted OCR text will appear here..."
+  },
+  "command": {
+    "title": "Quick Command",
+    "sub": "Math, FX rates (250 usd to try), translate (tr...) or launch",
+    "placeholder": "Type calculation, currency, 'tr text' or app name…",
+    "openView": "Open",
+    "launcherSub": "Apps, SSH hosts, projects, math, units & colors"
+  },
+  "devPage": {
+    "title": "Dev Hub",
+    "sub": "Git branch, active localhost ports & instant translation",
+    "gitTitle": "Git Repository",
+    "clean": "Working tree clean",
+    "dirtyCount": "{count} changed",
+    "noGit": "Open a project with Git or run Claude/Codex in one.",
+    "translateTitle": "Quick Translate (EN ↔ TR)",
+    "translatePh": "Type word or sentence…",
+    "portsTitle": "Localhost Ports",
+    "noPorts": "No local dev server ports detected right now.",
+    "noPortsShort": "No open ports",
+    "portsSub": "Listening ports, Docker containers & locked files",
+    "translateOnlySub": "Instant multilingual text translation",
+    "sourceLabel": "Source Text",
+    "resultLabel": "Translation",
+    "translateBtn": "Translate",
+    "translateHint": "Translation will appear here..."
+  },
+  "weatherPage": {
+    "title": "Weather & Calendar",
+    "sub": "Forecast & upcoming meeting link",
+    "noCityShort": "Set city",
+    "noCity": "Set your city in Settings → General to see weather.",
+    "noEvent": "No upcoming calendar events found.",
+    "feelsLike": "Feels like {temp}°",
+    "worldClocksTab": "World Clocks",
+    "clocksSub": "Compare timezones with the offset slider",
+    "offsetLabel": "Offset"
+  },
+  "netPage": {
+    "title": "Network, Disk & GPU",
+    "sub": "Live bandwidth, storage capacity & system hardware",
+    "download": "Download",
+    "upload": "Upload",
+    "disk": "Disk Used",
+    "tabSummary": "Summary",
+    "tabNetwork": "Network",
+    "topProcsTitle": "Top Memory Processes",
+    "runPing": "Ping & IP Check",
+    "runSpeed": "Run Speedtest (5 MB)"
+  },
+  "marketPage": {
+    "title": "FX & Crypto",
+    "sub": "Live exchange rates and market ticker"
   },
   "extras": {
     "invalidCalendarUrl": "Please paste an https or webcal calendar URL.",
@@ -600,14 +701,17 @@
   },
   "buddy": {
     "overlay": {
-      "lensCarry": "👀 Robo looks here",
-      "lensLook": "👀 Looking…",
-      "lensHome": "🏠 Let go: back home",
+      "lensCarry": "Robo looks here",
+      "lensLook": "Looking…",
+      "lensHome": "Let go: back home",
       "seen": "This is what I see:",
       "at": "Robo is looking at",
       "here": "this part of the screen",
       "placeholder": "Ask about what is here…",
       "explain": "Explain",
+      "explainError": "Explain error",
+      "ocr": "Copy text",
+      "ocrEmpty": "No readable text found in screenshot.",
       "spelling": "Check my spelling",
       "translate": "Translate",
       "summary": "Summarize",
@@ -618,7 +722,7 @@
       "home": "Go home",
       "put": "Put in Word",
       "putting": "Working in Word…",
-      "noFixes": "No mistakes found. Nice! 🎉",
+      "noFixes": "No mistakes found. Nice!",
       "pages": "Read {count} pages",
       "putDone": "{applied} of {total} fixes are in Word as tracked changes. Accept or reject them in Word.",
       "wordHint": "I read every page, not just what you see.",
@@ -626,13 +730,17 @@
     },
     "chat": {
       "chips": {
-        "explain": "💡 Explain",
-        "fix": "🛠️ Fix it",
-        "fixMore": "🛠️ Fix it for me",
-        "spelling": "✏️ Check my spelling",
-        "translate": "🌍 Translate",
-        "summary": "📝 Summarize"
+        "explain": "Explain",
+        "explain_error": "Explain error",
+        "fix": "Fix it",
+        "fixMore": "Fix it for me",
+        "spelling": "Check my spelling",
+        "translate": "Translate",
+        "summary": "Summarize",
+        "ocr": "Copy text"
       },
+      "ocrCopied": "Extracted text copied to clipboard",
+      "ocrEmpty": "No readable text detected.",
       "seen": "This is what Robo saw",
       "part": "This part of the screen",
       "forget": "Stop looking at this",
@@ -643,7 +751,7 @@
       "sent": "Robo saw this and sent it to the AI · click to close",
       "login": "Sign in with ChatGPT",
       "openCx": "Open Connections",
-      "clean": "No mistakes found. Nice! 🎉",
+      "clean": "No mistakes found. Nice!",
       "toWord": "✓ Put in Word (as changes)",
       "more": "Continue…",
       "about": "Ask about what is here…",
@@ -652,7 +760,7 @@
       "send": "Send",
       "wrong": "Something went wrong.",
       "browser": "Check your browser…",
-      "loggedIn": "Done! Ask your question again. 🎉",
+      "loggedIn": "Done! Ask your question again.",
       "noLogin": "Signing in did not work.",
       "fixed": "Fixed in {project}",
       "fixing": "Robo is finding the fix in {project}…",
@@ -932,23 +1040,59 @@
     },
     "badges": {
       "achievementLabel": "Achievement",
-      "first": { "name": "First Task", "how": "Finish a coding task" },
-      "ten": { "name": "Ten Tasks", "how": "10 tasks done" },
-      "fifty": { "name": "Fifty Tasks", "how": "50 tasks done" },
-      "helper": { "name": "Helpful", "how": "Reply 10 times from the island" },
-      "owl": { "name": "Night Owl", "how": "Finish a task after midnight" },
-      "bird": { "name": "Early Bird", "how": "Finish a task before 7 AM" },
-      "marathon": { "name": "Long Haul", "how": "Finish a task taking over 15 min" },
-      "focus": { "name": "Focus Master", "how": "Finish 5 focus sessions" },
-      "dj": { "name": "Cyber DJ", "how": "Control Spotify 10 times from the island" },
-      "tray": { "name": "Collector", "how": "Store 5 files in the tray" },
-      "mirror": { "name": "Looking Sharp", "how": "Use the quick mirror" },
-      "fashion": { "name": "Cyber Icon", "how": "Unlock all wardrobe gear" }
+      "gh_streak_3": {
+        "name": "3-Day Streak",
+        "how": "Maintain a 3-day GitHub contribution streak"
+      },
+      "gh_streak_7": {
+        "name": "Weekly Grinder",
+        "how": "Maintain a 7-day GitHub contribution streak"
+      },
+      "gh_streak_30": {
+        "name": "Monthly Legend",
+        "how": "Reach a 30-day GitHub contribution streak"
+      },
+      "gh_contrib_100": {
+        "name": "100+ Commits",
+        "how": "Reach 100+ GitHub contributions this year"
+      },
+      "gh_star": {
+        "name": "First Star",
+        "how": "Receive a star on any GitHub repository"
+      },
+      "gh_pr": {
+        "name": "Open PR",
+        "how": "Open or track an active Pull Request on GitHub"
+      },
+      "focus_5": {
+        "name": "Deep Worker",
+        "how": "Complete 5 Focus sessions"
+      },
+      "dj_10": {
+        "name": "Island DJ",
+        "how": "Control 10 music tracks from LumaDock"
+      },
+      "tray_5": {
+        "name": "File Keeper",
+        "how": "Drop or add 5+ files to the Tray"
+      },
+      "snip_ocr": {
+        "name": "Text Scanner",
+        "how": "Extract text from an image or snip via OCR"
+      },
+      "ai_10": {
+        "name": "AI Partner",
+        "how": "Complete 10 monitored AI tasks"
+      },
+      "picker_pro": {
+        "name": "Color Artist",
+        "how": "Pick a screen color with the Eyedropper"
+      }
     },
     "gearUnlockedTitle": "LumaDock unlocked new gear!",
     "gearUnlockedBody": "{count} tasks done: you earned {name}.",
-    "hungryTitle": "I'm hungry… finish a task 🍪",
-    "pokeDizzy": "Ouch! Too many taps… need a sec 😵",
+    "hungryTitle": "I'm hungry… finish a task",
+    "pokeDizzy": "Ouch! Too many taps… need a sec",
     "notEarnedYet": "Not earned yet",
     "lightPresets": {
       "classic": "Classic",
@@ -961,18 +1105,18 @@
     "lightDone": "Done",
     "lightError": "Error",
     "moods": {
-      "all": "▶️ Play All",
-      "happy": "😊 Happy",
-      "focus": "🎯 Focused",
-      "curious": "🤨 Curious",
-      "surprised": "✨ Surprised",
-      "angry": "😠 Glare",
-      "cool": "😎 Cool",
-      "wink": "😉 Wink",
-      "heart": "😍 Lovely",
-      "sad": "😢 Sad",
-      "dizzy": "😵 Dizzy",
-      "sleep": "😴 Standby"
+      "all": "▶ Play All",
+      "happy": "Happy",
+      "focus": "Focused",
+      "curious": "Curious",
+      "surprised": "Surprised",
+      "angry": "Glare",
+      "cool": "Cool",
+      "wink": "Wink",
+      "heart": "Lovely",
+      "sad": "Sad",
+      "dizzy": "Dizzy",
+      "sleep": "Standby"
     },
     "groups": {
       "name": "Name",
@@ -1009,7 +1153,7 @@
       "startup": "Startup Animation",
       "startupSub": "Waves and chirps when LumaDock launches",
       "hunger": "Energy & Hunger",
-      "hungerOnSub": "{name} is {pct}% charged. Every finished task recharges 🍪",
+      "hungerOnSub": "{name} is {pct}% charged. Every finished task recharges",
       "hungerOffSub": "Gets hungry when no tasks are finished for a while",
       "language": "Language · Dil",
       "languageSub": "Interface language for the island and settings",
@@ -1042,6 +1186,13 @@
       "volumeHudSub": "Display the volume bar inside the island when adjusting audio",
       "batteryWarn": "Battery Warning",
       "batteryWarnSub": "Warn when laptop or Bluetooth device battery is low",
+      "islandStyle": "Island Style",
+      "islandStyleSub": "Choose between glowing Aurora, frosted Glass or stealth Obsidian",
+      "styleAurora": "Aurora",
+      "styleGlass": "Glass",
+      "styleObsidian": "Obsidian",
+      "weatherFx": "Weather Particles",
+      "weatherFxSub": "Subtle rain, snow or sun shimmer inside the island based on weather",
       "fullscreenHide": "Auto-hide in Fullscreen",
       "fullscreenHideSub": "Automatically hide the island during fullscreen games or videos",
       "displayMonitor": "Display Monitor",
@@ -1053,24 +1204,28 @@
       "restartApp": "Restart LumaDock",
       "restartAppSub": "Close LumaDock and relaunch immediately",
       "quitApp": "Quit LumaDock",
-      "quitAppSub": "Close LumaDock completely (also available in the system tray)"
+      "quitAppSub": "Close LumaDock completely (also available in the system tray)",
+      "miniHud": "Mini Performance HUD",
+      "miniHudSub": "Show live CPU, RAM and download speed next to resting Buddy",
+      "wardrobeAllOpen": "All accessories and colors unlocked"
     },
     "tests": {
-      "hello": "👋 Start up",
-      "bye": "😴 Shut down",
-      "busy": "🟠 AI working",
-      "question": "❓ AI asks",
-      "done": "🟢 AI done",
-      "error": "🔴 AI error",
-      "music": "🎵 Demo music",
-      "focus": "⏱️ Focus 1 min",
-      "clear": "🧹 Stop all"
+      "hello": "Start up",
+      "bye": "Shut down",
+      "busy": "AI working",
+      "question": "AI asks",
+      "done": "AI done",
+      "error": "AI error",
+      "music": "Demo music",
+      "focus": "⏱ Focus 1 min",
+      "clear": "Stop all"
     },
     "sleepEffect": "Sleep Effect",
     "sleepEffectSub": "Falls asleep when nothing happens for a while",
     "soundEffects": "Sound effects",
     "demoTrack": "Cyber Synth Demo",
-    "minutesShort": "{n} min"
+    "minutesShort": "{n} min",
+    "customColorPick": "Pick any custom color"
   },
   "settings": {
     "title": "LumaDock Settings",
@@ -1155,13 +1310,34 @@
       "off": "idle"
     },
     "cx": {
-      "claudecode": ["Claude Code", "Follows your Claude Code sessions in the terminal or VS Code."],
-      "codex": ["Codex", "Follows OpenAI Codex while it codes for you."],
-      "gemini": ["Gemini CLI", "Follows your Gemini CLI sessions via lightweight hooks."],
-      "cursor": ["Cursor Agent", "Follows Cursor coding sessions via hooks."],
-      "claude": ["Claude", "The Claude app or claude.ai: Robo tells you when your answer is ready."],
-      "chatgpt": ["ChatGPT", "The ChatGPT app or chatgpt.com: Robo tells you when your answer is ready."],
-      "webMonitor": ["Browser AI Monitor (Beta)", "Unlock desktop & browser tracking for ChatGPT and Claude windows."]
+      "claudecode": [
+        "Claude Code",
+        "Follows your Claude Code sessions in the terminal or VS Code."
+      ],
+      "codex": [
+        "Codex",
+        "Follows OpenAI Codex while it codes for you."
+      ],
+      "gemini": [
+        "Gemini CLI",
+        "Follows your Gemini CLI sessions via lightweight hooks."
+      ],
+      "cursor": [
+        "Cursor Agent",
+        "Follows Cursor coding sessions via hooks."
+      ],
+      "claude": [
+        "Claude",
+        "The Claude app or claude.ai: Robo tells you when your answer is ready."
+      ],
+      "chatgpt": [
+        "ChatGPT",
+        "The ChatGPT app or chatgpt.com: Robo tells you when your answer is ready."
+      ],
+      "webMonitor": [
+        "Browser AI Monitor (Beta)",
+        "Unlock desktop & browser tracking for ChatGPT and Claude windows."
+      ]
     },
     "cxOn": "Connected",
     "cxOff": "Off",
@@ -1266,7 +1442,7 @@
     "codePh": "Have a code? Paste it here",
     "codeBtn": "Unlock",
     "codeChecking": "Checking…",
-    "codeOk": "Done! Your pack is open. 🎉",
+    "codeOk": "Done! Your pack is open.",
     "codeOffline": "No internet. Try again in a moment.",
     "codeRemove": "Remove the code from this PC",
     "seePacks": "See packs",
@@ -1280,23 +1456,96 @@
     "added": "{name} is in your LumaDock",
     "removed": "{name} was removed",
     "appsCatalog": {
-      "claude": ["AI Assistants", "Claude Code and Codex: Robo shows whether your AI is busy, has a question or is done."],
-      "buddy": ["Robo Buddy", "Grab Robo out of the island, drop him on anything and ask about it. Or let him check your spelling."],
-      "spotify": ["Spotify", "What is playing, with controls. Robo dances along."],
-      "focus": ["Focus", "A focus timer. Robo keeps distractions away for a while."],
-      "tray": ["Tray", "Drop files into the island and grab them again later."],
-      "clips": ["Clipboard", "Your last copies. Click one to copy it again."],
-      "note": ["Note", "One quick note, always at hand."],
-      "cpu": ["System Monitor", "Live CPU and RAM usage gauge on your home dashboard."],
-      "picker": ["Color Picker", "Pick the HEX color of any pixel on screen in one click."],
-      "clock": ["Clock", "The time on your home screen."],
-      "settings": ["Settings", "This app. Always there via the gear."]
+      "claude": [
+        "AI Assistants",
+        "Claude Code and Codex: Robo shows whether your AI is busy, has a question or is done."
+      ],
+      "buddy": [
+        "Robo Buddy",
+        "Grab Robo out of the island, drop him on anything and ask about it. Or let him check your spelling."
+      ],
+      "spotify": [
+        "Spotify",
+        "What is playing, with controls. Robo dances along."
+      ],
+      "focus": [
+        "Focus",
+        "A focus timer. Robo keeps distractions away for a while."
+      ],
+      "tray": [
+        "Tray",
+        "Drop files into the island and grab them again later."
+      ],
+      "clips": [
+        "Clipboard",
+        "Your last copies. Click one to copy it again."
+      ],
+      "note": [
+        "Note",
+        "One quick note, always at hand."
+      ],
+      "cpu": [
+        "System Monitor",
+        "Live CPU and RAM usage gauge on your home dashboard."
+      ],
+      "net": [
+        "System & Network",
+        "Live CPU, RAM, GPU, disk, network speed, Ping, Speedtest and Top Processes."
+      ],
+      "weather": [
+        "Weather & Calendar",
+        "Live temperature, 3-day forecast and one-click meeting join."
+      ],
+      "market": [
+        "Markets Ticker",
+        "Live USD/TRY, EUR/TRY and crypto exchange rates."
+      ],
+      "dev": [
+        "Dev Hub",
+        "Active Git branch status, open localhost ports and instant translator."
+      ],
+      "command": [
+        "Quick Command",
+        "Press Ctrl+Alt+Space anywhere for math, FX conversion and color history."
+      ],
+      "picker": [
+        "Color Picker",
+        "Pick the HEX color of any pixel on screen in one click."
+      ],
+      "clock": [
+        "Clock",
+        "The time on your home screen."
+      ],
+      "settings": [
+        "Settings",
+        "This app. Always there via the gear."
+      ],
+      "github": [
+        "GitHub & Git",
+        "Contribution streaks, heatmap, active PR/Issues, stargazers and local Git status."
+      ],
+      "ports": [
+        "Ports & Infra",
+        "Listening TCP ports, Docker containers, logs and File Locksmith."
+      ],
+      "translate": [
+        "Translate",
+        "Dedicated multilingual instant text translator."
+      ],
+      "devtools": [
+        "Dev Tools",
+        "Mini HTTP API tester, Webhook catcher, JWT, JSON, Base64, Diff and SHA-256."
+      ],
+      "vault": [
+        "2FA & Vault",
+        "Encrypted TOTP 2FA authenticator, secrets manager and password generator."
+      ]
     },
     "updateAvailable": "Update available: {version}",
     "upToDateVersion": "You are up to date: v{version}{hash}",
     "currentUpdating": "Current: v{version}{hash} · Auto updating",
     "syncedWithGithub": "Synchronized with GitHub WhoIsMrSentry/LumaDock{remoteHash}",
-    "remoteHashTag": " (remote: {hash})",
+    "remoteHashTag": "(remote: {hash})",
     "updateNowBtn": "Update Now",
     "checkUpdatesBtn": "Check Updates",
     "checkingGithubToast": "Checking GitHub (version & commit hash)…",
@@ -1311,6 +1560,203 @@
     "retry": "Try again",
     "beta": "beta",
     "newest": "Newest",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "statGhStreak": "GitHub Streak",
+    "statLongest": "Longest",
+    "ghContributions": "contributions",
+    "ghConnectSub": "Connect your GitHub username or token for streaks, PRs and activity",
+    "ghCliDetected": "gh CLI signed in as @{user}",
+    "ghClearToken": "Clear Token",
+    "ghAccountTitle": "Account & Token",
+    "ghAccountDesc": "Saved token is encrypted with Windows DPAPI"
+  },
+  "snip": {
+    "hint": "Drag to select region · Esc cancel",
+    "pin": "Pin",
+    "framed": "Framed",
+    "framedCopied": "Framed screenshot copied ✓",
+    "ocrCopied": "Text copied from snip ✓"
+  },
+  "studio": {
+    "mixerTitle": "Per-App Audio Mixer",
+    "mixerSub": "Control individual app volumes and switch output devices",
+    "mixerShort": "Apps & Devices",
+    "duckActiveSub": "Smart Audio Ducking active — media lowered automatically",
+    "duckShort": "Audio Ducked",
+    "appsAudioTitle": "Active Apps",
+    "winOnlyFeature": "Per-app Windows Core Audio control requires Windows.",
+    "noAudioApps": "No active audio streams playing right now.",
+    "outputDevicesTitle": "Audio Output Device",
+    "noDevices": "No playback devices detected.",
+    "smartDuckTitle": "Smart Audio Ducking",
+    "smartDuckSub": "Lower music during meetings or AI questions",
+    "undoAuto": "Undo Auto Action",
+    "duckedToast": "Media gently lowered for call / AI",
+    "restoredAudioToast": "Media volume restored",
+    "studioTitle": "Window Studio & Snip",
+    "studioSub": "Pin windows on top, ghost click-through, workspaces & screen capture",
+    "tabActions": "Studio",
+    "tabWindows": "Windows",
+    "tabRules": "Autopilot",
+    "screenAndPower": "Screen & Power Tools",
+    "btnSnip": "Snip & Pin",
+    "btnPinActive": "Pin Window",
+    "btnShield": "Share Shield",
+    "shieldShort": "Shield",
+    "clearPins": "Close Pins ({count})",
+    "lastWindow": "Target",
+    "workspacesTitle": "1-Click Workspaces",
+    "launch": "Launch",
+    "windowsListTitle": "Open Windows (Pin · Opacity · Ghost)",
+    "noWindows": "No switchable windows listed right now.",
+    "rulesTitle": "Context Autopilot & Privacy",
+    "ruleMeetingDuck": "Duck music during Teams / Zoom / Discord / Mic active",
+    "ruleAiDuck": "Duck music when AI asks a question or permission",
+    "ruleIdeMode": "Switch context badge on IDEs & Terminals",
+    "ruleFlowGuard": "Robo Flow Guard during Focus sessions",
+    "ruleAutoStrip": "8s Smart Action Strip on clipboard / drop",
+    "relayTitle": "AI Relay & Build Watchdog",
+    "relaySub": "Send errors between AIs, track builds and export your daily standup",
+    "tabStandup": "Standup",
+    "crossAiSendTitle": "Cross-AI Context Relay",
+    "relayPlaceholder": "Paste error, log or prompt to relay to another AI…",
+    "flightRadarTitle": "Recent AI Activity",
+    "noAiHistory": "No coding agent turns recorded yet.",
+    "savedScriptsTitle": "Quick Scripts & Watchdog",
+    "liveOutputTitle": "Live Output",
+    "idleScript": "Ready to run a script",
+    "sendErrToAi": "Relay Error to AI",
+    "cmdNamePh": "Name",
+    "standupTitle": "Daily Standup",
+    "focusLabel": "Focus & Distractions",
+    "aiBuildsLabel": "AI Turns & Builds",
+    "filesEditedLabel": "Files Touched Today",
+    "standupCopied": "Daily Standup Markdown copied ✓",
+    "askAi": "Ask AI",
+    "openRelay": "Relay",
+    "flowWarnTitle": "Stay in Flow!",
+    "flowWarnBody": "Focus is running ({app})",
+    "actInspectPort": "Port :{port}",
+    "actCopyDecoded": "Copy Decoded",
+    "actFormatJson": "Format JSON",
+    "actMinifyJson": "Minify",
+    "actCopyDate": "Copy Date",
+    "actSaveColor": "Save Color",
+    "actCopyClean": "Copy Clean",
+    "actCompress": "JPG Min",
+    "actStripExif": "Strip EXIF",
+    "dropReady": "Drop action ready",
+    "noTargetWindow": "Click another app first to target it.",
+    "pinnedToast": "Pinned on top: {title}",
+    "unpinnedToast": "Unpinned: {title}",
+    "zipCreated": "Archive saved: {name}",
+    "convertedToast": "Saved {name} (-{pct}%)",
+    "relayedToast": "Sent to {target} ✓",
+    "relayedCopyToast": "Copied & focused {target}",
+    "brightnessTitle": "Display Brightness",
+    "brightnessEmpty": "No DDC/WMI controllable displays found",
+    "rulerBtn": "Screen Ruler",
+    "pickerHint": "Click: Copy HEX · R: Ruler · ESC: Cancel",
+    "rulerHint": "Drag to measure pixels · Click: Copy · R: Picker",
+    "startRecBtn": "Record Screen",
+    "stopRecBtn": "Stop Recording",
+    "recSavedToast": "Screen recording saved",
+    "shieldOnToast": "Privacy Shield ON",
+    "shieldOffToast": "Privacy Shield OFF"
+  },
+  "appsDir": {
+    "subtitle": "All apps & sub-tools in one place — jump directly to any feature",
+    "searchPh": "Search apps or tools…",
+    "spotifyDesc": "Now playing, live LRC lyrics, playlists & speaker devices",
+    "aiName": "AI Assistants",
+    "aiDesc": "Track Claude Code, Codex, Gemini, Cursor & ChatGPT windows",
+    "actMonitor": "Monitor",
+    "actChat": "Robo Chat",
+    "relayName": "AI Relay & Watchdog",
+    "relayDesc": "Cross-AI handoff, script runner & local daily standup",
+    "studioName": "Window Studio & Snip",
+    "studioDesc": "Floating screen snips, pin/opacity/ghost windows, caffeine & shield",
+    "mixerName": "Per-App Audio Mixer",
+    "mixerDesc": "Individual app sliders, speaker switch & meeting/AI ducking",
+    "clipsName": "Clipboard & Vault",
+    "clipsDesc": "Smart pattern detection (JWT/JSON/Port), pinned vault & OCR/QR",
+    "noteName": "Notes, To-Do & Prompts",
+    "noteDesc": "Auto-saved notepad, multi-task To-Do list & AI prompt templates",
+    "focusName": "Focus & Ambient Audio",
+    "focusDesc": "Pomodoro timer, Flow Guard & Rain/Cafe/Brown noise mixer",
+    "trayName": "Tray, ZIP & Converter",
+    "trayDesc": "File drop basket, Wi-Fi QR share, WebP/JPG shrink & EXIF strip",
+    "devName": "Dev Hub",
+    "devDesc": "Git branch status, localhost port killer & instant EN↔TR translate",
+    "commandName": "Quick Command",
+    "commandDesc": "Math evaluator, live FX converter, color swatches & fast launch",
+    "weatherName": "Weather & Calendar",
+    "weatherDesc": "3-day forecast, ICS calendar & 1-click meeting join",
+    "netName": "Network, Disk & System",
+    "netDesc": "Live CPU/RAM, download/upload speeds & storage usage",
+    "marketName": "FX & Crypto Markets",
+    "marketDesc": "Instant USD/TRY, EUR/TRY, GBP/TRY & BTC/ETH ticker",
+    "pickerName": "Screen Color Picker",
+    "pickerDesc": "Sample any pixel on screen as HEX with instant copy",
+    "settingsDesc": "Appearance, outfits, connections, updates & startup settings",
+    "focusShort": "Timer · Rain/Cafe audio",
+    "trayShort": "Files · ZIP · WebP · QR",
+    "clipsShort": "Smart Vault · OCR · QR",
+    "noteShort": "Notes · To-Do · Prompts",
+    "studioShort": "Snip · Pin · Ghost · Keep",
+    "relayShort": "Cross-AI · Build · Standup",
+    "devShort": "Git · Ports · Translate",
+    "sysNetName": "System & Network",
+    "githubName": "GitHub & Git",
+    "portsName": "Ports & Infra",
+    "portsShort": "Ports, Docker & Locks",
+    "translateName": "Translate",
+    "translateShort": "Quick EN / TR translator",
+    "devtoolsName": "Dev Tools",
+    "devtoolsShort": "API, Webhook, JWT & Diff",
+    "vaultName": "2FA & Vault",
+    "vaultShort": "TOTP, Secrets & Passwords"
+  },
+  "githubPage": {
+    "sub": "Contribution streaks, active PRs, stargazers & CI",
+    "tabOverview": "Overview",
+    "tabActivity": "Activity",
+    "connectHint": "Connect your GitHub account in Settings -> Connections.",
+    "openSettings": "Open Connections",
+    "contributionsTitle": "Contributions",
+    "currentStreak": "Current Streak",
+    "longestStreak": "Longest",
+    "yearTotal": "1 Year",
+    "noPrs": "No active pull requests found.",
+    "noIssues": "No active issues found.",
+    "recentStars": "Recent Stargazers",
+    "followingTitle": "Following Activity",
+    "noStars": "No recent stargazers found.",
+    "noFollowing": "No recent following activity.",
+    "noCi": "No recent workflow runs."
+  },
+  "powerTools": {
+    "vaultSub": "Encrypted offline 2FA codes, secrets & passwords",
+    "secretsTab": "Secrets Vault",
+    "pwGenTab": "Password Gen",
+    "totpCodes": "2FA Codes",
+    "totpAdd": "Add Authenticator",
+    "totpEmpty": "No 2FA accounts yet. Paste otpauth:// URI or Secret.",
+    "orManual": "or enter issuer & secret manually:",
+    "secretsEmpty": "No saved secrets yet.",
+    "lengthLabel": "Length",
+    "devtoolsSub": "HTTP API tester, Webhook catcher & offline toolkit",
+    "webhookOff": "Webhook listener stopped",
+    "webhookSub": "Inspect local HTTP POST/GET webhook payloads live",
+    "webhookEmpty": "Waiting for incoming requests...",
+    "dockerEmpty": "No running or stopped Docker containers found.",
+    "dockerSub": "Start, stop, restart containers & inspect logs",
+    "dockerLogsHint": "Select Logs on a container to inspect tail.",
+    "locksTab": "File Locks",
+    "locksSub": "Find which process is locking a file and terminate it",
+    "locksEmpty": "Select a file and run Scan to check Windows locks.",
+    "browse": "Browse",
+    "scan": "Scan",
+    "uptimeEmpty": "No endpoints monitored yet."
   }
 }
