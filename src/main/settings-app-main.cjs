@@ -284,9 +284,15 @@ async function getNews() {
 handleIpc('settings-app:news', e => fromApp(e) ? getNews() : null);
 
 const compareVersions = (a, b) => {
-  const parts = v => String(v || '').replace(/^v/i, '').split('-')[0].split('.').map(n => parseInt(n, 10) || 0);
-  const x = parts(a), y = parts(b);
-  for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0);
+  const parse = v => {
+    const clean = String(v || '').trim().replace(/^v/i, '');
+    const [core, pre = ''] = clean.split('-', 2);
+    const nums = core.split('.').map(n => parseInt(n, 10) || 0);
+    const preNum = pre ? (parseInt((pre.match(/(\d+)/) || [])[1], 10) || 0) : Number.MAX_SAFE_INTEGER;
+    return [nums[0] || 0, nums[1] || 0, nums[2] || 0, pre ? 0 : 1, preNum];
+  };
+  const x = parse(a), y = parse(b);
+  for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i];
   return 0;
 };
 const isAllowedExternalUrl = url => /^https:\/\/(github\.com\/(WhoIsMrSentry\/LumaDock|lumadock\/lumadock)|lumadock\.app)(\/|$)/.test(String(url || ''));

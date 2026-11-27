@@ -32,12 +32,12 @@ LumaDock brings a responsive, fluid **Dynamic Island** experience to Windows 10 
 ## Quick Start (Pre-built)
 
 ### Windows
-1. Download **`LumaDock-Setup-1.2.0-beta.3-x64.exe`** (installer) or **`LumaDock-1.2.0-beta.3-win-x64.zip`** (portable) from [Releases](../../releases/latest).
+1. Download **`LumaDock-Setup-1.3.0-beta.1-x64.exe`** (installer) or **`LumaDock-1.3.0-beta.1-win-x64.zip`** (portable) from [Releases](../../releases/latest).
 2. Run the installer or extract the archive and launch **`LumaDock.exe`**.
 3. *(If SmartScreen appears, click **More info → Run anyway**).*
 
 ### macOS
-1. Download **`LumaDock-1.2.0-beta.3-mac-arm64.dmg`** (Apple Silicon) or **`LumaDock-1.2.0-beta.3-mac-x64.dmg`** (Intel) from [Releases](../../releases/latest).
+1. Download **`LumaDock-1.3.0-beta.1-mac-arm64.dmg`** (Apple Silicon) or **`LumaDock-1.3.0-beta.1-mac-x64.dmg`** (Intel) from [Releases](../../releases/latest).
 2. Drag **`LumaDock`** into **Applications**.
 3. *(Since builds are unsigned, on first launch right-click **LumaDock → Open** or allow it in **System Settings → Privacy & Security**).*
 

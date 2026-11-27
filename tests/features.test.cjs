@@ -80,6 +80,9 @@ test('settings-app URL allowlist & semver comparison behave securely', () => {
   assert.ok(compareVersions('1.2.1', '1.2.0-beta.2') > 0);
   assert.equal(compareVersions('v1.2.0', '1.2.0'), 0);
   assert.ok(compareVersions('1.1.9', '1.2.0') < 0);
+  assert.ok(compareVersions('1.3.0-beta.1', '1.2.0-beta.3') > 0);
+  assert.ok(compareVersions('1.2.0-beta.4', '1.2.0-beta.3') > 0);
+  assert.ok(compareVersions('1.3.0', '1.3.0-beta.1') > 0);
 });
 
 test('claude-code-hooks supports Gemini CLI & Cursor hooks plus token/cost telemetry', async () => {
