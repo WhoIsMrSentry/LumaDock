@@ -503,3 +503,347 @@ test('spotify helpers resolve build-config.json or LUMADOCK_SPOTIFY_CLIENT_ID wi
     delete require.cache[require.resolve(helperPath)];
   }
 });
+
+test('QR generator builds valid ISO finder patterns and SVG data URLs locally', () => {
+  const { generateQrMatrix, generateQrSvg, generateQrDataUrl } = require(path.join(ROOT, 'src', 'shared', 'qr.cjs'));
+  const m = generateQrMatrix('http://192.168.1.10:54321/q/abc123');
+  assert.ok(m.size >= 25 && (m.size - 21) % 4 === 0);
+  // Top-left 7x7 finder outer ring + center
+  for (let i = 0; i < 7; i++) {
+    assert.equal(m.modules[0][i], 1);
+    assert.equal(m.modules[6][i], 1);
+    assert.equal(m.modules[i][0], 1);
+    assert.equal(m.modules[i][6], 1);
+  }
+  assert.equal(m.modules[3][3], 1);
+  // Dark module at (size - 8, 8)
+  assert.equal(m.modules[m.size - 8][8], 1);
+
+  const svg = generateQrSvg('LUMADOCK');
+  assert.match(svg, /^<svg\b[^>]*viewBox="0 0 25 25"/);
+  const uri = generateQrDataUrl('LUMADOCK');
+  assert.match(uri, /^data:image\/svg\+xml;utf8,/);
+  assert.throws(() => generateQrMatrix('x'.repeat(200)), /capacity/);
+});
+
+test('command evaluator safely parses math expressions, units and currency ratios', () => {
+  const { evaluateMath, evaluateConversion } = require(path.join(ROOT, 'src', 'shared', 'command-eval.cjs'));
+  assert.equal(evaluateMath('2 + 3 * 4')?.value, 14);
+  assert.equal(evaluateMath('(10 + 5)^2 / 5')?.value, 45);
+  assert.equal(evaluateMath('sqrt(144) + 0x10')?.value, 28);
+  assert.equal(evaluateMath('1 / 0'), null);
+  assert.equal(evaluateMath('process.exit(1)'), null);
+
+  assert.equal(evaluateConversion('10 km to mi')?.formatted, '6.2137 mi');
+  assert.equal(evaluateConversion('100 c to f')?.value, 212);
+  assert.equal(evaluateConversion('2 gb to mb')?.value, 2048);
+  const fx = evaluateConversion('200 usd to try', { USD: 1, TRY: 35.5, EUR: 0.92 });
+  assert.equal(fx?.value, 7100);
+  assert.match(fx?.formatted || '', /7,100 TRY/);
+});
+
+test('dev-tools parsers and LAN QR Drop server enforce token auth and parse netstat/git', async () => {
+  const { parseNetstatPorts, parseLsofPorts, parseGitStatus, createLanDropManager } = require(path.join(ROOT, 'src', 'main', 'dev-tools-main.cjs'));
+  const ns = [
+    '  TCP    127.0.0.1:3000         0.0.0.0:0              LISTENING       4120',
+    '  TCP    0.0.0.0:5173           0.0.0.0:0              LISTENING       5512',
+    '  TCP    0.0.0.0:47823          0.0.0.0:0              LISTENING       9999'
+  ].join('\n');
+  const tl = '"node.exe","4120","Console","1","10,000 K"\n"vite.exe","5512","Console","1","8,000 K"\n';
+  const ports = parseNetstatPorts(ns, tl, 9999);
+  assert.deepEqual(ports.map(p => [p.port, p.process]), [[3000, 'node'], [5173, 'vite']]);
+
+  const lsof = 'COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME\nnode 444 me 21u IPv4 0x1 0t0 TCP 127.0.0.1:8080 (LISTEN)\n';
+  assert.equal(parseLsofPorts(lsof, 1)[0].port, 8080);
+
+  const git = parseGitStatus('## main...origin/main [ahead 2]\n M src/ui/tools-ui.js\n?? new.txt\n', 'C:\\Work\\app');
+  assert.equal(git.branch, 'main');
+  assert.equal(git.ahead, 2);
+  assert.equal(git.modified, 1);
+  assert.equal(git.untracked, 1);
+  assert.equal(git.dirty, 2);
+
+  // LAN QR Drop server roundtrip test
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumadock-qrdrop-'));
+  const tmpFile = path.join(dir, 'hello.txt');
+  fs.writeFileSync(tmpFile, 'LumaDock LAN Drop Payload', 'utf8');
+  const mgr = createLanDropManager();
+  try {
+    const share = await mgr.start([tmpFile]);
+    assert.ok(share.active);
+    assert.match(share.qrDataUrl, /^data:image\/svg\+xml;utf8,/);
+    const u = new URL(share.url);
+    const localUrl = `http://127.0.0.1:${u.port}${u.pathname}`;
+    const pageRes = await fetch(localUrl);
+    assert.equal(pageRes.status, 200);
+    assert.match(await pageRes.text(), /hello\.txt/);
+
+    const fileRes = await fetch(localUrl + '/f/0');
+    assert.equal(fileRes.status, 200);
+    assert.equal(await fileRes.text(), 'LumaDock LAN Drop Payload');
+
+    const badRes = await fetch(`http://127.0.0.1:${u.port}/q/wrongtoken/f/0`);
+    assert.equal(badRes.status, 404);
+  } finally {
+    await mgr.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('all modified UI scripts parse with zero syntax errors', () => {
+  const vm = require('node:vm');
+  for (const rel of [
+    'src/ui/command-ui.js',
+    'src/ui/focus-ui.js',
+    'src/ui/tools-ui.js',
+    'src/ui/dock-studio-ui.js',
+    'src/ui/extras-ui.js',
+    'src/ui/lumadock-fun.js',
+    'src/ui/spotify-ui.js',
+    'src/ui/ai-monitor-ui.js',
+    'src/ui/pages-ui.js',
+    'src/ui/blob-ui.js',
+    'src/ui/icons-ui.js',
+    'src/ui/chat-ui.js'
+  ]) {
+    const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    new vm.Script(src, { filename: rel });
+  }
+  for (const rel of ['src/ui/snip.html', 'src/ui/pin.html']) {
+    const html = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+    assert.ok(scripts.length > 0, `${rel} must contain inline script`);
+    scripts.forEach((m, idx) => new vm.Script(m[1], { filename: `${rel}#${idx}` }));
+  }
+});
+
+test('non-blocking architecture: no screen-capture loop, PDH GPU stall, or unguarded clipboard toPNG poll', () => {
+  const extrasUi = fs.readFileSync(path.join(ROOT, 'src/ui/extras-ui.js'), 'utf8');
+  const extrasMain = fs.readFileSync(path.join(ROOT, 'src/main/extras-main.cjs'), 'utf8');
+  const devToolsMain = fs.readFileSync(path.join(ROOT, 'src/main/dev-tools-main.cjs'), 'utf8');
+  const commandUi = fs.readFileSync(path.join(ROOT, 'src/ui/command-ui.js'), 'utf8');
+  const volWatch = fs.readFileSync(path.join(ROOT, 'src/native/volume-watch.ps1'), 'utf8');
+
+  assert.ok(!/getDisplayMedia/.test(extrasUi), 'extras-ui must not invoke getDisplayMedia screen capture');
+  assert.ok(!/desktopCapturer\.getSources/.test(extrasMain), 'extras-main must not capture screen sources for visualizer');
+  assert.ok(/availableFormats/.test(extrasMain), 'extras-main must inspect clipboard formats before reading images');
+  assert.ok(/hasClipSeqWatcher/.test(extrasMain), 'extras-main must rely on Windows clipboard sequence watcher');
+  assert.ok(!/Get-Counter/.test(devToolsMain), 'dev-tools-main must not spawn PowerShell Get-Counter telemetry');
+  assert.ok(/--no-optional-locks/.test(devToolsMain), 'dev-tools-main git status must pass --no-optional-locks');
+  assert.ok(!/refreshTelemetry\(\);\s*refreshMarket\(\);/.test(commandUi), 'command-ui must not eagerly run telemetry on startup');
+  assert.ok(/GetClipboardSequenceNumber/.test(volWatch), 'volume-watch.ps1 must expose GetClipboardSequenceNumber');
+  assert.ok(/ReleaseComObject/.test(volWatch), 'volume-watch.ps1 must release COM wrappers');
+});
+
+test('content detective classifies developer/clipboard patterns cleanly & skips password managers', () => {
+  const { analyzeClipboardContent, validateIbanMod97, isSensitiveOwner } = require(path.join(ROOT, 'src/shared/content-detective.cjs'));
+
+  assert.equal(isSensitiveOwner('Bitwarden'), true);
+  assert.equal(analyzeClipboardContent('{"secret":1}', 'KeePassXC')?.skip, true);
+  assert.equal(analyzeClipboardContent('ghp_abcdefghijklmnopqrstuvwxyz123456')?.skip, true);
+
+  const port = analyzeClipboardContent('Error: listen EADDRINUSE: address already in use :::3000');
+  assert.equal(port?.kind, 'port-error');
+  assert.equal(port?.meta.port, 3000);
+
+  const hdr = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const pay = Buffer.from(JSON.stringify({ sub: '42', exp: 4102444800 })).toString('base64url');
+  const jwt = analyzeClipboardContent(`${hdr}.${pay}.sig`);
+  assert.equal(jwt?.kind, 'jwt');
+  assert.equal(jwt?.meta.payload.sub, '42');
+  assert.equal(jwt?.meta.expired, false);
+
+  const epoch = analyzeClipboardContent('1764000000');
+  assert.equal(epoch?.kind, 'epoch');
+
+  const clr = analyzeClipboardContent('#c6e994');
+  assert.equal(clr?.kind, 'color');
+  assert.equal(clr?.badge, '#C6E994');
+
+  assert.equal(validateIbanMod97('DE89370400440532013000'), true);
+  assert.equal(analyzeClipboardContent('DE89 3704 0044 0532 0130 00')?.kind, 'iban');
+
+  const b64 = Buffer.from('LumaDock Studio Ready').toString('base64');
+  assert.equal(analyzeClipboardContent(b64)?.meta.decoded, 'LumaDock Studio Ready');
+});
+
+test('pure Node ZIP builder generates valid PKZIP archives', async () => {
+  const { createZipBuffer, createZipFromPaths } = require(path.join(ROOT, 'src/main/zip-and-media.cjs'));
+  const rawBuf = createZipBuffer([{ name: 'hello.txt', data: Buffer.from('Merhaba LumaDock!', 'utf8') }]);
+  assert.equal(rawBuf.readUInt32LE(0), 0x04034b50);
+  assert.ok(rawBuf.includes(Buffer.from('hello.txt', 'utf8')));
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumadock-zip-'));
+  try {
+    const f1 = path.join(dir, 'sample.txt');
+    fs.writeFileSync(f1, 'test payload 123', 'utf8');
+    const out = await createZipFromPaths([f1], dir);
+    assert.ok(out.outPath.endsWith('.zip'));
+    assert.equal(out.count, 1);
+    assert.ok(fs.existsSync(out.outPath));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('context engine tracks foreground autopilot, undo, and local standup summary', () => {
+  const { createContextEngine } = require(path.join(ROOT, 'src/main/context-engine.cjs'));
+  let duckedLog = [];
+  const store = {};
+  const ctx = createContextEngine({
+    readJson: (k, fb) => store[k] || fb,
+    writeJson: (k, v) => { store[k] = v; },
+    onDuckChange: d => duckedLog.push(d)
+  });
+
+  ctx.onForegroundWindow({ hwnd: '1', pid: 10, process: 'ms-teams', title: 'Daily Sync | Microsoft Teams' });
+  assert.equal(ctx.getState().context, 'meeting');
+  assert.equal(ctx.getState().ducked, true);
+  assert.equal(duckedLog[duckedLog.length - 1], true);
+
+  assert.equal(ctx.undoAutoAction().ok, true);
+  assert.equal(ctx.getState().ducked, false);
+
+  ctx.setFocusActive(true, 25);
+  ctx.recordAiActivity({ files: ['src/ui/dock-studio-ui.js'], branch: 'main', ok: true });
+  const md = ctx.formatStandupMarkdown('en');
+  assert.match(md, /25 min/);
+  assert.match(md, /dock-studio-ui\.js/);
+});
+
+test('navigation fix: separate header apps button and blur-free view switch', () => {
+  const iconsUi = fs.readFileSync(path.join(ROOT, 'src/ui/icons-ui.js'), 'utf8');
+  const blobUi = fs.readFileSync(path.join(ROOT, 'src/ui/blob-ui.js'), 'utf8');
+  assert.ok(/hit\.appsMenu/.test(iconsUi), 'icons-ui must expose dedicated hit.appsMenu header button');
+  assert.ok(!/setView\(was === 'home' \? 'apps' : 'home'\)/.test(iconsUi), 'hit.home must not toggle to apps silently');
+  assert.ok(!/ctx\.filter/.test(blobUi), 'blob-ui must not run software Canvas filter blur');
+});
+
+test('apps directory shows full un-truncated names on Canvas, completes Studio/Tools CRUD, avoids emojis, and supports 5s buddy grow', () => {
+  const mascot = fs.readFileSync(path.join(ROOT, 'mascot.html'), 'utf8');
+  const aiUi = fs.readFileSync(path.join(ROOT, 'src/ui/ai-monitor-ui.js'), 'utf8');
+  const studioUi = fs.readFileSync(path.join(ROOT, 'src/ui/dock-studio-ui.js'), 'utf8');
+  const toolsUi = fs.readFileSync(path.join(ROOT, 'src/ui/tools-ui.js'), 'utf8');
+  const commandUi = fs.readFileSync(path.join(ROOT, 'src/ui/command-ui.js'), 'utf8');
+  const extrasUi = fs.readFileSync(path.join(ROOT, 'src/ui/extras-ui.js'), 'utf8');
+
+  assert.ok(/__lumadockBuddyBurst/.test(mascot), 'mascot.html must expose __lumadockBuddyBurst');
+  assert.ok(/REST_W:\s*\n?\s*136/.test(mascot) && /BAR_H:\s*\n?\s*40/.test(mascot), 'resting bar must be upgraded larger Buddy size 136x40');
+
+  assert.ok(/const cols = 3/.test(aiUi) && /appsScroll/.test(aiUi) && /appsMaxScroll/.test(aiUi), 'ai-monitor-ui must draw wide 3-column Canvas Apps with scroll');
+  assert.ok(/VIEWS\s*=\s*\['mixer',\s*'studio',\s*'relay'\]/.test(studioUi), 'dock-studio-ui must leave apps view on native Canvas');
+  assert.ok(/st-ws-name/.test(studioUi) && /data-ws-del/.test(studioUi) && /data-wdel/.test(studioUi), 'dock-studio-ui must support Workspaces add/delete and Watchdog delete');
+  assert.ok(/data-pr-save/.test(toolsUi) && /data-prdel/.test(toolsUi), 'tools-ui must support Prompt template add/delete');
+  assert.ok(/noteTab\s*=\s*tab/.test(toolsUi) && /clipsTab\s*=\s*tab/.test(toolsUi), 'tools-ui must support direct sub-tab navigation from Apps');
+  assert.ok(/__lumadockConvertWebp/.test(studioUi) && /__lumadockConvertWebp/.test(extrasUi), 'tray quick image/EXIF converters must be wired');
+
+  const emojiRe = /[\u{1F300}-\u{1FAFF}]/u;
+  for (const [name, src] of [['dock-studio-ui', studioUi], ['tools-ui', toolsUi], ['command-ui', commandUi]]) {
+    assert.ok(!emojiRe.test(src), `${name} must not contain emojis`);
+  }
+});
+
+test('github-main computes contribution streaks and event summaries accurately', () => {
+  const { computeContributionStreaks, summarizeEvent } = require(path.join(ROOT, 'src', 'main', 'github-main.cjs'));
+  const days = [
+    { date: '2026-11-20', count: 2 },
+    { date: '2026-11-21', count: 5 },
+    { date: '2026-11-22', count: 1 },
+    { date: '2026-11-23', count: 0 },
+    { date: '2026-11-24', count: 3 },
+    { date: '2026-11-25', count: 4 },
+    { date: '2026-11-26', count: 2 },
+    { date: '2026-11-27', count: 0 }
+  ];
+  const st = computeContributionStreaks(days, '2026-11-27');
+  assert.equal(st.totalYear, 17);
+  assert.equal(st.todayCount, 0);
+  assert.equal(st.currentStreak, 3); // 24, 25, 26 grace while today=0
+  assert.equal(st.longestStreak, 3);
+
+  const st2 = computeContributionStreaks([
+    { date: '2026-11-24', count: 1 },
+    { date: '2026-11-25', count: 2 },
+    { date: '2026-11-26', count: 1 },
+    { date: '2026-11-27', count: 4 }
+  ], '2026-11-27');
+  assert.equal(st2.currentStreak, 4);
+  assert.equal(st2.longestStreak, 4);
+
+  const push = summarizeEvent({ type: 'PushEvent', actor: { login: 'alice' }, repo: { name: 'a/b' }, payload: { size: 2, ref: 'refs/heads/main' } });
+  assert.equal(push.action, 'push');
+  assert.match(push.detail, /2 commit.*main/);
+  const star = summarizeEvent({ type: 'WatchEvent', actor: { login: 'bob' }, repo: { name: 'a/b' } });
+  assert.equal(star.action, 'star');
+  const pr = summarizeEvent({ type: 'PullRequestEvent', actor: { login: 'carol' }, repo: { name: 'a/b' }, payload: { action: 'opened', pull_request: { number: 12, title: 'Fix bug', html_url: 'https://github.com/a/b/pull/12' } } });
+  assert.equal(pr.action, 'pr');
+  assert.match(pr.detail, /opened #12 Fix bug/);
+});
+
+test('power-tools-main generates RFC 6238 TOTP, parses otpauth URIs, generates passwords and parses SSH config', () => {
+  const { generateTotp, parseOtpAuthUri, generateSecurePassword, parseSshConfig } = require(path.join(ROOT, 'src', 'main', 'power-tools-main.cjs'));
+  const rfcSecret = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ'; // "12345678901234567890"
+  assert.equal(generateTotp(rfcSecret, { nowMs: 59000, digits: 6 }).code, '287082');
+  assert.equal(generateTotp(rfcSecret, { nowMs: 59000, digits: 8 }).code, '94287082');
+
+  const parsed = parseOtpAuthUri('otpauth://totp/GitHub:WhoIsMrSentry?secret=JBSWY3DPEHPK3PXP&issuer=GitHub&digits=6&period=30');
+  assert.equal(parsed.issuer, 'GitHub');
+  assert.equal(parsed.account, 'WhoIsMrSentry');
+  assert.equal(parsed.secret, 'JBSWY3DPEHPK3PXP');
+
+  const pw = generateSecurePassword({ length: 24, symbols: true });
+  assert.equal(pw.length, 24);
+  const phrase = generateSecurePassword({ passphrase: true, words: 4 });
+  assert.match(phrase, /^[a-z]+-[a-z]+-[a-z]+-[a-z]+-\d{2}$/);
+
+  const ssh = parseSshConfig('Host prod-box\n  HostName 10.0.0.5\n  User deploy\n\nHost *\n  ServerAliveInterval 60\n');
+  assert.equal(ssh.length, 1);
+  assert.equal(ssh[0].name, 'prod-box');
+  assert.equal(ssh[0].hostName, '10.0.0.5');
+});
+
+test('platform polish: PrintScreen exclusion, dark scrollbars, zero emojis, unlocked custom Buddy, menu clarity and empty-state discoverability', () => {
+  const psVol = fs.readFileSync(path.join(ROOT, 'src/native/volume-watch.ps1'), 'utf8');
+  const mainJs = fs.readFileSync(path.join(ROOT, 'main.js'), 'utf8');
+  const pagesUi = fs.readFileSync(path.join(ROOT, 'src/ui/pages-ui.js'), 'utf8');
+  const mascot = fs.readFileSync(path.join(ROOT, 'mascot.html'), 'utf8');
+  const buddy = fs.readFileSync(path.join(ROOT, 'buddy.html'), 'utf8');
+  const settingsHtml = fs.readFileSync(path.join(ROOT, 'settings-app.html'), 'utf8');
+  const aiUi = fs.readFileSync(path.join(ROOT, 'src/ui/ai-monitor-ui.js'), 'utf8');
+  const cmdUi = fs.readFileSync(path.join(ROOT, 'src/ui/command-ui.js'), 'utf8');
+  const toolsUi = fs.readFileSync(path.join(ROOT, 'src/ui/tools-ui.js'), 'utf8');
+  const extrasUi = fs.readFileSync(path.join(ROOT, 'src/ui/extras-ui.js'), 'utf8');
+  const funJs = fs.readFileSync(path.join(ROOT, 'src/ui/lumadock-fun.js'), 'utf8');
+  const eyedropper = fs.readFileSync(path.join(ROOT, 'src/ui/eyedropper.html'), 'utf8');
+  const enJson = fs.readFileSync(path.join(ROOT, 'src/locales/en.json'), 'utf8');
+  const trJson = fs.readFileSync(path.join(ROOT, 'src/locales/tr.json'), 'utf8');
+
+  assert.match(psVol, /ScreenClippingHost/i);
+  assert.match(psVol, /SnippingTool/i);
+  assert.match(mainJs, /screen-saver/);
+  assert.match(mainJs, /lumadockEnsureVisible/);
+
+  assert.match(pagesUi, /::-webkit-scrollbar-button/);
+  assert.match(mascot, /color-scheme:\s*dark/);
+  assert.match(settingsHtml, /color-scheme:\s*dark/);
+
+  for (const f of fs.readdirSync(path.join(ROOT, 'src/ui')).filter(x => x.endsWith('.js')).map(x => path.join(ROOT, 'src/ui', x)).concat([
+    path.join(ROOT, 'mascot.html'), path.join(ROOT, 'buddy.html'), path.join(ROOT, 'settings-app.html')
+  ])) {
+    const content = fs.readFileSync(f, 'utf8');
+    assert.ok(!/scrollbar-width\s*:\s*thin/i.test(content), `${path.basename(f)} must not use scrollbar-width: thin`);
+    assert.ok(!/[\u{1F300}-\u{1FAFF}]/u.test(content), `${path.basename(f)} must not contain emojis`);
+  }
+  assert.ok(!/[\u{1F300}-\u{1FAFF}]/u.test(enJson) && !/[\u{1F300}-\u{1FAFF}]/u.test(trJson), 'Locales must not contain emojis');
+
+  assert.ok(!/'cpuApp'/.test(aiUi), 'ai-monitor-ui must deduplicate cpuApp into netApp');
+  assert.ok(/'githubApp'/.test(aiUi) && /'portsApp'/.test(aiUi) && /'translateApp'/.test(aiUi) && /'devtoolsApp'/.test(aiUi) && /'vaultApp'/.test(aiUi));
+  assert.ok(/eyedropperStart/.test(aiUi) && /11/.test(eyedropper));
+  assert.ok(/1500/.test(cmdUi) && /1500/.test(extrasUi), 'net/stats polling must refresh every 1.5s');
+  assert.ok(/hb-fx-amt/.test(cmdUi) && /hb-fx-from/.test(cmdUi) && /hb-fx-to/.test(cmdUi), 'Market converter must be interactive');
+  assert.ok(/data-ctab="qr"/.test(toolsUi) && /data-ctab="ocr"/.test(toolsUi), 'QR and OCR tabs must always be visible');
+  assert.ok(/ex-empty-add/.test(extrasUi) && /trayPickFiles/.test(extrasUi), 'Tray must expose Add Files picker even when empty');
+  assert.ok(/unlocked\s*=\s*\(\)\s*=>\s*true/.test(funJs), 'All Buddy outfits must be unlocked');
+  assert.ok(/isHexColor/.test(funJs) && /type="color"/.test(funJs), 'Buddy must support unlimited custom HEX colors');
+  assert.ok(/statusSadUntil/.test(funJs) && !/hungry\(\)\s*&&\s*prefs\.faces/.test(funJs), 'Buddy must not stay permanently sad');
+});
